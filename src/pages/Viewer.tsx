@@ -63,11 +63,12 @@ const Viewer = () => {
         src={url!}
         className="w-full h-full border-0"
         title="Website Viewer"
-        sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals allow-downloads allow-top-navigation"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+        loading="eager"
         onLoad={() => {
           console.log('Iframe loaded successfully');
-          setIframeLoaded(true);
+          setTimeout(() => setIframeLoaded(true), 500);
         }}
         onError={(e) => {
           console.error('Iframe load error:', e);
