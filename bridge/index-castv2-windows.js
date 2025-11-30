@@ -380,7 +380,7 @@ async function castMedia(url, retryCount = 0) {
             }
             
             clearTimeout(launchTimeout);
-            clearInterval(heartbeatInterval);
+            // Keep heartbeat running to maintain connection
             
             const sessionId = app.sessionId;
             const transportId = app.transportId;
@@ -411,7 +411,10 @@ async function castMedia(url, retryCount = 0) {
             media.on('message', (data) => {
               console.log('📨 Media message:', JSON.stringify(data, null, 2));
               if (data.type === 'MEDIA_STATUS') {
-                console.log('✅ Media loaded successfully');
+                console.log('✅ Media loaded successfully - keeping connection alive');
+                clearTimeout(launchTimeout);
+                // Don't clear heartbeat interval - keep connection alive
+                // Don't close client - let it run until manually stopped
                 resolve({ success: true });
               }
             });
