@@ -41,11 +41,14 @@ export const useChromecast = () => {
     // Save the device for auto-reconnect
     localStorage.setItem(LAST_DEVICE_KEY, JSON.stringify(device));
 
+    // Monitor session status but don't disconnect on every update
+    // Only disconnect if the Chromecast device is truly unavailable
     castSession.addUpdateListener((isAlive: boolean) => {
+      console.log('Session update - isAlive:', isAlive);
       if (!isAlive) {
-        setIsConnected(false);
-        setCurrentDevice(null);
-        setSession(null);
+        console.log('Session ended, but keeping connection state for monitoring');
+        // Don't immediately disconnect - the device might still be available
+        // Just mark that we're not actively controlling it
         setIsCasting(false);
       }
     });
@@ -222,7 +225,7 @@ export const useChromecast = () => {
     if (session) {
       session.stop(
         () => {
-          console.log('Session stopped');
+          console.log('Session stopped - full disconnect');
           setIsConnected(false);
           setCurrentDevice(null);
           setSession(null);
@@ -230,12 +233,18 @@ export const useChromecast = () => {
           // Clear saved device when manually disconnecting
           localStorage.removeItem(LAST_DEVICE_KEY);
           toast({
-            title: 'Casting Stopped',
+            title: 'Disconnected',
             description: 'Disconnected from Chromecast',
           });
         },
         (error) => {
           console.error('Error stopping session:', error);
+          // Even if stop fails, clear the connection state
+          setIsConnected(false);
+          setCurrentDevice(null);
+          setSession(null);
+          setIsCasting(false);
+          localStorage.removeItem(LAST_DEVICE_KEY);
         }
       );
     }
