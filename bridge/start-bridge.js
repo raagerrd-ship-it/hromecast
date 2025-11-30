@@ -222,46 +222,49 @@ async function checkAndActivateScreensaver() {
   }
 }
 
-// Discover Chromecast devices using Bonjour
+// Discover Chromecast devices using Bonjour (only at startup)
 function discoverDevices() {
-  console.log('🔍 Scanning for Chromecast devices on local network...');
-  
-  const browser = Bonjour.find({ type: 'googlecast' });
-  
-  browser.on('up', async (service) => {
-    const deviceKey = `${service.referer.address}:${service.port}`;
+  return new Promise((resolve) => {
+    console.log('🔍 Scanning for Chromecast devices on local network...');
     
-    if (!discoveredDevices.has(deviceKey)) {
-      discoveredDevices.set(deviceKey, {
-        name: service.name,
-        host: service.referer.address,
-        port: service.port
-      });
+    const browser = Bonjour.find({ type: 'googlecast' });
+    const discoveryTimeout = setTimeout(() => {
+      browser.stop();
+      resolve(browser);
+    }, 8000); // Stop after 8 seconds
+    
+    browser.on('up', async (service) => {
+      const deviceKey = `${service.referer.address}:${service.port}`;
       
-      console.log(`✅ Found Chromecast: ${service.name} at ${service.referer.address}:${service.port}`);
-      
-      // Report this device to database
-      await reportDiscoveredDevice(service.name, service.referer.address, service.port);
-      
-      // If no current device, use this as default
-      if (!currentDevice) {
-        currentDevice = {
+      if (!discoveredDevices.has(deviceKey)) {
+        discoveredDevices.set(deviceKey, {
           name: service.name,
           host: service.referer.address,
           port: service.port
-        };
-        console.log(`🎯 Using device as default: ${service.name}`);
+        });
+        
+        console.log(`✅ Found Chromecast: ${service.name} at ${service.referer.address}:${service.port}`);
+        
+        // Report this device to database
+        await reportDiscoveredDevice(service.name, service.referer.address, service.port);
+        
+        // If no current device, use this as default
+        if (!currentDevice) {
+          currentDevice = {
+            name: service.name,
+            host: service.referer.address,
+            port: service.port
+          };
+        }
       }
-    }
+    });
+    
+    browser.on('error', (error) => {
+      console.error('Bonjour browser error:', error);
+    });
+    
+    browser.start();
   });
-  
-  browser.on('error', (error) => {
-    console.error('Bonjour browser error:', error);
-  });
-  
-  browser.start();
-  
-  return browser;
 }
 
 // Cast URL using custom receiver
@@ -499,11 +502,8 @@ async function main() {
   console.log(`⏱️  Poll interval: ${POLL_INTERVAL}ms`);
   console.log('');
 
-  // Discover devices
-  const browser = discoverDevices();
-
-  // Wait for device discovery
-  await new Promise(resolve => setTimeout(resolve, 8000));
+  // Discover devices (one-time scan at startup)
+  const browser = await discoverDevices();
 
   console.log(`\n📊 Discovery complete: Found ${discoveredDevices.size} device(s)`);
   
@@ -515,12 +515,38 @@ async function main() {
   
   console.log('✅ All devices reported to database');
   
-  // Continue discovery in background to find new devices
-  setInterval(async () => {
-    for (const [key, device] of discoveredDevices) {
-      await reportDiscoveredDevice(device.name, device.host, device.port);
+  // Check if user has previously selected a device
+  const settings = await getScreensaverSettings();
+  if (settings && settings.selected_chromecast_id) {
+    // Try to find the previously selected device in current discovery
+    const { data: selectedChromecast } = await supabase
+      .from('discovered_chromecasts')
+      .select('*')
+      .eq('id', settings.selected_chromecast_id)
+      .single();
+    
+    if (selectedChromecast) {
+      // Check if this device is in our discovered devices
+      const deviceKey = `${selectedChromecast.chromecast_host}:${selectedChromecast.chromecast_port}`;
+      if (discoveredDevices.has(deviceKey)) {
+        currentDevice = {
+          name: selectedChromecast.chromecast_name,
+          host: selectedChromecast.chromecast_host,
+          port: selectedChromecast.chromecast_port
+        };
+        console.log(`🎯 Auto-selected previously chosen device: ${currentDevice.name}`);
+      } else {
+        console.log('⚠️  Previously selected device not found in current scan, using first discovered device');
+      }
     }
-  }, 30000); // Update every 30 seconds
+  }
+  
+  if (!currentDevice && discoveredDevices.size > 0) {
+    // Use first discovered device as default
+    const firstDevice = Array.from(discoveredDevices.values())[0];
+    currentDevice = firstDevice;
+    console.log(`🎯 Using first discovered device as default: ${currentDevice.name}`);
+  }
 
   // Subscribe to realtime updates
   const channel = subscribeToCommands();
