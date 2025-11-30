@@ -259,7 +259,7 @@ const Index = () => {
     await handleCast(url);
   };
 
-  // Fetch recent commands for bridge
+  // Fetch recent commands for bridge and add to activity log
   const fetchRecentCommands = async () => {
     if (!bridgeDeviceId) return;
 
@@ -273,6 +273,22 @@ const Index = () => {
 
       if (error) throw error;
       setRecentCommands(data || []);
+      
+      // Add command status updates to activity log
+      data?.forEach(command => {
+        const existingLog = activityLogs.find(log => log.details?.includes(command.id));
+        if (!existingLog) {
+          const logType = command.status === 'failed' ? 'error' : 'bridge';
+          const message = command.status === 'completed' ? 'Cast completed' : 
+                         command.status === 'failed' ? 'Cast failed' :
+                         command.status === 'processing' ? 'Processing cast' : 'Cast queued';
+          addActivityLog(
+            logType,
+            message,
+            `${command.url.substring(0, 60)}... [${command.id.substring(0, 8)}]`
+          );
+        }
+      });
     } catch (error) {
       console.error('Error fetching commands:', error);
     }
@@ -587,59 +603,20 @@ const Index = () => {
             </CardContent>
           </Card>
 
-          {/* Recent Commands Log */}
-          {isBridgeConfigured && recentCommands.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Command Log</CardTitle>
-                <CardDescription>
-                  Recent cast commands processed by this bridge
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {recentCommands.map((command) => (
-                    <div
-                      key={command.id}
-                      className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg"
-                    >
-                      {getStatusIcon(command.status)}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {command.url}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(command.created_at).toLocaleTimeString()}
-                        </p>
-                        {command.error_message && (
-                          <p className="text-xs text-red-500 mt-1">
-                            {command.error_message}
-                          </p>
-                        )}
-                      </div>
-                      <Badge className={getStatusColor(command.status)}>
-                        {command.status}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </main>
 
-        {/* Activity Log */}
-        <div className="mt-16 max-w-4xl mx-auto">
+        {/* Unified Activity Log */}
+        <div className="mt-8 max-w-4xl mx-auto">
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="flex items-center gap-2">
                     <Clock className="h-5 w-5" />
-                    Activity Log
+                    Activity & Command Log
                   </CardTitle>
                   <CardDescription>
-                    Real-time log of connections, casts, and bridge activity
+                    Real-time log of all connections, casts, commands, and bridge activity
                   </CardDescription>
                 </div>
                 {activityLogs.length > 0 && (
