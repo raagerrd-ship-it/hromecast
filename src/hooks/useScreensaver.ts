@@ -66,6 +66,13 @@ export const useScreensaver = ({
       return;
     }
 
+    // If someone is already casting, don't interrupt
+    if (isCasting) {
+      console.log('[Screensaver] Check skipped - device is already casting');
+      onLog?.('connection', 'Screensaver check skipped', 'Device is actively casting');
+      return;
+    }
+
     // If screensaver is already active, don't trigger again
     if (isScreensaverActive) {
       console.log('[Screensaver] Check skipped - already active (waiting for user activity)');
@@ -124,6 +131,7 @@ export const useScreensaver = ({
       }
     }
   }, [
+    isCasting,
     screensaverConfig.enabled,
     screensaverConfig.url,
     screensaverConfig.idleTimeout,
