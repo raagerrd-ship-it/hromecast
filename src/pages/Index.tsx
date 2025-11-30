@@ -128,10 +128,11 @@ const Index = () => {
       
       // Queue cast command for bridge service
       const deviceId = getOrCreateDeviceId();
+      const castUrl = renderData.videoUrl || renderData.viewerUrl;
       const { data: queueData, error: queueError } = await supabase.functions.invoke('queue-cast', {
         body: { 
           deviceId,
-          url: renderData.videoUrl,
+          url: castUrl,
           commandType: 'cast'
         }
       });
@@ -153,8 +154,8 @@ const Index = () => {
 
       console.log("Cast command queued:", queueData);
       
-      // Return the video URL for reference
-      return renderData.videoUrl;
+      // Return the cast URL for reference
+      return castUrl;
       
     } catch (error) {
       console.error("Error processing website:", error);
@@ -169,8 +170,21 @@ const Index = () => {
 
   const handleStartScreensaver = async (url: string) => {
     console.log("Starting screensaver with URL:", url);
-    const castUrl = await handleCast(url);
-    if (castUrl) {
+    
+    // For screensaver, prepare the URL through render-website
+    const { data: renderData, error: renderError } = await supabase.functions.invoke('render-website', {
+      body: { url }
+    });
+    
+    if (renderError || !renderData) {
+      console.error("Error preparing screensaver URL:", renderError);
+      return;
+    }
+    
+    // Cast directly via local Chromecast (not through bridge)
+    const castUrl = renderData.viewerUrl;
+    if (castUrl && chromecast.isConnected) {
+      console.log("Starting screensaver cast:", castUrl);
       chromecast.loadMedia(castUrl);
     }
   };
