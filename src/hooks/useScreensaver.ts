@@ -7,6 +7,7 @@ interface UseScreensaverProps {
   lastActivityTime: number;
   screensaverConfig: ScreensaverConfig;
   onStartScreensaver: (url: string) => Promise<void>;
+  onLog?: (type: 'connection' | 'cast' | 'bridge' | 'error', message: string, details?: string) => void;
 }
 
 export const useScreensaver = ({
@@ -15,49 +16,36 @@ export const useScreensaver = ({
   lastActivityTime,
   screensaverConfig,
   onStartScreensaver,
+  onLog,
 }: UseScreensaverProps) => {
   const [isScreensaverActive, setIsScreensaverActive] = useState(false);
 
   const checkIdleStatus = useCallback(async () => {
-    console.log('Screensaver check running...', {
-      enabled: screensaverConfig.enabled,
-      hasUrl: !!screensaverConfig.url,
-      url: screensaverConfig.url,
-      isScreensaverActive,
-      idleTimeMs: Date.now() - lastActivityTime,
-      timeoutMs: screensaverConfig.idleTimeout * 60 * 1000
-    });
-
     // In bridge mode, we don't need to be connected to cast
     // The bridge service will handle the Chromecast connection
     if (!screensaverConfig.enabled) {
-      console.log('Screensaver disabled, skipping check');
       return;
     }
 
     if (isScreensaverActive) {
-      console.log('Screensaver already active, skipping check');
       return;
     }
 
     if (!screensaverConfig.url) {
-      console.log('No screensaver URL configured, skipping check');
+      onLog?.('error', 'Screensaver check failed', 'No URL configured');
       return;
     }
 
     const idleTimeMs = Date.now() - lastActivityTime;
     const idleTimeoutMs = screensaverConfig.idleTimeout * 60 * 1000;
 
-    console.log(`Idle check: ${idleTimeMs}ms / ${idleTimeoutMs}ms needed`);
-
     if (idleTimeMs >= idleTimeoutMs) {
-      console.log('✅ TRIGGERING SCREENSAVER NOW!');
+      onLog?.('cast', 'Screensaver idle timeout reached', `Triggering after ${Math.floor(idleTimeMs / 1000)}s idle`);
       setIsScreensaverActive(true);
       await onStartScreensaver(screensaverConfig.url);
       
       // Reset after a delay to allow re-triggering if needed
       setTimeout(() => {
-        console.log('Resetting screensaver active state');
         setIsScreensaverActive(false);
       }, 30000); // Reset after 30 seconds
     }
@@ -66,6 +54,7 @@ export const useScreensaver = ({
     isScreensaverActive,
     lastActivityTime,
     onStartScreensaver,
+    onLog,
   ]);
 
   useEffect(() => {
