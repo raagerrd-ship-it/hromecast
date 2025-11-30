@@ -59,7 +59,7 @@ function discoverDevices() {
   });
 }
 
-// Cast media to Chromecast
+// Cast media to Chromecast using custom receiver
 async function castMedia(url) {
   if (!currentDevice) {
     throw new Error('No Chromecast devices found on network');
@@ -67,22 +67,36 @@ async function castMedia(url) {
   
   console.log(`📺 Casting to ${currentDevice.name}: ${url}`);
   
+  // Use custom receiver App ID
+  const CUSTOM_APP_ID = 'FE376873';
+  
   return new Promise((resolve, reject) => {
-    currentDevice.play(url, {
-      // Remove explicit type to let Chromecast detect it
-      title: 'Website Viewer',
-      streamType: 'LIVE',
-      autoplay: true
-    }, (err) => {
+    // First, launch the custom receiver app
+    currentDevice.app(CUSTOM_APP_ID, (err, app) => {
       if (err) {
-        console.error('❌ Cast error:', err.message);
+        console.error('❌ Failed to launch custom receiver:', err.message);
         reject(err);
         return;
       }
       
-      console.log('✅ Media loaded successfully');
-      activeSession = { url, startTime: Date.now() };
-      resolve({ success: true });
+      console.log('✅ Custom receiver launched');
+      
+      // Load the URL via the custom receiver
+      currentDevice.play(url, {
+        title: 'Website Viewer',
+        contentType: 'text/html',
+        autoplay: true
+      }, (err) => {
+        if (err) {
+          console.error('❌ Cast error:', err.message);
+          reject(err);
+          return;
+        }
+        
+        console.log('✅ Media loaded successfully');
+        activeSession = { url, startTime: Date.now() };
+        resolve({ success: true });
+      });
     });
   });
 }
