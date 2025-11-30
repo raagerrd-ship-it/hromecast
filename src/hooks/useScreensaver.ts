@@ -38,11 +38,6 @@ export const useScreensaver = ({
       return;
     }
 
-    if (isScreensaverActive) {
-      console.log('[Screensaver] Check skipped - already active');
-      return;
-    }
-
     if (!screensaverConfig.url) {
       console.log('[Screensaver] Check failed - no URL');
       onLog?.('error', 'Screensaver check failed', 'No URL configured');
@@ -65,6 +60,12 @@ export const useScreensaver = ({
     if (remainingMs > 0) {
       onLog?.('connection', 'Screensaver idle check', `${Math.floor(remainingMs / 1000)}s until activation`);
     } else {
+      // Only trigger if not already active
+      if (isScreensaverActive) {
+        console.log('[Screensaver] Check skipped - already triggered and waiting');
+        return;
+      }
+      
       console.log('[Screensaver] ⚡ TRIGGERING SCREENSAVER NOW ⚡');
       onLog?.('cast', 'Screensaver idle timeout reached', `Triggering after ${Math.floor(idleTimeMs / 1000)}s idle`);
       setIsScreensaverActive(true);
@@ -73,9 +74,16 @@ export const useScreensaver = ({
         console.log('[Screensaver] Calling onStartScreensaver with URL:', screensaverConfig.url);
         await onStartScreensaver(screensaverConfig.url);
         console.log('[Screensaver] ✅ onStartScreensaver completed successfully');
+        // Reset after a delay to allow re-triggering if cast fails
+        setTimeout(() => {
+          console.log('[Screensaver] Resetting isScreensaverActive flag');
+          setIsScreensaverActive(false);
+        }, 30000); // 30 seconds
       } catch (error) {
         console.error('[Screensaver] ❌ onStartScreensaver failed:', error);
         onLog?.('error', 'Screensaver cast failed', String(error));
+        // Reset immediately on error so it can retry
+        setIsScreensaverActive(false);
       }
     }
   }, [

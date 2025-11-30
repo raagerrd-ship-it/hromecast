@@ -229,8 +229,13 @@ const Index = () => {
     console.log("Starting screensaver with URL:", url);
     addActivityLog('cast', 'Screensaver activated', `Auto-casting: ${url}`);
     
-    // Queue screensaver cast through bridge service (same as regular casts)
-    await handleCast(url);
+    try {
+      // Cast directly and wait for result
+      await handleCast(url);
+    } catch (error) {
+      console.error("Screensaver cast error:", error);
+      addActivityLog('error', 'Screensaver cast failed', String(error));
+    }
   };
 
   // Fetch recent commands for bridge
