@@ -36,6 +36,7 @@ export const ScreensaverSettings = ({ onSave, currentSettings, chromecast }: Scr
   const [url, setUrl] = useState(currentSettings.url);
   const [idleTimeout, setIdleTimeout] = useState(currentSettings.idleTimeout);
   const [checkInterval, setCheckInterval] = useState(currentSettings.checkInterval);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const { toast } = useToast();
 
   // Sync local state with prop changes (e.g., when loaded from database)
@@ -44,6 +45,7 @@ export const ScreensaverSettings = ({ onSave, currentSettings, chromecast }: Scr
     setUrl(currentSettings.url);
     setIdleTimeout(currentSettings.idleTimeout);
     setCheckInterval(currentSettings.checkInterval);
+    setIsInitialLoad(false);
   }, [currentSettings]);
 
   const handleSave = () => {
@@ -62,6 +64,16 @@ export const ScreensaverSettings = ({ onSave, currentSettings, chromecast }: Scr
       description: "Screensaver settings have been updated",
     });
   };
+
+  // Auto-save when settings change (but not on initial load)
+  useEffect(() => {
+    if (isInitialLoad) return;
+    
+    // Only auto-save if we have a valid URL or screensaver is disabled
+    if (!enabled || (enabled && url)) {
+      onSave({ enabled, url, idleTimeout, checkInterval });
+    }
+  }, [enabled, url, idleTimeout, checkInterval]);
 
   return (
     <Card className="bg-card/50 border-border/50 backdrop-blur-sm">
@@ -181,9 +193,9 @@ export const ScreensaverSettings = ({ onSave, currentSettings, chromecast }: Scr
           </>
         )}
 
-        <Button onClick={handleSave} className="w-full">
+        <Button onClick={handleSave} className="w-full" variant="outline">
           <Save className="h-4 w-4 mr-2" />
-          Save Settings
+          Save Now
         </Button>
       </CardContent>
     </Card>
