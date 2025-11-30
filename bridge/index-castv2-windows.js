@@ -297,63 +297,101 @@ async function castMedia(url) {
       connection.send({ type: 'CONNECT' });
       
       // Start heartbeat
-      setInterval(() => {
+      const heartbeatInterval = setInterval(() => {
         heartbeat.send({ type: 'PING' });
       }, 5000);
       
-      console.log(`🚀 Launching custom receiver app: ${CUSTOM_APP_ID}`);
+      // Listen for heartbeat responses
+      heartbeat.on('message', (data) => {
+        if (data.type === 'PONG') {
+          console.log('💓 Heartbeat OK');
+        }
+      });
+      
+      // First, get current receiver status
+      console.log('📡 Getting receiver status...');
+      receiver.send({ type: 'GET_STATUS', requestId: 1 });
       
       // Set a timeout for app launch
       const launchTimeout = setTimeout(() => {
-        console.error('⏱️  Timeout waiting for app to launch');
+        console.error('⏱️  Timeout waiting for receiver response');
+        clearInterval(heartbeatInterval);
         client.close();
-        reject(new Error('App launch timeout'));
+        reject(new Error('Receiver timeout'));
       }, 15000);
       
-      // Launch custom receiver
-      receiver.send({ type: 'LAUNCH', appId: CUSTOM_APP_ID, requestId: 1 });
+      let appLaunched = false;
       
       receiver.on('message', (data) => {
         console.log('📨 Receiver message:', JSON.stringify(data, null, 2));
         
-        if (data.type === 'RECEIVER_STATUS' && data.status && data.status.applications) {
-          clearTimeout(launchTimeout);
-          const app = data.status.applications[0];
-          console.log('📱 App launched:', app.displayName);
+        if (data.type === 'RECEIVER_STATUS') {
+          // First response - receiver status received
+          if (!appLaunched) {
+            console.log(`🚀 Launching custom receiver app: ${CUSTOM_APP_ID}`);
+            receiver.send({ type: 'LAUNCH', appId: CUSTOM_APP_ID, requestId: 2 });
+            appLaunched = true;
+            return;
+          }
           
-          // Join the app session
-          const sessionId = app.sessionId;
-          const transportId = app.transportId;
-          
-          // Create media channel
-          const media = client.createChannel('sender-0', transportId, 'urn:x-cast:com.google.cast.media', 'JSON');
-          
-          // Load the URL
-          console.log(`📺 Loading URL: ${url}`);
-          media.send({
-            type: 'LOAD',
-            requestId: 2,
-            sessionId: sessionId,
-            media: {
-              contentId: url,
-              contentType: 'text/html',
-              streamType: 'LIVE',
-              metadata: {
-                type: 0,
-                metadataType: 0,
-                title: 'Website Viewer'
-              }
-            },
-            autoplay: true
-          });
-          
-          media.on('message', (data) => {
-            console.log('📨 Media message:', JSON.stringify(data, null, 2));
-            if (data.type === 'MEDIA_STATUS') {
-              console.log('✅ Media loaded successfully');
-              resolve({ success: true });
+          // App launch response
+          if (data.status && data.status.applications && data.status.applications.length > 0) {
+            clearTimeout(launchTimeout);
+            clearInterval(heartbeatInterval);
+            
+            const app = data.status.applications[0];
+            console.log('📱 App launched:', app.displayName, 'AppId:', app.appId);
+            
+            // Verify it's our custom app
+            if (app.appId !== CUSTOM_APP_ID) {
+              console.log('⚠️  Wrong app running, stopping it first...');
+              receiver.send({ type: 'STOP', requestId: 3, sessionId: app.sessionId });
+              setTimeout(() => {
+                receiver.send({ type: 'LAUNCH', appId: CUSTOM_APP_ID, requestId: 4 });
+              }, 1000);
+              return;
             }
-          });
+            
+            // Join the app session
+            const sessionId = app.sessionId;
+            const transportId = app.transportId;
+            
+            // Connect to the app
+            const appConnection = client.createChannel('sender-0', transportId, 'urn:x-cast:com.google.cast.tp.connection', 'JSON');
+            appConnection.send({ type: 'CONNECT' });
+            
+            // Create media channel
+            const media = client.createChannel('sender-0', transportId, 'urn:x-cast:com.google.cast.media', 'JSON');
+            
+            // Load the URL
+            console.log(`📺 Loading URL: ${url}`);
+            media.send({
+              type: 'LOAD',
+              requestId: 5,
+              sessionId: sessionId,
+              media: {
+                contentId: url,
+                contentType: 'text/html',
+                streamType: 'LIVE',
+                metadata: {
+                  type: 0,
+                  metadataType: 0,
+                  title: 'Website Viewer'
+                }
+              },
+              autoplay: true
+            });
+            
+            media.on('message', (data) => {
+              console.log('📨 Media message:', JSON.stringify(data, null, 2));
+              if (data.type === 'MEDIA_STATUS') {
+                console.log('✅ Media loaded successfully');
+                resolve({ success: true });
+              }
+            });
+          } else {
+            console.log('⚠️  No applications running in receiver status');
+          }
         }
       });
     });
