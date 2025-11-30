@@ -1,6 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
 const Chromecasts = require('chromecasts');
-const Bonjour = require('bonjour-service');
 require('dotenv').config();
 
 // Configuration
