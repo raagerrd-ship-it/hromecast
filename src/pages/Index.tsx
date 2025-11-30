@@ -171,22 +171,8 @@ const Index = () => {
   const handleStartScreensaver = async (url: string) => {
     console.log("Starting screensaver with URL:", url);
     
-    // For screensaver, prepare the URL through render-website
-    const { data: renderData, error: renderError } = await supabase.functions.invoke('render-website', {
-      body: { url }
-    });
-    
-    if (renderError || !renderData) {
-      console.error("Error preparing screensaver URL:", renderError);
-      return;
-    }
-    
-    // Cast directly via local Chromecast (not through bridge)
-    const castUrl = renderData.viewerUrl;
-    if (castUrl && chromecast.isConnected) {
-      console.log("Starting screensaver cast:", castUrl);
-      chromecast.loadMedia(castUrl);
-    }
+    // Queue screensaver cast through bridge service (same as regular casts)
+    await handleCast(url);
   };
 
   const screensaverStatus = useScreensaver({
