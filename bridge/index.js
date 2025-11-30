@@ -46,7 +46,9 @@ async function castMedia(url) {
   return new Promise((resolve, reject) => {
     currentDevice.play(url, {
       type: 'text/html',
-      title: 'Website Viewer'
+      title: 'Website Viewer',
+      streamType: 'LIVE',
+      autoplay: true
     }, (err) => {
       if (err) {
         console.error('❌ Cast error:', err.message);
