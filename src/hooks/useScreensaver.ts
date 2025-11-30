@@ -48,11 +48,7 @@ export const useScreensaver = ({
       onLog?.('cast', 'Screensaver idle timeout reached', `Triggering after ${Math.floor(idleTimeMs / 1000)}s idle`);
       setIsScreensaverActive(true);
       await onStartScreensaver(screensaverConfig.url);
-      
-      // Reset after a delay to allow re-triggering if needed
-      setTimeout(() => {
-        setIsScreensaverActive(false);
-      }, 30000); // Reset after 30 seconds
+      // Don't auto-reset - only reset when casting state changes or user interacts
     }
   }, [
     screensaverConfig,
@@ -86,8 +82,9 @@ export const useScreensaver = ({
   useEffect(() => {
     if (isCasting) {
       setIsScreensaverActive(false);
+      onLog?.('connection', 'Screensaver reset', 'Casting activity detected');
     }
-  }, [isCasting]);
+  }, [isCasting, onLog]);
 
   // Calculate status information
   const idleTimeMs = Date.now() - lastActivityTime;
