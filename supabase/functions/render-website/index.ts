@@ -40,22 +40,17 @@ serve(async (req) => {
       );
     }
 
-    // Generate a viewer URL that Chromecast can load
-    // This creates a special page that displays the website in an iframe
-    const viewerUrl = `${req.headers.get('origin') || 'https://db36ca02-4c2b-4e0e-a58f-a351aa767ebf.lovableproject.com'}/viewer?url=${encodeURIComponent(url)}`;
-
-    console.log('Generated viewer URL:', viewerUrl);
-
-    // Always return viewer URL for live-casting
-    console.log('Using viewer URL for live casting');
+    // Return the URL directly for Chromecast to load
+    // This bypasses the iframe wrapper which was causing loading issues
+    console.log('Using direct URL for casting');
     
     return new Response(
       JSON.stringify({ 
         success: true,
         url,
-        viewerUrl,
+        viewerUrl: url,  // Use direct URL instead of viewer wrapper
         contentType: 'text/html',
-        message: 'Live casting enabled',
+        message: 'Direct URL casting',
         timestamp: new Date().toISOString()
       }),
       { 
