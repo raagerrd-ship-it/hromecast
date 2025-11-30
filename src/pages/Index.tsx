@@ -1,5 +1,6 @@
 import { CastInterface } from "@/components/CastInterface";
 import { ScreensaverSettings, ScreensaverConfig } from "@/components/ScreensaverSettings";
+import { ConnectionStatus } from "@/components/ConnectionStatus";
 import { useScreensaver } from "@/hooks/useScreensaver";
 import { useChromecast } from "@/hooks/useChromecast";
 import { Monitor } from "lucide-react";
@@ -98,6 +99,12 @@ const Index = () => {
 
         {/* Main Interface */}
         <main className="space-y-6">
+          <ConnectionStatus 
+            isConnected={chromecast.isConnected}
+            deviceName={chromecast.currentDevice?.friendlyName}
+            hasAutoConnect={chromecast.isAvailable && !chromecast.isConnected}
+          />
+          
           <CastInterface onCast={handleCast} chromecast={chromecast} />
           
           <ScreensaverSettings
