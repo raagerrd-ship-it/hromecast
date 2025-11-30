@@ -3,7 +3,7 @@ import { ScreensaverSettings, ScreensaverConfig } from "@/components/Screensaver
 import { ConnectionStatus } from "@/components/ConnectionStatus";
 import { useScreensaver } from "@/hooks/useScreensaver";
 import { useChromecast } from "@/hooks/useChromecast";
-import { Monitor, Smartphone, Wifi, WifiOff, Play, Square, Settings, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { Monitor, Smartphone, Wifi, WifiOff, Play, Square, Settings, CheckCircle2, XCircle, Clock, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
@@ -644,13 +644,28 @@ const Index = () => {
         <div className="mt-16 max-w-4xl mx-auto">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="h-5 w-5" />
-                Activity Log
-              </CardTitle>
-              <CardDescription>
-                Real-time log of connections, casts, and bridge activity
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Clock className="h-5 w-5" />
+                    Activity Log
+                  </CardTitle>
+                  <CardDescription>
+                    Real-time log of connections, casts, and bridge activity
+                  </CardDescription>
+                </div>
+                {activityLogs.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setActivityLogs([])}
+                    className="gap-2"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Clear Log
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               {activityLogs.length === 0 ? (
