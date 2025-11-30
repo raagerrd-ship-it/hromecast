@@ -115,25 +115,16 @@ const Index = () => {
   // Load bridge configuration
   const loadBridgeConfiguration = async () => {
     try {
-      const { value: savedDeviceId } = await Preferences.get({ key: 'bridge_device_id' });
-      let deviceId = savedDeviceId;
-      
-      if (!deviceId) {
-        // Generate a random device ID
-        deviceId = `bridge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        await Preferences.set({ key: 'bridge_device_id', value: deviceId });
-        addActivityLog('bridge', 'Generated new bridge device ID', deviceId);
-      }
+      const deviceId = "device-1764517968693-qxx7xr08y";
+      await Preferences.set({ key: 'bridge_device_id', value: deviceId });
       
       setBridgeDeviceId(deviceId);
       setIsBridgeConfigured(true);
       
       // Auto-start bridge service after configuration is loaded
       setTimeout(() => {
-        if (deviceId) {
-          setIsServiceActive(true);
-          addActivityLog('bridge', 'Bridge service auto-started', `Device ID: ${deviceId}`);
-        }
+        setIsServiceActive(true);
+        addActivityLog('bridge', 'Bridge service auto-started', `Device ID: ${deviceId}`);
       }, 1500);
     } catch (error) {
       console.error('Error loading bridge configuration:', error);
