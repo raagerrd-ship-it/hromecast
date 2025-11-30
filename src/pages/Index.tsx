@@ -255,32 +255,62 @@ const Index = () => {
     console.log("Starting screensaver with URL:", url);
     addActivityLog('cast', 'Screensaver activated', `Auto-casting: ${url}`);
     
-    // Queue screensaver cast directly without viewer wrapper
-    const deviceId = getOrCreateDeviceId();
-    const { data: queueData, error: queueError } = await supabase.functions.invoke('queue-cast', {
-      body: { 
-        deviceId,
-        url: url, // Cast URL directly
-        commandType: 'cast'
-      }
-    });
+    try {
+      // First, render the website to get the viewer URL (wraps in iframe for Chromecast)
+      const { data: renderData, error: renderError } = await supabase.functions.invoke('render-website', {
+        body: { url, action: 'cast' }
+      });
 
-    if (queueError) {
-      console.error("Error queueing screensaver command:", queueError);
-      addActivityLog('error', 'Failed to queue screensaver', queueError.message);
+      if (renderError) {
+        console.error("Error rendering screensaver:", renderError);
+        addActivityLog('error', 'Failed to render screensaver', renderError.message);
+        toast({
+          title: "Screensaver Failed",
+          description: renderError.message || "Failed to prepare screensaver",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      console.log("Screensaver render response:", renderData);
+      const viewerUrl = renderData.viewerUrl;
+      addActivityLog('cast', 'Screensaver rendered successfully', `Viewer URL: ${viewerUrl}`);
+      
+      // Queue the viewer URL (not the raw URL) for bridge service
+      const deviceId = getOrCreateDeviceId();
+      const { data: queueData, error: queueError } = await supabase.functions.invoke('queue-cast', {
+        body: { 
+          deviceId,
+          url: viewerUrl, // Use viewer URL that wraps in iframe
+          commandType: 'cast'
+        }
+      });
+
+      if (queueError) {
+        console.error("Error queueing screensaver command:", queueError);
+        addActivityLog('error', 'Failed to queue screensaver', queueError.message);
+        toast({
+          title: "Screensaver Failed",
+          description: "Failed to queue screensaver cast",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      addActivityLog('bridge', 'Screensaver queued to bridge', `Device: ${deviceId}, URL: ${viewerUrl}`);
+      toast({
+        title: "Screensaver Started",
+        description: "Bridge will cast to Chromecast",
+      });
+    } catch (error) {
+      console.error("Error processing screensaver:", error);
+      addActivityLog('error', 'Screensaver error', String(error));
       toast({
         title: "Screensaver Failed",
-        description: "Failed to queue screensaver cast",
+        description: "An unexpected error occurred",
         variant: "destructive",
       });
-      return;
     }
-
-    addActivityLog('bridge', 'Screensaver queued to bridge', `Device: ${deviceId}, URL: ${url}`);
-    toast({
-      title: "Screensaver Started",
-      description: "Bridge will cast to Chromecast",
-    });
   };
 
   // Fetch recent commands for bridge and add to activity log
