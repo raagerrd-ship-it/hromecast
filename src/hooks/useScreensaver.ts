@@ -74,11 +74,8 @@ export const useScreensaver = ({
         console.log('[Screensaver] Calling onStartScreensaver with URL:', screensaverConfig.url);
         await onStartScreensaver(screensaverConfig.url);
         console.log('[Screensaver] ✅ onStartScreensaver completed successfully');
-        // Reset after a delay to allow re-triggering if cast fails
-        setTimeout(() => {
-          console.log('[Screensaver] Resetting isScreensaverActive flag');
-          setIsScreensaverActive(false);
-        }, 30000); // 30 seconds
+        onLog?.('cast', 'Screensaver activated', 'Cast command sent successfully');
+        // Don't reset - stay active until user activity
       } catch (error) {
         console.error('[Screensaver] ❌ onStartScreensaver failed:', error);
         onLog?.('error', 'Screensaver cast failed', String(error));
@@ -124,13 +121,20 @@ export const useScreensaver = ({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screensaverConfig.enabled, screensaverConfig.checkInterval, screensaverConfig.idleTimeout, screensaverConfig.url]);
 
-  // Reset screensaver state when casting starts or connection changes
+  // Reset screensaver when user activity is detected (lastActivityTime changes)
   useEffect(() => {
-    if (isCasting) {
-      setIsScreensaverActive(false);
-      onLog?.('connection', 'Screensaver reset', 'Casting activity detected');
+    if (isScreensaverActive) {
+      const now = Date.now();
+      const timeSinceActivity = now - lastActivityTime;
+      
+      // If activity occurred recently (within last 5 seconds), user is active again
+      if (timeSinceActivity < 5000) {
+        console.log('[Screensaver] User activity detected, resetting screensaver');
+        setIsScreensaverActive(false);
+        onLog?.('connection', 'Screensaver deactivated', 'User activity detected');
+      }
     }
-  }, [isCasting]); // Remove onLog from dependencies to prevent infinite loop
+  }, [lastActivityTime, isScreensaverActive, onLog]);
 
   // Calculate status information
   const idleTimeMs = Date.now() - lastActivityTime;
