@@ -24,6 +24,7 @@ export const useScreensaver = ({
     // In bridge mode, we don't need to be connected to cast
     // The bridge service will handle the Chromecast connection
     if (!screensaverConfig.enabled) {
+      onLog?.('connection', 'Screensaver check skipped', 'Screensaver is disabled');
       return;
     }
 
@@ -38,8 +39,12 @@ export const useScreensaver = ({
 
     const idleTimeMs = Date.now() - lastActivityTime;
     const idleTimeoutMs = screensaverConfig.idleTimeout * 60 * 1000;
+    const remainingMs = idleTimeoutMs - idleTimeMs;
 
-    if (idleTimeMs >= idleTimeoutMs) {
+    // Log the check status
+    if (remainingMs > 0) {
+      onLog?.('connection', 'Screensaver idle check', `${Math.floor(remainingMs / 1000)}s until activation`);
+    } else {
       onLog?.('cast', 'Screensaver idle timeout reached', `Triggering after ${Math.floor(idleTimeMs / 1000)}s idle`);
       setIsScreensaverActive(true);
       await onStartScreensaver(screensaverConfig.url);
