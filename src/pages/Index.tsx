@@ -597,7 +597,7 @@ const Index = () => {
                   Live preview of what will be cast to your Chromecast
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
                 <div className="relative w-full max-w-2xl mx-auto aspect-video bg-muted rounded-lg overflow-hidden border">
                   <iframe
                     src={screensaverConfig.url}
@@ -606,6 +606,16 @@ const Index = () => {
                     sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   />
+                </div>
+                
+                <div className="flex justify-center">
+                  <Button 
+                    onClick={() => handleStartScreensaver(screensaverConfig.url!)}
+                    className="gap-2"
+                  >
+                    <Play className="h-4 w-4" />
+                    Test Cast Now
+                  </Button>
                 </div>
               </CardContent>
             </Card>
