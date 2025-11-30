@@ -506,10 +506,10 @@ const Index = () => {
             <Monitor className="h-8 w-8 text-primary" />
           </div>
           <h1 className="text-5xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-            ChromeCast Portal
+            ChromeCast Screensaver
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Cast any website to your Chromecast from a remote server. Enter a URL and stream it directly to your TV.
+            Automatically cast content to your Chromecast when idle. Configure your screensaver settings and let the bridge service handle the rest.
           </p>
         </header>
 
@@ -530,8 +530,6 @@ const Index = () => {
             }
             onReconnect={chromecast.requestSession}
           />
-          
-          <CastInterface onCast={handleCast} chromecast={chromecast} />
           
           <ScreensaverSettings
             currentSettings={screensaverConfig}
