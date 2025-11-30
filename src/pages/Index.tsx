@@ -482,6 +482,7 @@ const Index = () => {
     lastActivityTime: chromecast.lastActivityTime,
     screensaverConfig,
     onStartScreensaver: handleStartScreensaver,
+    onLog: addActivityLog,
   });
 
   // Force re-render every second to update idle time display
