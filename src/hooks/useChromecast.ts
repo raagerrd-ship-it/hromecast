@@ -149,10 +149,11 @@ export const useChromecast = () => {
         return;
       }
 
-      const mediaInfo = new cast.media.MediaInfo(url, 'text/html');
+      // Set content type to video/mp4 for video casting
+      const mediaInfo = new cast.media.MediaInfo(url, 'video/mp4');
       mediaInfo.metadata = new cast.media.GenericMediaMetadata();
-      mediaInfo.metadata.title = 'Website Cast';
-      mediaInfo.metadata.subtitle = url;
+      mediaInfo.metadata.title = 'Website Video';
+      mediaInfo.metadata.subtitle = 'Recorded website view';
 
       const request = new cast.media.LoadRequest(mediaInfo);
 
