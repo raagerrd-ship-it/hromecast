@@ -24,7 +24,7 @@ serve(async (req) => {
       );
     }
 
-    console.log('Processing URL for video rendering:', url, 'Action:', action);
+    console.log('Processing URL for live casting:', url, 'Action:', action);
 
     // Validate URL
     let targetUrl: URL;
@@ -40,70 +40,25 @@ serve(async (req) => {
       );
     }
 
-    // Get Urlbox credentials
-    const urlboxApiKey = Deno.env.get('URLBOX_API_KEY');
-    const urlboxApiSecret = Deno.env.get('URLBOX_API_SECRET');
-
-    if (!urlboxApiKey || !urlboxApiSecret) {
-      console.error('Urlbox credentials not configured');
-      return new Response(
-        JSON.stringify({ error: 'Video rendering service not configured' }),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      );
-    }
-
-    // Configure Urlbox to render the website as a video
-    const urlboxOptions = {
-      url: url,
-      format: 'mp4',  // MP4 video format for Chromecast
-      video: true,
-      video_duration: 30, // 30 seconds of video capture
-      full_page: true,
-      width: 1920,
-      height: 1080,
-      quality: 80,
-      ttl: 3600 // Cache for 1 hour
-    };
-
-    // Create query string
-    const queryString = new URLSearchParams(urlboxOptions as any).toString();
+    // Use custom Chromecast receiver that can display live websites
+    const receiverUrl = `${req.headers.get('origin') || 'https://db36ca02-4c2b-4e0e-a58f-a351aa767ebf.lovableproject.com'}/chromecast-receiver.html`;
     
-    // Generate HMAC signature
-    const encoder = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-      'raw',
-      encoder.encode(urlboxApiSecret),
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['sign']
-    );
-    
-    const signature = await crypto.subtle.sign(
-      'HMAC',
-      key,
-      encoder.encode(queryString)
-    );
-    
-    const token = Array.from(new Uint8Array(signature))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
+    // The actual website URL will be passed to the receiver
+    // For now, return the target URL directly so the bridge can cast it
+    const viewerUrl = url;
 
-    // Construct Urlbox video URL
-    const videoUrl = `https://api.urlbox.io/v1/${urlboxApiKey}/${token}/mp4?${queryString}`;
-
-    console.log('Generated video URL via Urlbox');
-    console.log('Video will render website as MP4 stream');
+    console.log('Using custom Chromecast receiver for live streaming');
+    console.log('Target URL:', viewerUrl);
+    console.log('Receiver app:', receiverUrl);
     
     return new Response(
       JSON.stringify({ 
         success: true,
         url,
-        viewerUrl: videoUrl,
-        contentType: 'video/mp4',
-        message: 'Server-side video rendering enabled',
+        viewerUrl,
+        receiverUrl,
+        contentType: 'text/html',
+        message: 'Custom receiver enabled for live streaming',
         timestamp: new Date().toISOString()
       }),
       { 
