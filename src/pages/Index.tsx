@@ -8,34 +8,36 @@ const Index = () => {
 
   const handleCast = async (url: string) => {
     try {
-      console.log("Calling cast-website edge function with URL:", url);
+      console.log("Processing URL for casting:", url);
       
-      const { data, error } = await supabase.functions.invoke('cast-website', {
-        body: { url }
+      // Call the render-website function to generate a viewer URL
+      const { data: renderData, error: renderError } = await supabase.functions.invoke('render-website', {
+        body: { url, action: 'viewer' }
       });
 
-      if (error) {
-        console.error("Error from edge function:", error);
+      if (renderError) {
+        console.error("Error from render function:", renderError);
         toast({
-          title: "Cast Failed",
-          description: error.message || "Failed to connect to casting service",
+          title: "Rendering Failed",
+          description: renderError.message || "Failed to prepare website for casting",
           variant: "destructive",
         });
-        return;
+        return null;
       }
 
-      console.log("Cast response:", data);
-      toast({
-        title: "Website Loaded",
-        description: `Successfully processed ${url}`,
-      });
+      console.log("Render response:", renderData);
+      
+      // Return the viewer URL that can be cast
+      return renderData.viewerUrl;
+      
     } catch (error) {
-      console.error("Error casting website:", error);
+      console.error("Error processing website:", error);
       toast({
-        title: "Cast Failed",
+        title: "Processing Failed",
         description: "An unexpected error occurred",
         variant: "destructive",
       });
+      return null;
     }
   };
 
