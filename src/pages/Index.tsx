@@ -34,11 +34,8 @@ interface ActivityLog {
 }
 
 const getOrCreateDeviceId = () => {
-  let deviceId = localStorage.getItem(DEVICE_ID_KEY);
-  if (!deviceId) {
-    deviceId = `device-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    localStorage.setItem(DEVICE_ID_KEY, deviceId);
-  }
+  const deviceId = "device-1764517968693-qxx7xr08y";
+  localStorage.setItem(DEVICE_ID_KEY, deviceId);
   return deviceId;
 };
 
