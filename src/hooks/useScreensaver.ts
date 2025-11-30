@@ -64,15 +64,24 @@ export const useScreensaver = ({
 
   useEffect(() => {
     if (!screensaverConfig.enabled) {
+      onLog?.('connection', 'Screensaver monitoring stopped', 'Screensaver is disabled');
       return;
     }
+
+    onLog?.('connection', 'Screensaver monitoring started', `Checking every ${screensaverConfig.checkInterval}s, timeout: ${screensaverConfig.idleTimeout}m`);
 
     // Check at the configured interval
     const intervalMs = screensaverConfig.checkInterval * 1000;
     const interval = setInterval(checkIdleStatus, intervalMs);
 
-    return () => clearInterval(interval);
-  }, [checkIdleStatus, screensaverConfig.enabled, screensaverConfig.checkInterval]);
+    // Run check immediately on start
+    checkIdleStatus();
+
+    return () => {
+      clearInterval(interval);
+      onLog?.('connection', 'Screensaver monitoring stopped', 'Component unmounting or settings changed');
+    };
+  }, [checkIdleStatus, screensaverConfig.enabled, screensaverConfig.checkInterval, screensaverConfig.idleTimeout, onLog]);
 
   // Reset screensaver state when casting starts or connection changes
   useEffect(() => {
