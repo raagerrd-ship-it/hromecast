@@ -19,6 +19,7 @@ export const useScreensaver = ({
   onLog,
 }: UseScreensaverProps) => {
   const [isScreensaverActive, setIsScreensaverActive] = useState(false);
+  const [lastCastTime, setLastCastTime] = useState<number>(0);
 
   // Use ref to always get the latest values without causing re-renders
   const checkIdleStatus = useCallback(async () => {
@@ -28,7 +29,8 @@ export const useScreensaver = ({
       url: screensaverConfig.url,
       isScreensaverActive,
       lastActivityTime: new Date(lastActivityTime).toISOString(),
-      idleTimeout: screensaverConfig.idleTimeout
+      idleTimeout: screensaverConfig.idleTimeout,
+      lastCastTime: lastCastTime ? new Date(lastCastTime).toISOString() : 'never'
     });
 
     // In bridge mode, we don't need to be connected to cast
@@ -47,19 +49,33 @@ export const useScreensaver = ({
     const idleTimeMs = now - lastActivityTime;
     const idleTimeoutMs = screensaverConfig.idleTimeout * 60 * 1000;
     const remainingMs = idleTimeoutMs - idleTimeMs;
+    
+    // Check cooldown - prevent re-casting within check interval
+    const timeSinceLastCast = now - lastCastTime;
+    const cooldownMs = screensaverConfig.checkInterval * 1000;
+    const cooldownRemaining = cooldownMs - timeSinceLastCast;
 
     console.log('[Screensaver] Idle calculation', {
       idleTimeMs,
       idleTimeoutMs,
       remainingMs,
       remainingSeconds: Math.floor(remainingMs / 1000),
-      shouldTrigger: remainingMs <= 0
+      shouldTrigger: remainingMs <= 0,
+      timeSinceLastCast,
+      cooldownRemaining,
+      cooldownActive: cooldownRemaining > 0
     });
 
     // Log the check status
     if (remainingMs > 0) {
       onLog?.('connection', 'Screensaver idle check', `${Math.floor(remainingMs / 1000)}s until activation`);
     } else {
+      // Check cooldown before triggering
+      if (cooldownRemaining > 0) {
+        console.log('[Screensaver] Check skipped - cooldown active', Math.floor(cooldownRemaining / 1000), 's remaining');
+        return;
+      }
+      
       // Only trigger if not already active
       if (isScreensaverActive) {
         console.log('[Screensaver] Check skipped - already triggered and waiting');
@@ -69,6 +85,7 @@ export const useScreensaver = ({
       console.log('[Screensaver] ⚡ TRIGGERING SCREENSAVER NOW ⚡');
       onLog?.('cast', 'Screensaver idle timeout reached', `Triggering after ${Math.floor(idleTimeMs / 1000)}s idle`);
       setIsScreensaverActive(true);
+      setLastCastTime(now); // Record cast time
       
       try {
         console.log('[Screensaver] Calling onStartScreensaver with URL:', screensaverConfig.url);
@@ -87,8 +104,10 @@ export const useScreensaver = ({
     screensaverConfig.enabled,
     screensaverConfig.url,
     screensaverConfig.idleTimeout,
+    screensaverConfig.checkInterval,
     isScreensaverActive,
     lastActivityTime,
+    lastCastTime,
     onStartScreensaver,
     onLog,
   ]);
@@ -131,6 +150,7 @@ export const useScreensaver = ({
       if (timeSinceActivity < 5000) {
         console.log('[Screensaver] User activity detected, resetting screensaver');
         setIsScreensaverActive(false);
+        setLastCastTime(0); // Reset cooldown on user activity
         onLog?.('connection', 'Screensaver deactivated', 'User activity detected');
       }
     }
