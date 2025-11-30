@@ -166,73 +166,14 @@ export const useChromecast = () => {
   }, [isAvailable, sessionListener, toast]);
 
   const loadMedia = useCallback(
-    (url: string, onError?: (error: string) => void) => {
-      console.log('[Cast] loadMedia called', { 
-        url, 
-        hasSession: !!session, 
-        isConnected, 
-        currentDevice 
-      });
-      
-      if (!session) {
-        const errorMsg = 'Connect to a Chromecast device first.';
-        console.error('[Cast] No session available despite being connected');
-        toast({
-          title: 'Not Connected',
-          description: errorMsg,
-          variant: 'destructive',
-        });
-        onError?.(errorMsg);
-        return;
-      }
-
-      const cast = window.chrome?.cast;
-      if (!cast) {
-        const errorMsg = 'Chromecast API is not loaded.';
-        toast({
-          title: 'Cast API Not Available',
-          description: errorMsg,
-          variant: 'destructive',
-        });
-        onError?.(errorMsg);
-        return;
-      }
-
-      console.log('[Cast] Creating media info for URL:', url);
-      
-      // Create media info for the viewer URL
-      const mediaInfo = new cast.media.MediaInfo(url, 'text/html');
-      const metadata = new cast.media.GenericMediaMetadata();
-      metadata.title = 'Website Cast';
-      mediaInfo.metadata = metadata;
-
-      const loadRequest = new cast.media.LoadRequest(mediaInfo);
-
-      console.log('[Cast] Calling session.loadMedia...');
-      session.loadMedia(
-        loadRequest,
-        () => {
-          console.log('[Cast] ✅ Media loaded successfully:', url);
-          setIsCasting(true);
-          setLastActivityTime(Date.now());
-          toast({
-            title: 'Casting Started',
-            description: 'Website is now playing on your TV',
-          });
-        },
-        (error) => {
-          console.error('[Cast] ❌ Error loading media:', error);
-          const errorMsg = `Failed to start casting: ${error.description || error.code || 'Unknown error'}`;
-          toast({
-            title: 'Cast Failed',
-            description: 'Failed to start casting. Try reconnecting.',
-            variant: 'destructive',
-          });
-          onError?.(errorMsg);
-        }
-      );
+    (url: string) => {
+      // This function is kept for compatibility but does nothing
+      // All casting is handled by the bridge service
+      console.log('loadMedia called but delegated to bridge service:', url);
+      setIsCasting(true);
+      setLastActivityTime(Date.now());
     },
-    [session, isConnected, currentDevice, toast]
+    []
   );
 
   const stopCasting = useCallback(() => {
