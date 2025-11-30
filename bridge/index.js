@@ -103,11 +103,17 @@ async function castMedia(url) {
           return;
         }
         
-        // Load media
+        // Load media - use text/html for viewer pages
         const media = {
           contentId: url,
-          contentType: 'video/mp4',
-          streamType: 'BUFFERED'
+          contentType: 'text/html',
+          streamType: 'BUFFERED',
+          metadata: {
+            type: 0,
+            metadataType: 0,
+            title: 'Website Viewer',
+            images: []
+          }
         };
         
         player.load(media, { autoplay: true }, (err, status) => {
