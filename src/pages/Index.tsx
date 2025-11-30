@@ -298,21 +298,7 @@ const Index = () => {
       if (error) throw error;
       setRecentCommands(data || []);
       
-      // Add command status updates to activity log
-      data?.forEach(command => {
-        const existingLog = activityLogs.find(log => log.details?.includes(command.id));
-        if (!existingLog) {
-          const logType = command.status === 'failed' ? 'error' : 'bridge';
-          const message = command.status === 'completed' ? 'Cast completed' : 
-                         command.status === 'failed' ? 'Cast failed' :
-                         command.status === 'processing' ? 'Processing cast' : 'Cast queued';
-          addActivityLog(
-            logType,
-            message,
-            `${command.url.substring(0, 60)}... [${command.id.substring(0, 8)}]`
-          );
-        }
-      });
+      // Don't add duplicate logs - the processPendingCommands function already logs command processing
     } catch (error) {
       console.error('Error fetching commands:', error);
     }
