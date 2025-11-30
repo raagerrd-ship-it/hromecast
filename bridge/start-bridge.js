@@ -283,7 +283,7 @@ async function castMedia(url) {
   return new Promise((resolve, reject) => {
     console.log(`📺 Connecting to ${targetDevice.name} at ${targetDevice.host}...`);
     
-    client = new Client();
+    client = new castv2.Client();
     
     client.connect(targetDevice.host, () => {
       console.log('✅ Connected to Chromecast');
