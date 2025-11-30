@@ -22,6 +22,8 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let discoveredDevices = new Map(); // Store all discovered devices
 let currentDevice = null;
 let client = null;
+let lastScreensaverCheck = 0;
+const SCREENSAVER_CHECK_INTERVAL = 60000; // Check every minute
 
 // Report discovered devices to database
 async function reportDiscoveredDevice(name, host, port) {
@@ -83,6 +85,134 @@ async function getSelectedChromecast() {
   } catch (error) {
     console.error('Error getting selected chromecast:', error);
     return null;
+  }
+}
+
+// Get screensaver settings from database
+async function getScreensaverSettings() {
+  try {
+    const { data, error } = await supabase
+      .from('screensaver_settings')
+      .select('*')
+      .eq('device_id', DEVICE_ID)
+      .single();
+
+    if (error || !data) {
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error getting screensaver settings:', error);
+    return null;
+  }
+}
+
+// Check if Chromecast is idle (no active sessions)
+async function isChromecastIdle() {
+  const selectedDevice = await getSelectedChromecast();
+  const targetDevice = selectedDevice || currentDevice;
+  
+  if (!targetDevice) {
+    console.log('⚠️  No target device available for idle check');
+    return false;
+  }
+  
+  return new Promise((resolve) => {
+    const checkClient = new Client();
+    
+    // Set timeout to avoid hanging
+    const timeout = setTimeout(() => {
+      console.log('⏱️  Idle check timeout - assuming busy');
+      checkClient.close();
+      resolve(false);
+    }, 5000);
+    
+    checkClient.connect(targetDevice.host, () => {
+      const receiver = checkClient.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.receiver', 'JSON');
+      
+      // Request receiver status
+      receiver.send({ type: 'GET_STATUS', requestId: 1 });
+      
+      receiver.on('message', (data) => {
+        if (data.type === 'RECEIVER_STATUS') {
+          clearTimeout(timeout);
+          checkClient.close();
+          
+          const apps = data.status?.applications || [];
+          
+          // Check if any app is running (except backdrop)
+          const activeApps = apps.filter(app => 
+            app.appId !== 'E8C28D3C' // Backdrop app ID
+          );
+          
+          if (activeApps.length === 0) {
+            console.log('✅ Chromecast is idle (no active apps)');
+            resolve(true);
+          } else {
+            console.log(`⏸️  Chromecast is busy (${activeApps.length} active app(s)): ${activeApps.map(a => a.displayName).join(', ')}`);
+            resolve(false);
+          }
+        }
+      });
+    });
+    
+    checkClient.on('error', (err) => {
+      clearTimeout(timeout);
+      console.error('❌ Error checking idle status:', err.message);
+      checkClient.close();
+      resolve(false);
+    });
+  });
+}
+
+// Auto-screensaver check - runs every minute
+async function checkAndActivateScreensaver() {
+  const now = Date.now();
+  
+  // Throttle checks to once per minute
+  if (now - lastScreensaverCheck < SCREENSAVER_CHECK_INTERVAL) {
+    return;
+  }
+  
+  lastScreensaverCheck = now;
+  
+  console.log('\n🔍 [AUTO-SCREENSAVER] Checking if screensaver should activate...');
+  
+  // Get screensaver settings
+  const settings = await getScreensaverSettings();
+  
+  if (!settings) {
+    console.log('⚠️  [AUTO-SCREENSAVER] No settings found');
+    return;
+  }
+  
+  if (!settings.enabled) {
+    console.log('⏸️  [AUTO-SCREENSAVER] Screensaver disabled in settings');
+    return;
+  }
+  
+  if (!settings.url) {
+    console.log('⚠️  [AUTO-SCREENSAVER] No URL configured');
+    return;
+  }
+  
+  // Check if Chromecast is idle
+  const isIdle = await isChromecastIdle();
+  
+  if (!isIdle) {
+    console.log('⏭️  [AUTO-SCREENSAVER] Device busy, skipping');
+    return;
+  }
+  
+  // Cast screensaver
+  console.log(`🎬 [AUTO-SCREENSAVER] Activating screensaver: ${settings.url}`);
+  
+  try {
+    await castMedia(settings.url);
+    console.log('✅ [AUTO-SCREENSAVER] Screensaver activated successfully');
+  } catch (error) {
+    console.error('❌ [AUTO-SCREENSAVER] Failed to activate:', error.message);
   }
 }
 
@@ -344,13 +474,21 @@ async function main() {
   console.log('🔄 Starting command polling...');
   const pollInterval = setInterval(processPendingCommands, POLL_INTERVAL);
 
+  // Start auto-screensaver monitoring
+  console.log('🎬 Starting auto-screensaver monitoring (checks every 60s)...');
+  const screensaverInterval = setInterval(checkAndActivateScreensaver, SCREENSAVER_CHECK_INTERVAL);
+
   // Initial poll
   processPendingCommands();
+  
+  // Initial screensaver check after 10 seconds
+  setTimeout(checkAndActivateScreensaver, 10000);
 
   // Handle shutdown
   process.on('SIGINT', async () => {
     console.log('\n🛑 Shutting down bridge service...');
     clearInterval(pollInterval);
+    clearInterval(screensaverInterval);
     await channel.unsubscribe();
     if (client) {
       client.close();
