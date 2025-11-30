@@ -1,0 +1,4 @@
+project_id = "umxwaxzmoxwasryjibhe"
+
+[functions.cast-website]
+verify_jwt = false
