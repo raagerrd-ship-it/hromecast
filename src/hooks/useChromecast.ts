@@ -23,25 +23,33 @@ export const useChromecast = () => {
   const [session, setSession] = useState<chrome.cast.Session | null>(null);
   const [isCasting, setIsCasting] = useState(false);
   const [lastActivityTime, setLastActivityTime] = useState(Date.now());
+  const [shouldAutoConnect, setShouldAutoConnect] = useState(false);
   const { toast } = useToast();
+
+  const LAST_DEVICE_KEY = 'chromecast-last-device';
 
   const sessionListener = useCallback((castSession: any) => {
     console.log('Session established:', castSession);
     setSession(castSession);
     setIsConnected(true);
-    setCurrentDevice({
+    const device = {
       friendlyName: castSession.receiver.friendlyName,
       id: castSession.receiver.id || '',
-    });
+    };
+    setCurrentDevice(device);
+    
+    // Save the device for auto-reconnect
+    localStorage.setItem(LAST_DEVICE_KEY, JSON.stringify(device));
 
     castSession.addUpdateListener((isAlive: boolean) => {
       if (!isAlive) {
         setIsConnected(false);
         setCurrentDevice(null);
         setSession(null);
+        setIsCasting(false);
       }
     });
-  }, []);
+  }, [LAST_DEVICE_KEY]);
 
   const receiverListener = useCallback(
     (availability: string) => {
@@ -77,6 +85,12 @@ export const useChromecast = () => {
       apiConfig,
       () => {
         console.log('Cast API initialized successfully');
+        // Check for saved device and trigger auto-connect
+        const savedDevice = localStorage.getItem(LAST_DEVICE_KEY);
+        if (savedDevice) {
+          console.log('Found saved device, will attempt auto-connect');
+          setShouldAutoConnect(true);
+        }
       },
       (error: any) => {
         console.error('Error initializing Cast API:', error);
@@ -87,7 +101,7 @@ export const useChromecast = () => {
         });
       }
     );
-  }, [sessionListener, receiverListener, toast]);
+  }, [sessionListener, receiverListener, toast, LAST_DEVICE_KEY]);
 
   useEffect(() => {
     console.log('Setting up Cast API callback');
@@ -106,6 +120,15 @@ export const useChromecast = () => {
       initializeCastApi();
     }
   }, [initializeCastApi]);
+
+  // Auto-connect to saved device
+  useEffect(() => {
+    if (shouldAutoConnect && isAvailable && !isConnected) {
+      console.log('Attempting auto-connect to saved device');
+      requestSession();
+      setShouldAutoConnect(false);
+    }
+  }, [shouldAutoConnect, isAvailable, isConnected]);
 
   const requestSession = useCallback(() => {
     const cast = window.chrome?.cast;
@@ -193,6 +216,8 @@ export const useChromecast = () => {
           setCurrentDevice(null);
           setSession(null);
           setIsCasting(false);
+          // Clear saved device when manually disconnecting
+          localStorage.removeItem(LAST_DEVICE_KEY);
           toast({
             title: 'Casting Stopped',
             description: 'Disconnected from Chromecast',
@@ -203,7 +228,7 @@ export const useChromecast = () => {
         }
       );
     }
-  }, [session, toast]);
+  }, [session, toast, LAST_DEVICE_KEY]);
 
   return {
     isAvailable,
