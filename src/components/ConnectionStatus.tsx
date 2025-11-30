@@ -6,18 +6,54 @@ interface ConnectionStatusProps {
   isConnected: boolean;
   deviceName?: string;
   hasAutoConnect: boolean;
+  screensaverEnabled?: boolean;
+  idleTimeSeconds?: number;
+  timeUntilScreensaverSeconds?: number;
+  checkIntervalSeconds?: number;
 }
 
-export const ConnectionStatus = ({ isConnected, deviceName, hasAutoConnect }: ConnectionStatusProps) => {
+export const ConnectionStatus = ({ 
+  isConnected, 
+  deviceName, 
+  hasAutoConnect,
+  screensaverEnabled,
+  idleTimeSeconds,
+  timeUntilScreensaverSeconds,
+  checkIntervalSeconds,
+}: ConnectionStatusProps) => {
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    if (mins > 0) {
+      return `${mins}m ${secs}s`;
+    }
+    return `${secs}s`;
+  };
+
   if (isConnected && deviceName) {
     return (
       <Card className="bg-primary/10 border-primary/20">
-        <CardContent className="p-4 flex items-center gap-3">
-          <Wifi className="h-5 w-5 text-primary" />
-          <div className="flex-1">
-            <p className="text-sm font-medium">Connected to {deviceName}</p>
-            <p className="text-xs text-muted-foreground">Screensaver ready</p>
+        <CardContent className="p-4 space-y-2">
+          <div className="flex items-center gap-3">
+            <Wifi className="h-5 w-5 text-primary" />
+            <div className="flex-1">
+              <p className="text-sm font-medium">Connected to {deviceName}</p>
+              {screensaverEnabled && (
+                <p className="text-xs text-muted-foreground">
+                  Screensaver enabled • Checking every {checkIntervalSeconds}s
+                </p>
+              )}
+              {!screensaverEnabled && (
+                <p className="text-xs text-muted-foreground">Screensaver disabled</p>
+              )}
+            </div>
           </div>
+          {screensaverEnabled && idleTimeSeconds !== undefined && timeUntilScreensaverSeconds !== undefined && (
+            <div className="text-xs text-muted-foreground pl-8 space-y-1">
+              <p>Idle time: {formatTime(idleTimeSeconds)}</p>
+              <p>Screensaver in: {formatTime(timeUntilScreensaverSeconds)}</p>
+            </div>
+          )}
         </CardContent>
       </Card>
     );

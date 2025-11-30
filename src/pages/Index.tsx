@@ -73,7 +73,7 @@ const Index = () => {
     }
   };
 
-  useScreensaver({
+  const screensaverStatus = useScreensaver({
     isConnected: chromecast.isConnected,
     isCasting: chromecast.isCasting,
     lastActivityTime: chromecast.lastActivityTime,
@@ -103,6 +103,10 @@ const Index = () => {
             isConnected={chromecast.isConnected}
             deviceName={chromecast.currentDevice?.friendlyName}
             hasAutoConnect={chromecast.isAvailable && !chromecast.isConnected}
+            screensaverEnabled={screensaverConfig.enabled}
+            idleTimeSeconds={screensaverStatus.idleTimeSeconds}
+            timeUntilScreensaverSeconds={screensaverStatus.timeUntilScreensaverSeconds}
+            checkIntervalSeconds={screensaverStatus.checkIntervalSeconds}
           />
           
           <CastInterface onCast={handleCast} chromecast={chromecast} />

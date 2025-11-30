@@ -59,5 +59,15 @@ export const useScreensaver = ({
     }
   }, [isCasting]);
 
-  return { isScreensaverActive };
+  // Calculate status information
+  const idleTimeMs = Date.now() - lastActivityTime;
+  const idleTimeoutMs = screensaverConfig.idleTimeout * 60 * 1000;
+  const timeUntilScreensaver = Math.max(0, idleTimeoutMs - idleTimeMs);
+
+  return { 
+    isScreensaverActive,
+    idleTimeSeconds: Math.floor(idleTimeMs / 1000),
+    timeUntilScreensaverSeconds: Math.floor(timeUntilScreensaver / 1000),
+    checkIntervalSeconds: screensaverConfig.checkInterval,
+  };
 };
