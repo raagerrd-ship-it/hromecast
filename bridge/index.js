@@ -69,7 +69,7 @@ async function castMedia(url) {
   
   return new Promise((resolve, reject) => {
     currentDevice.play(url, {
-      type: 'text/html',
+      // Remove explicit type to let Chromecast detect it
       title: 'Website Viewer',
       streamType: 'LIVE',
       autoplay: true
