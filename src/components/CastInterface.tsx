@@ -3,13 +3,24 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Wifi, Cast, Square, Loader2, AlertCircle } from "lucide-react";
-import { useChromecast } from "@/hooks/useChromecast";
+
+interface ChromecastHook {
+  isAvailable: boolean;
+  isConnected: boolean;
+  currentDevice: { friendlyName: string; id?: string } | null;
+  isCasting: boolean;
+  lastActivityTime: number;
+  requestSession: () => void;
+  loadMedia: (url: string) => void;
+  stopCasting: () => void;
+}
 
 interface CastInterfaceProps {
   onCast: (url: string) => Promise<string | null>;
+  chromecast: ChromecastHook;
 }
 
-export const CastInterface = ({ onCast }: CastInterfaceProps) => {
+export const CastInterface = ({ onCast, chromecast }: CastInterfaceProps) => {
   const [url, setUrl] = useState("");
   const [isCasting, setIsCasting] = useState(false);
   const {
@@ -19,7 +30,7 @@ export const CastInterface = ({ onCast }: CastInterfaceProps) => {
     requestSession,
     loadMedia,
     stopCasting,
-  } = useChromecast();
+  } = chromecast;
 
   const handleConnect = () => {
     requestSession();
