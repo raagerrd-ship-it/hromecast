@@ -19,9 +19,31 @@ export const useScreensaver = ({
   onLog,
 }: UseScreensaverProps) => {
   const [isScreensaverActive, setIsScreensaverActive] = useState(false);
-  const lastCastTimeRef = useRef<number>(0); // Use ref for immediate updates
-  const intervalRef = useRef<NodeJS.Timeout | null>(null); // Store interval ID
+  const lastCastTimeRef = useRef<number>(0);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null); // Use timeout instead of interval
   const MIN_CAST_INTERVAL_MS = 60000; // Minimum 60 seconds between casts
+
+  // Schedule next check based on idle timeout
+  const scheduleNextCheck = useCallback(() => {
+    if (!screensaverConfig.enabled) return;
+    
+    // Clear any existing timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+
+    const now = Date.now();
+    const timeSinceLastActivity = now - lastActivityTime;
+    const idleTimeoutMs = screensaverConfig.idleTimeout * 60 * 1000;
+    const timeUntilCheck = Math.max(0, idleTimeoutMs - timeSinceLastActivity);
+
+    console.log(`[Screensaver] ⏰ Scheduling next check in ${Math.floor(timeUntilCheck / 1000)}s`);
+    
+    timeoutRef.current = setTimeout(() => {
+      checkIdleStatus();
+    }, timeUntilCheck);
+  }, [screensaverConfig.enabled, screensaverConfig.idleTimeout, lastActivityTime]);
 
   // Use ref to always get the latest values without causing re-renders
   const checkIdleStatus = useCallback(async () => {
@@ -78,32 +100,27 @@ export const useScreensaver = ({
       onLog?.('connection', 'Screensaver idle check', `${Math.floor(remainingMs / 1000)}s until activation`);
     } else {
       console.log('[Screensaver] ⚡ TRIGGERING SCREENSAVER NOW ⚡');
-      console.log(`[Screensaver] Setting cooldown timer for ${MIN_CAST_INTERVAL_MS / 1000}s`);
       onLog?.('cast', 'Screensaver idle timeout reached', `Triggering after ${Math.floor(idleTimeMs / 1000)}s idle`);
       
-      // IMMEDIATELY clear the interval to prevent additional triggers
-      if (intervalRef.current) {
-        console.log('[Screensaver] 🛑 Clearing interval to prevent re-triggers');
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-      
-      // Set cooldown IMMEDIATELY using ref (before async call)
+      // Set cooldown IMMEDIATELY
       lastCastTimeRef.current = now;
       setIsScreensaverActive(true);
       
       try {
         console.log('[Screensaver] Calling onStartScreensaver with URL:', screensaverConfig.url);
         await onStartScreensaver(screensaverConfig.url);
-        console.log('[Screensaver] ✅ onStartScreensaver completed successfully');
-        console.log(`[Screensaver] 🔒 Cooldown active until: ${new Date(now + MIN_CAST_INTERVAL_MS).toISOString()}`);
-        onLog?.('cast', 'Screensaver activated', `Cast sent - 60s cooldown active`);
+        console.log('[Screensaver] ✅ Cast sent successfully');
+        onLog?.('cast', 'Screensaver activated', `Next check in ${screensaverConfig.idleTimeout}m`);
+        
+        // Schedule next check after idle timeout period
+        scheduleNextCheck();
       } catch (error) {
-        console.error('[Screensaver] ❌ onStartScreensaver failed:', error);
+        console.error('[Screensaver] ❌ Cast failed:', error);
         onLog?.('error', 'Screensaver cast failed', String(error));
-        // Reset on error so it can retry
         setIsScreensaverActive(false);
         lastCastTimeRef.current = 0;
+        // Retry after a short delay
+        setTimeout(() => scheduleNextCheck(), 5000);
       }
     }
   }, [
@@ -115,13 +132,15 @@ export const useScreensaver = ({
     MIN_CAST_INTERVAL_MS,
     onStartScreensaver,
     onLog,
+    scheduleNextCheck,
   ]);
 
+  // Set up monitoring on mount and when settings change
   useEffect(() => {
-    // Clear any existing interval first
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
+    // Clear any existing timeout first
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
     }
 
     if (!screensaverConfig.enabled) {
@@ -129,38 +148,22 @@ export const useScreensaver = ({
       return;
     }
 
-    // Don't run interval if screensaver is already active
-    if (isScreensaverActive) {
-      console.log('[Screensaver] ⏸️  Interval paused - screensaver is active');
-      return;
-    }
+    console.log('[Screensaver] 🚀 Starting monitoring - checking based on idle timeout');
+    onLog?.('connection', 'Screensaver monitoring started', `Will check after ${screensaverConfig.idleTimeout}m idle`);
 
-    // Log monitoring start
-    console.log('[Screensaver] 🚀 Setting up monitoring', screensaverConfig);
-    onLog?.('connection', 'Screensaver monitoring started', `Checking every ${screensaverConfig.checkInterval}s, timeout: ${screensaverConfig.idleTimeout}m`);
-
-    // Check at the configured interval
-    const intervalMs = screensaverConfig.checkInterval * 1000;
-    intervalRef.current = setInterval(() => {
-      console.log('[Screensaver] ⏰ Running periodic check via interval');
-      checkIdleStatus();
-    }, intervalMs);
-
-    // Run check immediately on start
-    console.log('[Screensaver] 🎬 Running initial check');
-    checkIdleStatus();
+    // Schedule the first check
+    scheduleNextCheck();
 
     return () => {
       console.log('[Screensaver] 🛑 Cleaning up monitoring');
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screensaverConfig.enabled, screensaverConfig.checkInterval, screensaverConfig.idleTimeout, screensaverConfig.url, isScreensaverActive]);
+  }, [screensaverConfig.enabled, screensaverConfig.idleTimeout, scheduleNextCheck]);
 
-  // Reset screensaver when user activity is detected (lastActivityTime changes)
+  // Reset and reschedule when user activity is detected
   useEffect(() => {
     if (isScreensaverActive) {
       const now = Date.now();
@@ -168,13 +171,16 @@ export const useScreensaver = ({
       
       // If activity occurred recently (within last 5 seconds), user is active again
       if (timeSinceActivity < 5000) {
-        console.log('[Screensaver] User activity detected, resetting screensaver');
+        console.log('[Screensaver] User activity detected, resetting and rescheduling');
         setIsScreensaverActive(false);
-        lastCastTimeRef.current = 0; // Reset cooldown on user activity
+        lastCastTimeRef.current = 0;
         onLog?.('connection', 'Screensaver deactivated', 'User activity detected');
+        
+        // Reschedule check from now
+        scheduleNextCheck();
       }
     }
-  }, [lastActivityTime, isScreensaverActive, onLog]);
+  }, [lastActivityTime, isScreensaverActive, onLog, scheduleNextCheck]);
 
   // Calculate status information
   const idleTimeMs = Date.now() - lastActivityTime;
