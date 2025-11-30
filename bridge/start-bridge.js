@@ -319,6 +319,19 @@ async function castMedia(url) {
       receiver.on('message', (data) => {
         console.log('📨 Receiver message:', JSON.stringify(data, null, 2));
         
+        // Handle launch errors
+        if (data.type === 'LAUNCH_ERROR') {
+          clearTimeout(launchTimeout);
+          clearInterval(heartbeatInterval);
+          console.error(`❌ Failed to launch custom receiver app: ${data.reason}`);
+          console.log('💡 Custom receiver app (FE376873) not found or not published');
+          console.log('💡 Make sure the app is registered and published in Google Cast Developer Console');
+          console.log('📝 Receiver URL should be: https://hromecast.lovable.app/chromecast-receiver.html');
+          client.close();
+          reject(new Error(`Custom receiver not available: ${data.reason}`));
+          return;
+        }
+        
         if (data.type === 'RECEIVER_STATUS') {
           // First response - receiver status received
           if (!appLaunched) {
