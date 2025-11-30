@@ -303,11 +303,21 @@ async function castMedia(url) {
       
       console.log(`🚀 Launching custom receiver app: ${CUSTOM_APP_ID}`);
       
+      // Set a timeout for app launch
+      const launchTimeout = setTimeout(() => {
+        console.error('⏱️  Timeout waiting for app to launch');
+        client.close();
+        reject(new Error('App launch timeout'));
+      }, 15000);
+      
       // Launch custom receiver
       receiver.send({ type: 'LAUNCH', appId: CUSTOM_APP_ID, requestId: 1 });
       
       receiver.on('message', (data) => {
+        console.log('📨 Receiver message:', JSON.stringify(data, null, 2));
+        
         if (data.type === 'RECEIVER_STATUS' && data.status && data.status.applications) {
+          clearTimeout(launchTimeout);
           const app = data.status.applications[0];
           console.log('📱 App launched:', app.displayName);
           
@@ -338,6 +348,7 @@ async function castMedia(url) {
           });
           
           media.on('message', (data) => {
+            console.log('📨 Media message:', JSON.stringify(data, null, 2));
             if (data.type === 'MEDIA_STATUS') {
               console.log('✅ Media loaded successfully');
               resolve({ success: true });
