@@ -1,15 +1,7 @@
-import { createClient } from '@supabase/supabase-js';
-import { Client, DefaultMediaReceiver } from 'castv2-client';
-import Bonjour from 'bonjour-service';
-import dotenv from 'dotenv';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-
-dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const { createClient } = require('@supabase/supabase-js');
+const { Client, DefaultMediaReceiver } = require('castv2-client');
+const Bonjour = require('bonjour-service');
+require('dotenv').config();
 
 // Configuration
 const SUPABASE_URL = process.env.SUPABASE_URL;
