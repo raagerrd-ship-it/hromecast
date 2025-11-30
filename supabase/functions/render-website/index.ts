@@ -86,28 +86,45 @@ serve(async (req) => {
         );
       }
 
-      // Generate HMAC for urlbox request
-      const encoder = new TextEncoder();
-      const queryString = `url=${encodeURIComponent(url)}&format=mp4&width=1920&height=1080&video=true&video_duration=10`;
-      const key = await crypto.subtle.importKey(
-        'raw',
-        encoder.encode(apiSecret),
-        { name: 'HMAC', hash: 'SHA-256' },
-        false,
-        ['sign']
-      );
-      const signature = await crypto.subtle.sign(
-        'HMAC',
-        key,
-        encoder.encode(queryString)
-      );
-      const token = Array.from(new Uint8Array(signature))
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('');
+      console.log('Requesting video render for:', url);
 
-      const videoUrl = `https://api.urlbox.io/v1/${apiKey}/${token}/mp4?${queryString}`;
+      // Use urlbox.io render API for synchronous video generation
+      const renderResponse = await fetch('https://api.urlbox.com/v1/render/sync', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiSecret}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          url: url,
+          format: 'mp4',
+          video: true,
+          video_duration: 30,
+          width: 1920,
+          height: 1080,
+          wait_for: 'navigation'
+        })
+      });
+
+      if (!renderResponse.ok) {
+        const errorText = await renderResponse.text();
+        console.error('Urlbox API error:', errorText);
+        return new Response(
+          JSON.stringify({ 
+            error: 'Failed to generate video',
+            message: `Urlbox API returned ${renderResponse.status}: ${errorText}`
+          }),
+          { 
+            status: 500, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        );
+      }
+
+      const renderData = await renderResponse.json();
+      const videoUrl = renderData.renderUrl;
       
-      console.log('Generated video URL for:', url);
+      console.log('Video ready at:', videoUrl);
       
       return new Response(
         JSON.stringify({ 
