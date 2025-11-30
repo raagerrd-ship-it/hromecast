@@ -23,44 +23,6 @@ export const useChromecast = () => {
   const [session, setSession] = useState<chrome.cast.Session | null>(null);
   const { toast } = useToast();
 
-  useEffect(() => {
-    // Initialize Cast API
-    window.__onGCastApiAvailable = (isAvailable) => {
-      if (isAvailable) {
-        initializeCastApi();
-      }
-    };
-  }, []);
-
-  const initializeCastApi = useCallback(() => {
-    const cast = window.chrome?.cast;
-    if (!cast) return;
-
-    const applicationID = cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID;
-    const sessionRequest = new cast.SessionRequest(applicationID);
-    const apiConfig = new cast.ApiConfig(
-      sessionRequest,
-      sessionListener,
-      receiverListener
-    );
-
-    cast.initialize(
-      apiConfig,
-      () => {
-        console.log('Cast API initialized successfully');
-        setIsAvailable(true);
-      },
-      (error: any) => {
-        console.error('Error initializing Cast API:', error);
-        toast({
-          title: 'Cast API Error',
-          description: 'Failed to initialize Chromecast. Make sure you have a Chromecast on your network.',
-          variant: 'destructive',
-        });
-      }
-    );
-  }, [toast]);
-
   const sessionListener = useCallback((castSession: any) => {
     console.log('Session established:', castSession);
     setSession(castSession);
@@ -94,6 +56,58 @@ export const useChromecast = () => {
     },
     [toast]
   );
+
+  const initializeCastApi = useCallback(() => {
+    console.log('initializeCastApi called');
+    const cast = window.chrome?.cast;
+    if (!cast) {
+      console.log('Cast API not found on window.chrome');
+      return;
+    }
+
+    console.log('Cast API found, initializing...');
+    const applicationID = cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID;
+    const sessionRequest = new cast.SessionRequest(applicationID);
+    const apiConfig = new cast.ApiConfig(
+      sessionRequest,
+      sessionListener,
+      receiverListener
+    );
+
+    cast.initialize(
+      apiConfig,
+      () => {
+        console.log('Cast API initialized successfully');
+        setIsAvailable(true);
+      },
+      (error: any) => {
+        console.error('Error initializing Cast API:', error);
+        toast({
+          title: 'Cast API Error',
+          description: 'Failed to initialize Chromecast. Make sure you have a Chromecast on your network.',
+          variant: 'destructive',
+        });
+      }
+    );
+  }, [sessionListener, receiverListener, toast]);
+
+  useEffect(() => {
+    console.log('Setting up Cast API callback');
+    
+    // Initialize Cast API
+    window.__onGCastApiAvailable = (isAvailable) => {
+      console.log('Cast API available callback called:', isAvailable);
+      if (isAvailable) {
+        initializeCastApi();
+      }
+    };
+
+    // Check if Cast API is already available
+    if (window.chrome?.cast) {
+      console.log('Cast API already loaded, initializing...');
+      initializeCastApi();
+    }
+  }, [initializeCastApi]);
 
   const requestSession = useCallback(() => {
     const cast = window.chrome?.cast;
