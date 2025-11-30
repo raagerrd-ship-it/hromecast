@@ -186,11 +186,12 @@ export const useScreensaver = ({
   const idleTimeMs = Date.now() - lastActivityTime;
   const idleTimeoutMs = screensaverConfig.idleTimeout * 60 * 1000;
   const timeUntilScreensaver = Math.max(0, idleTimeoutMs - idleTimeMs);
+  const progressPercentage = Math.min(100, (idleTimeMs / idleTimeoutMs) * 100);
 
   return { 
     isScreensaverActive,
     idleTimeSeconds: Math.floor(idleTimeMs / 1000),
     timeUntilScreensaverSeconds: Math.floor(timeUntilScreensaver / 1000),
-    checkIntervalSeconds: screensaverConfig.checkInterval,
+    progressPercentage: Math.round(progressPercentage),
   };
 };

@@ -10,7 +10,6 @@ interface ConnectionStatusProps {
   screensaverEnabled?: boolean;
   idleTimeSeconds?: number;
   timeUntilScreensaverSeconds?: number;
-  checkIntervalSeconds?: number;
   lastSavedDeviceName?: string;
   onReconnect?: () => void;
 }
@@ -22,7 +21,6 @@ export const ConnectionStatus = ({
   screensaverEnabled,
   idleTimeSeconds,
   timeUntilScreensaverSeconds,
-  checkIntervalSeconds,
   lastSavedDeviceName,
   onReconnect,
 }: ConnectionStatusProps) => {
@@ -45,7 +43,7 @@ export const ConnectionStatus = ({
               <p className="text-sm font-medium">Connected to {deviceName}</p>
               {screensaverEnabled && (
                 <p className="text-xs text-muted-foreground">
-                  Screensaver enabled • Checking every {checkIntervalSeconds}s
+                  Screensaver enabled • Idle timeout monitoring active
                 </p>
               )}
               {!screensaverEnabled && (
