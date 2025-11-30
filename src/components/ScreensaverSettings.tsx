@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +25,14 @@ export const ScreensaverSettings = ({ onSave, currentSettings }: ScreensaverSett
   const [idleTimeout, setIdleTimeout] = useState(currentSettings.idleTimeout);
   const [checkInterval, setCheckInterval] = useState(currentSettings.checkInterval);
   const { toast } = useToast();
+
+  // Sync local state with prop changes (e.g., when loaded from database)
+  useEffect(() => {
+    setEnabled(currentSettings.enabled);
+    setUrl(currentSettings.url);
+    setIdleTimeout(currentSettings.idleTimeout);
+    setCheckInterval(currentSettings.checkInterval);
+  }, [currentSettings]);
 
   const handleSave = () => {
     if (enabled && !url) {
