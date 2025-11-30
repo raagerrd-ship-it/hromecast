@@ -73,73 +73,130 @@ serve(async (req) => {
       const apiKey = Deno.env.get('URLBOX_API_KEY');
       const apiSecret = Deno.env.get('URLBOX_API_SECRET');
       
+      console.log('Checking Urlbox credentials - API Key exists:', !!apiKey, 'API Secret exists:', !!apiSecret);
+      
       if (!apiKey || !apiSecret) {
+        console.error('Missing Urlbox credentials');
+        // Fallback to viewer URL if video rendering is not configured
+        console.log('Falling back to viewer URL');
         return new Response(
           JSON.stringify({ 
-            error: 'Video recording requires URLBOX_API_KEY and URLBOX_API_SECRET to be configured',
-            message: 'Please add your Urlbox.io API credentials to use video recording'
+            success: true,
+            url,
+            viewerUrl,
+            contentType: 'text/html',
+            message: 'Video recording not configured, using viewer URL instead',
+            timestamp: new Date().toISOString()
           }),
           { 
-            status: 400, 
+            status: 200, 
             headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
           }
         );
       }
 
-      console.log('Requesting video render for:', url);
+      try {
+        console.log('Requesting video render for:', url);
 
-      // Use urlbox.io render API for synchronous video generation
-      const renderResponse = await fetch('https://api.urlbox.com/v1/render/sync', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiSecret}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          url: url,
-          format: 'mp4',
-          video: true,
-          video_duration: 30,
-          width: 1920,
-          height: 1080,
-          wait_for: 'navigation'
-        })
-      });
+        // Use urlbox.io render API for synchronous video generation
+        const renderResponse = await fetch('https://api.urlbox.com/v1/render/sync', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiSecret}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            url: url,
+            format: 'mp4',
+            video: true,
+            video_duration: 30,
+            width: 1920,
+            height: 1080,
+            wait_for: 'navigation'
+          })
+        });
 
-      if (!renderResponse.ok) {
-        const errorText = await renderResponse.text();
-        console.error('Urlbox API error:', errorText);
-        return new Response(
-          JSON.stringify({ 
-            error: 'Failed to generate video',
-            message: `Urlbox API returned ${renderResponse.status}: ${errorText}`
-          }),
-          { 
-            status: 500, 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-          }
-        );
-      }
+        console.log('Urlbox API response status:', renderResponse.status);
 
-      const renderData = await renderResponse.json();
-      const videoUrl = renderData.renderUrl;
-      
-      console.log('Video ready at:', videoUrl);
-      
-      return new Response(
-        JSON.stringify({ 
-          success: true,
-          url,
-          viewerUrl,
-          videoUrl,
-          contentType: 'video/mp4',
-          timestamp: new Date().toISOString()
-        }),
-        { 
-          status: 200, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        if (!renderResponse.ok) {
+          const errorText = await renderResponse.text();
+          console.error('Urlbox API error:', renderResponse.status, errorText);
+          
+          // Fallback to viewer URL on error
+          console.log('Video rendering failed, falling back to viewer URL');
+          return new Response(
+            JSON.stringify({ 
+              success: true,
+              url,
+              viewerUrl,
+              contentType: 'text/html',
+              message: 'Video rendering failed, using viewer URL instead',
+              timestamp: new Date().toISOString()
+            }),
+            { 
+              status: 200, 
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            }
+          );
         }
-      );
+
+        const renderData = await renderResponse.json();
+        console.log('Urlbox render response:', JSON.stringify(renderData));
+        const videoUrl = renderData.renderUrl;
+        
+        if (!videoUrl) {
+          console.error('No video URL in response:', renderData);
+          // Fallback to viewer URL
+          return new Response(
+            JSON.stringify({ 
+              success: true,
+              url,
+              viewerUrl,
+              contentType: 'text/html',
+              message: 'Video URL not available, using viewer URL instead',
+              timestamp: new Date().toISOString()
+            }),
+            { 
+              status: 200, 
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            }
+          );
+        }
+        
+        console.log('Video ready at:', videoUrl);
+        
+        return new Response(
+          JSON.stringify({ 
+            success: true,
+            url,
+            viewerUrl,
+            videoUrl,
+            contentType: 'video/mp4',
+            timestamp: new Date().toISOString()
+          }),
+          { 
+            status: 200, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        );
+      } catch (videoError) {
+        console.error('Error during video rendering:', videoError);
+        // Fallback to viewer URL
+        return new Response(
+          JSON.stringify({ 
+            success: true,
+            url,
+            viewerUrl,
+            contentType: 'text/html',
+            message: 'Video rendering error, using viewer URL instead',
+            timestamp: new Date().toISOString()
+          }),
+          { 
+            status: 200, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        );
+      }
     }
 
     // Default: return viewer URL for casting
