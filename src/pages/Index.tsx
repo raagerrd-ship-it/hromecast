@@ -25,6 +25,14 @@ interface CommandStatus {
   error_message?: string;
 }
 
+interface ActivityLog {
+  id: string;
+  timestamp: Date;
+  type: 'connection' | 'cast' | 'bridge' | 'error';
+  message: string;
+  details?: string;
+}
+
 const getOrCreateDeviceId = () => {
   let deviceId = localStorage.getItem(DEVICE_ID_KEY);
   if (!deviceId) {
@@ -52,6 +60,19 @@ const Index = () => {
   const [recentCommands, setRecentCommands] = useState<CommandStatus[]>([]);
   const [isBridgeConfigured, setIsBridgeConfigured] = useState(false);
   const [pollInterval, setPollInterval] = useState<number | null>(null);
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+
+  // Helper function to add activity log
+  const addActivityLog = (type: ActivityLog['type'], message: string, details?: string) => {
+    const newLog: ActivityLog = {
+      id: `${Date.now()}-${Math.random()}`,
+      timestamp: new Date(),
+      type,
+      message,
+      details,
+    };
+    setActivityLogs(prev => [newLog, ...prev].slice(0, 50)); // Keep last 50 logs
+  };
 
   // Load settings from database on mount
   useEffect(() => {
@@ -161,6 +182,7 @@ const Index = () => {
   const handleCast = async (url: string) => {
     try {
       console.log("Processing URL for casting:", url);
+      addActivityLog('cast', 'Preparing to cast URL', url);
       
       // Call the render-website function to generate a video
       const { data: renderData, error: renderError } = await supabase.functions.invoke('render-website', {
@@ -169,6 +191,7 @@ const Index = () => {
 
       if (renderError) {
         console.error("Error from render function:", renderError);
+        addActivityLog('error', 'Failed to render website', renderError.message);
         toast({
           title: "Rendering Failed",
           description: renderError.message || "Failed to prepare website for casting",
@@ -178,6 +201,7 @@ const Index = () => {
       }
 
       console.log("Render response:", renderData);
+      addActivityLog('cast', 'Website rendered successfully', `Viewer URL: ${renderData.viewerUrl}`);
       
       // Queue cast command for bridge service
       const deviceId = getOrCreateDeviceId();
@@ -192,6 +216,7 @@ const Index = () => {
 
       if (queueError) {
         console.error("Error queueing cast command:", queueError);
+        addActivityLog('error', 'Failed to queue cast command', queueError.message);
         toast({
           title: "Queue Failed",
           description: "Failed to queue cast command",
@@ -200,6 +225,7 @@ const Index = () => {
         return null;
       }
 
+      addActivityLog('cast', 'Cast queued successfully', `Command ID: ${queueData.id}`);
       toast({
         title: "Cast Queued",
         description: "Your local bridge will process this cast shortly",
@@ -212,6 +238,7 @@ const Index = () => {
       
     } catch (error) {
       console.error("Error processing website:", error);
+      addActivityLog('error', 'Unexpected error occurred', String(error));
       toast({
         title: "Processing Failed",
         description: "An unexpected error occurred",
@@ -265,6 +292,7 @@ const Index = () => {
       if (commands && commands.length > 0) {
         const command = commands[0];
         
+        addActivityLog('bridge', 'Processing cast command', command.url);
         toast({
           title: "Processing Cast",
           description: `Casting: ${command.url.substring(0, 50)}...`,
@@ -284,6 +312,7 @@ const Index = () => {
             })
             .eq('id', command.id);
 
+          addActivityLog('bridge', 'Cast completed successfully', command.url);
           toast({
             title: "Cast Complete",
             description: "Video is now playing",
@@ -294,6 +323,7 @@ const Index = () => {
       }
     } catch (error) {
       console.error('Error processing commands:', error);
+      addActivityLog('error', 'Failed to process bridge command', String(error));
     }
   };
 
@@ -309,6 +339,7 @@ const Index = () => {
     }
 
     setIsServiceActive(true);
+    addActivityLog('bridge', 'Bridge service started', `Device ID: ${bridgeDeviceId}`);
     
     const interval = window.setInterval(() => {
       processPendingCommands();
@@ -345,6 +376,7 @@ const Index = () => {
   // Stop bridge service
   const stopBridgeService = () => {
     setIsServiceActive(false);
+    addActivityLog('bridge', 'Bridge service stopped');
     
     if (pollInterval) {
       clearInterval(pollInterval);
@@ -356,6 +388,15 @@ const Index = () => {
       description: "No longer listening for commands",
     });
   };
+
+  // Track connection state changes
+  useEffect(() => {
+    if (chromecast.isConnected && chromecast.currentDevice) {
+      addActivityLog('connection', 'Connected to Chromecast', chromecast.currentDevice.friendlyName);
+    } else if (!chromecast.isConnected && activityLogs.length > 0 && activityLogs[0].type === 'connection') {
+      addActivityLog('connection', 'Disconnected from Chromecast');
+    }
+  }, [chromecast.isConnected, chromecast.currentDevice]);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -380,6 +421,32 @@ const Index = () => {
         return 'bg-blue-500/10 text-blue-500';
       default:
         return 'bg-muted text-muted-foreground';
+    }
+  };
+
+  const getLogIcon = (type: ActivityLog['type']) => {
+    switch (type) {
+      case 'connection':
+        return <Wifi className="h-4 w-4 text-blue-500" />;
+      case 'cast':
+        return <Monitor className="h-4 w-4 text-green-500" />;
+      case 'bridge':
+        return <Smartphone className="h-4 w-4 text-purple-500" />;
+      case 'error':
+        return <XCircle className="h-4 w-4 text-red-500" />;
+    }
+  };
+
+  const getLogColor = (type: ActivityLog['type']) => {
+    switch (type) {
+      case 'connection':
+        return 'bg-blue-500/10 text-blue-500 border-blue-500/20';
+      case 'cast':
+        return 'bg-green-500/10 text-green-500 border-green-500/20';
+      case 'bridge':
+        return 'bg-purple-500/10 text-purple-500 border-purple-500/20';
+      case 'error':
+        return 'bg-red-500/10 text-red-500 border-red-500/20';
     }
   };
 
@@ -551,35 +618,51 @@ const Index = () => {
           )}
         </main>
 
-        {/* Info Cards */}
-        <div className="mt-16 grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-          <div className="p-6 rounded-lg bg-card/50 border border-border/50 backdrop-blur-sm">
-            <div className="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center mb-4">
-              <span className="text-primary font-bold">1</span>
-            </div>
-            <h3 className="font-semibold mb-2">Connect Device</h3>
-            <p className="text-sm text-muted-foreground">
-              Connect to your Chromecast device on the same network
-            </p>
-          </div>
-          <div className="p-6 rounded-lg bg-card/50 border border-border/50 backdrop-blur-sm">
-            <div className="h-10 w-10 rounded-lg bg-secondary/20 flex items-center justify-center mb-4">
-              <span className="text-secondary font-bold">2</span>
-            </div>
-            <h3 className="font-semibold mb-2">Enter URL</h3>
-            <p className="text-sm text-muted-foreground">
-              Paste the website URL you want to cast
-            </p>
-          </div>
-          <div className="p-6 rounded-lg bg-card/50 border border-border/50 backdrop-blur-sm">
-            <div className="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center mb-4">
-              <span className="text-primary font-bold">3</span>
-            </div>
-            <h3 className="font-semibold mb-2">Start Casting</h3>
-            <p className="text-sm text-muted-foreground">
-              Watch the website render in real-time on your TV
-            </p>
-          </div>
+        {/* Activity Log */}
+        <div className="mt-16 max-w-4xl mx-auto">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5" />
+                Activity Log
+              </CardTitle>
+              <CardDescription>
+                Real-time log of connections, casts, and bridge activity
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {activityLogs.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p className="text-sm">No activity yet</p>
+                  <p className="text-xs mt-1">Connect to a Chromecast or start casting to see logs</p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {activityLogs.map((log) => (
+                    <div
+                      key={log.id}
+                      className={`flex items-start gap-3 p-3 rounded-lg border ${getLogColor(log.type)}`}
+                    >
+                      {getLogIcon(log.type)}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-medium">{log.message}</p>
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">
+                            {log.timestamp.toLocaleTimeString()}
+                          </span>
+                        </div>
+                        {log.details && (
+                          <p className="text-xs text-muted-foreground mt-1 truncate">
+                            {log.details}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
