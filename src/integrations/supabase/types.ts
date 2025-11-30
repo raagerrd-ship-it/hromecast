@@ -14,7 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      screensaver_settings: {
+        Row: {
+          check_interval: number
+          created_at: string
+          device_id: string
+          enabled: boolean
+          id: string
+          idle_timeout: number
+          updated_at: string
+          url: string | null
+        }
+        Insert: {
+          check_interval?: number
+          created_at?: string
+          device_id: string
+          enabled?: boolean
+          id?: string
+          idle_timeout?: number
+          updated_at?: string
+          url?: string | null
+        }
+        Update: {
+          check_interval?: number
+          created_at?: string
+          device_id?: string
+          enabled?: boolean
+          id?: string
+          idle_timeout?: number
+          updated_at?: string
+          url?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

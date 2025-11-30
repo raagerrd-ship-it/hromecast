@@ -9,26 +9,101 @@ import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 
 const SCREENSAVER_CONFIG_KEY = "chromecast-screensaver-config";
+const DEVICE_ID_KEY = "chromecast-device-id";
+
+const getOrCreateDeviceId = () => {
+  let deviceId = localStorage.getItem(DEVICE_ID_KEY);
+  if (!deviceId) {
+    deviceId = `device-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    localStorage.setItem(DEVICE_ID_KEY, deviceId);
+  }
+  return deviceId;
+};
 
 const Index = () => {
   const { toast } = useToast();
   const chromecast = useChromecast();
+  const [isLoading, setIsLoading] = useState(true);
   
-  const [screensaverConfig, setScreensaverConfig] = useState<ScreensaverConfig>(() => {
-    const saved = localStorage.getItem(SCREENSAVER_CONFIG_KEY);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch {
-        return { enabled: false, url: "", idleTimeout: 5, checkInterval: 10 };
-      }
-    }
-    return { enabled: false, url: "", idleTimeout: 5, checkInterval: 10 };
+  const [screensaverConfig, setScreensaverConfig] = useState<ScreensaverConfig>({
+    enabled: false,
+    url: "",
+    idleTimeout: 5,
+    checkInterval: 10,
   });
 
+  // Load settings from database on mount
   useEffect(() => {
-    localStorage.setItem(SCREENSAVER_CONFIG_KEY, JSON.stringify(screensaverConfig));
-  }, [screensaverConfig]);
+    const loadSettings = async () => {
+      try {
+        const deviceId = getOrCreateDeviceId();
+        const { data, error } = await supabase
+          .from('screensaver_settings')
+          .select('*')
+          .eq('device_id', deviceId)
+          .single();
+
+        if (error && error.code !== 'PGRST116') {
+          console.error('Error loading settings:', error);
+          // Fall back to localStorage
+          const saved = localStorage.getItem(SCREENSAVER_CONFIG_KEY);
+          if (saved) {
+            try {
+              setScreensaverConfig(JSON.parse(saved));
+            } catch (e) {
+              console.error('Error parsing localStorage settings:', e);
+            }
+          }
+        } else if (data) {
+          setScreensaverConfig({
+            enabled: data.enabled,
+            url: data.url || "",
+            idleTimeout: data.idle_timeout,
+            checkInterval: data.check_interval,
+          });
+        }
+      } catch (error) {
+        console.error('Error loading settings:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadSettings();
+  }, []);
+
+  // Save settings to database when changed
+  useEffect(() => {
+    if (isLoading) return;
+
+    const saveSettings = async () => {
+      try {
+        const deviceId = getOrCreateDeviceId();
+        const { error } = await supabase
+          .from('screensaver_settings')
+          .upsert({
+            device_id: deviceId,
+            enabled: screensaverConfig.enabled,
+            url: screensaverConfig.url,
+            idle_timeout: screensaverConfig.idleTimeout,
+            check_interval: screensaverConfig.checkInterval,
+          }, {
+            onConflict: 'device_id'
+          });
+
+        if (error) {
+          console.error('Error saving settings:', error);
+        } else {
+          // Also save to localStorage as backup
+          localStorage.setItem(SCREENSAVER_CONFIG_KEY, JSON.stringify(screensaverConfig));
+        }
+      } catch (error) {
+        console.error('Error saving settings:', error);
+      }
+    };
+
+    saveSettings();
+  }, [screensaverConfig, isLoading]);
 
   const handleCast = async (url: string) => {
     try {
