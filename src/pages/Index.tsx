@@ -119,10 +119,25 @@ const Index = () => {
   const loadBridgeConfiguration = async () => {
     try {
       const { value: savedDeviceId } = await Preferences.get({ key: 'bridge_device_id' });
-      if (savedDeviceId) {
-        setBridgeDeviceId(savedDeviceId);
-        setIsBridgeConfigured(true);
+      let deviceId = savedDeviceId;
+      
+      if (!deviceId) {
+        // Generate a random device ID
+        deviceId = `bridge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        await Preferences.set({ key: 'bridge_device_id', value: deviceId });
+        addActivityLog('bridge', 'Generated new bridge device ID', deviceId);
       }
+      
+      setBridgeDeviceId(deviceId);
+      setIsBridgeConfigured(true);
+      
+      // Auto-start bridge service after configuration is loaded
+      setTimeout(() => {
+        if (deviceId) {
+          setIsServiceActive(true);
+          addActivityLog('bridge', 'Bridge service auto-started', `Device ID: ${deviceId}`);
+        }
+      }, 1500);
     } catch (error) {
       console.error('Error loading bridge configuration:', error);
     }
@@ -327,25 +342,15 @@ const Index = () => {
     }
   };
 
-  // Start bridge service
-  const startBridgeService = () => {
-    if (!bridgeDeviceId) {
-      toast({
-        title: "Configuration Required",
-        description: "Please enter a device ID first",
-        variant: "destructive",
-      });
-      return;
-    }
+  // Start bridge service and set up polling
+  useEffect(() => {
+    if (!isServiceActive || !bridgeDeviceId) return;
 
-    setIsServiceActive(true);
-    addActivityLog('bridge', 'Bridge service started', `Device ID: ${bridgeDeviceId}`);
-    
     const interval = window.setInterval(() => {
       processPendingCommands();
       fetchRecentCommands();
     }, 5000);
-    
+
     setPollInterval(interval);
 
     const channel = supabase
@@ -365,12 +370,32 @@ const Index = () => {
       )
       .subscribe();
 
+    fetchRecentCommands();
+
+    return () => {
+      if (interval) clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
+  }, [isServiceActive, bridgeDeviceId]);
+
+  // Start bridge service
+  const startBridgeService = () => {
+    if (!bridgeDeviceId) {
+      toast({
+        title: "Configuration Required",
+        description: "Please enter a device ID first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsServiceActive(true);
+    addActivityLog('bridge', 'Bridge service started', `Device ID: ${bridgeDeviceId}`);
+
     toast({
       title: "Bridge Service Started",
       description: "Listening for cast commands",
     });
-
-    fetchRecentCommands();
   };
 
   // Stop bridge service
@@ -519,61 +544,57 @@ const Index = () => {
               <CardTitle className="flex items-center gap-2">
                 <Smartphone className="h-5 w-5" />
                 Bridge Service
-                {isServiceActive && (
+                {isServiceActive ? (
                   <Badge className="ml-2 bg-green-500/10 text-green-500">
                     Active
+                  </Badge>
+                ) : (
+                  <Badge className="ml-2 bg-muted text-muted-foreground">
+                    Stopped
                   </Badge>
                 )}
               </CardTitle>
               <CardDescription>
-                Turn this device into a local bridge server for Chromecast control
+                Automatically processes cast commands from the main interface
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {!isBridgeConfigured && (
-                <div className="space-y-3">
-                  <Label htmlFor="bridge-device-id">Bridge Device ID</Label>
-                  <Input
-                    id="bridge-device-id"
-                    value={bridgeDeviceId}
-                    onChange={(e) => setBridgeDeviceId(e.target.value)}
-                    placeholder="Enter a unique device ID"
-                  />
-                  <Button onClick={saveBridgeConfiguration} className="w-full">
-                    <Settings className="h-4 w-4 mr-2" />
-                    Save Configuration
-                  </Button>
+              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                <div className="flex-1">
+                  <p className="text-xs text-muted-foreground">Device ID</p>
+                  <p className="text-sm font-mono">{bridgeDeviceId}</p>
                 </div>
-              )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={async () => {
+                    const newId = `bridge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                    setBridgeDeviceId(newId);
+                    await Preferences.set({ key: 'bridge_device_id', value: newId });
+                    addActivityLog('bridge', 'Generated new device ID', newId);
+                    toast({
+                      title: "New Device ID",
+                      description: "Bridge will restart with new ID",
+                    });
+                  }}
+                >
+                  Regenerate
+                </Button>
+              </div>
 
-              {isBridgeConfigured && (
-                <>
-                  <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                    <span className="text-sm">Device ID: {bridgeDeviceId}</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setIsBridgeConfigured(false)}
-                    >
-                      Change
-                    </Button>
-                  </div>
-
-                  <div className="flex gap-3">
-                    {!isServiceActive ? (
-                      <Button onClick={startBridgeService} className="flex-1">
-                        <Play className="h-4 w-4 mr-2" />
-                        Start Bridge
-                      </Button>
-                    ) : (
-                      <Button onClick={stopBridgeService} variant="destructive" className="flex-1">
-                        <Square className="h-4 w-4 mr-2" />
-                        Stop Bridge
-                      </Button>
-                    )}
-                  </div>
-                </>
-              )}
+              <div className="flex gap-3">
+                {!isServiceActive ? (
+                  <Button onClick={startBridgeService} className="flex-1">
+                    <Play className="h-4 w-4 mr-2" />
+                    Start Bridge
+                  </Button>
+                ) : (
+                  <Button onClick={stopBridgeService} variant="destructive" className="flex-1">
+                    <Square className="h-4 w-4 mr-2" />
+                    Stop Bridge
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
 
