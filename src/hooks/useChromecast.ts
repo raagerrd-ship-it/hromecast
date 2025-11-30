@@ -188,6 +188,17 @@ export const useChromecast = () => {
           console.log('Media loaded successfully:', media);
           setIsCasting(true);
           setLastActivityTime(Date.now());
+          
+          // Listen for media status updates to detect when casting ends
+          media.addUpdateListener((isAlive: boolean) => {
+            console.log('Media update - isAlive:', isAlive);
+            if (!isAlive) {
+              console.log('Media finished playing, setting isCasting to false');
+              setIsCasting(false);
+              setLastActivityTime(Date.now()); // Reset activity time when content ends
+            }
+          });
+          
           toast({
             title: 'Casting Started',
             description: `Now casting ${url}`,
