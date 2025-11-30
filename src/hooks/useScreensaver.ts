@@ -19,7 +19,9 @@ export const useScreensaver = ({
   const [isScreensaverActive, setIsScreensaverActive] = useState(false);
 
   const checkIdleStatus = useCallback(async () => {
-    if (!screensaverConfig.enabled || !isConnected || isCasting || isScreensaverActive) {
+    // In bridge mode, we don't need to be connected to cast
+    // The bridge service will handle the Chromecast connection
+    if (!screensaverConfig.enabled || isScreensaverActive) {
       return;
     }
 
@@ -30,11 +32,14 @@ export const useScreensaver = ({
       console.log('Starting screensaver after idle timeout');
       setIsScreensaverActive(true);
       await onStartScreensaver(screensaverConfig.url);
+      
+      // Reset after a delay to allow re-triggering if needed
+      setTimeout(() => {
+        setIsScreensaverActive(false);
+      }, 30000); // Reset after 30 seconds
     }
   }, [
     screensaverConfig,
-    isConnected,
-    isCasting,
     isScreensaverActive,
     lastActivityTime,
     onStartScreensaver,
@@ -52,7 +57,7 @@ export const useScreensaver = ({
     return () => clearInterval(interval);
   }, [checkIdleStatus, screensaverConfig.enabled, screensaverConfig.checkInterval]);
 
-  // Reset screensaver state when casting starts
+  // Reset screensaver state when casting starts or connection changes
   useEffect(() => {
     if (isCasting) {
       setIsScreensaverActive(false);
