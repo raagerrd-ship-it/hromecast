@@ -115,6 +115,12 @@ export const useScreensaver = ({
       return;
     }
 
+    // Don't run interval if screensaver is already active
+    if (isScreensaverActive) {
+      console.log('[Screensaver] ⏸️  Interval paused - screensaver is active');
+      return;
+    }
+
     // Log monitoring start
     console.log('[Screensaver] 🚀 Setting up monitoring', screensaverConfig);
     onLog?.('connection', 'Screensaver monitoring started', `Checking every ${screensaverConfig.checkInterval}s, timeout: ${screensaverConfig.idleTimeout}m`);
@@ -135,7 +141,7 @@ export const useScreensaver = ({
       clearInterval(interval);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screensaverConfig.enabled, screensaverConfig.checkInterval, screensaverConfig.idleTimeout, screensaverConfig.url]);
+  }, [screensaverConfig.enabled, screensaverConfig.checkInterval, screensaverConfig.idleTimeout, screensaverConfig.url, isScreensaverActive]);
 
   // Reset screensaver when user activity is detected (lastActivityTime changes)
   useEffect(() => {
