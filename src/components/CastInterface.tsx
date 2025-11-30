@@ -22,11 +22,11 @@ interface CastInterfaceProps {
 
 export const CastInterface = ({ onCast, chromecast }: CastInterfaceProps) => {
   const [url, setUrl] = useState("");
-  const [isCasting, setIsCasting] = useState(false);
   const {
     isAvailable,
     isConnected,
     currentDevice,
+    isCasting,
     requestSession,
     loadMedia,
     stopCasting,
@@ -41,13 +41,11 @@ export const CastInterface = ({ onCast, chromecast }: CastInterfaceProps) => {
       return;
     }
 
-    // Queue cast command for bridge service
-    setIsCasting(true);
+    // Cast directly via Chromecast SDK
     await onCast(url);
   };
 
   const handleStop = () => {
-    setIsCasting(false);
     stopCasting();
   };
 

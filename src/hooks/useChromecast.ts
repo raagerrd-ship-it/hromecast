@@ -167,11 +167,53 @@ export const useChromecast = () => {
 
   const loadMedia = useCallback(
     (url: string) => {
-      // This function is kept for compatibility but does nothing
-      // All casting is handled by the bridge service
-      console.log('loadMedia called but delegated to bridge service:', url);
-      setIsCasting(true);
-      setLastActivityTime(Date.now());
+      if (!session) {
+        toast({
+          title: 'Not Connected',
+          description: 'Connect to a Chromecast device first.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const cast = window.chrome?.cast;
+      if (!cast) {
+        toast({
+          title: 'Cast API Not Available',
+          description: 'Chromecast API is not loaded.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Create media info for the viewer URL
+      const mediaInfo = new cast.media.MediaInfo(url, 'text/html');
+      const metadata = new cast.media.GenericMediaMetadata();
+      metadata.title = 'Website Cast';
+      mediaInfo.metadata = metadata;
+
+      const loadRequest = new cast.media.LoadRequest(mediaInfo);
+
+      session.loadMedia(
+        loadRequest,
+        () => {
+          console.log('Media loaded successfully:', url);
+          setIsCasting(true);
+          setLastActivityTime(Date.now());
+          toast({
+            title: 'Casting Started',
+            description: 'Website is now playing on your TV',
+          });
+        },
+        (error) => {
+          console.error('Error loading media:', error);
+          toast({
+            title: 'Cast Failed',
+            description: 'Failed to start casting. Try reconnecting.',
+            variant: 'destructive',
+          });
+        }
+      );
     },
     [session, toast]
   );
