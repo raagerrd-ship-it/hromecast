@@ -1,5 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
 const Client = require('castv2-client').Client;
+const castv2 = require('castv2');
 const Bonjour = require('bonjour-hap')();
 require('dotenv').config();
 
@@ -119,7 +120,7 @@ async function isChromecastIdle() {
   }
   
   return new Promise((resolve) => {
-    const checkClient = new Client();
+    const checkClient = new castv2.Client();
     
     // Set timeout to avoid hanging
     const timeout = setTimeout(() => {
@@ -129,7 +130,11 @@ async function isChromecastIdle() {
     }, 5000);
     
     checkClient.connect(targetDevice.host, () => {
+      const connection = checkClient.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.tp.connection', 'JSON');
       const receiver = checkClient.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.receiver', 'JSON');
+      
+      // Connect first
+      connection.send({ type: 'CONNECT' });
       
       // Request receiver status
       receiver.send({ type: 'GET_STATUS', requestId: 1 });
@@ -137,6 +142,7 @@ async function isChromecastIdle() {
       receiver.on('message', (data) => {
         if (data.type === 'RECEIVER_STATUS') {
           clearTimeout(timeout);
+          connection.send({ type: 'CLOSE' });
           checkClient.close();
           
           const apps = data.status?.applications || [];
