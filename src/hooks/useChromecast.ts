@@ -167,8 +167,16 @@ export const useChromecast = () => {
 
   const loadMedia = useCallback(
     (url: string, onError?: (error: string) => void) => {
+      console.log('[Cast] loadMedia called', { 
+        url, 
+        hasSession: !!session, 
+        isConnected, 
+        currentDevice 
+      });
+      
       if (!session) {
         const errorMsg = 'Connect to a Chromecast device first.';
+        console.error('[Cast] No session available despite being connected');
         toast({
           title: 'Not Connected',
           description: errorMsg,
@@ -190,6 +198,8 @@ export const useChromecast = () => {
         return;
       }
 
+      console.log('[Cast] Creating media info for URL:', url);
+      
       // Create media info for the viewer URL
       const mediaInfo = new cast.media.MediaInfo(url, 'text/html');
       const metadata = new cast.media.GenericMediaMetadata();
@@ -198,10 +208,11 @@ export const useChromecast = () => {
 
       const loadRequest = new cast.media.LoadRequest(mediaInfo);
 
+      console.log('[Cast] Calling session.loadMedia...');
       session.loadMedia(
         loadRequest,
         () => {
-          console.log('Media loaded successfully:', url);
+          console.log('[Cast] ✅ Media loaded successfully:', url);
           setIsCasting(true);
           setLastActivityTime(Date.now());
           toast({
@@ -210,7 +221,7 @@ export const useChromecast = () => {
           });
         },
         (error) => {
-          console.error('Error loading media:', error);
+          console.error('[Cast] ❌ Error loading media:', error);
           const errorMsg = `Failed to start casting: ${error.description || error.code || 'Unknown error'}`;
           toast({
             title: 'Cast Failed',
@@ -221,7 +232,7 @@ export const useChromecast = () => {
         }
       );
     },
-    [session, toast]
+    [session, isConnected, currentDevice, toast]
   );
 
   const stopCasting = useCallback(() => {
