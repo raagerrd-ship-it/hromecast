@@ -433,34 +433,65 @@ async function tryDefaultMediaReceiver(targetDevice, url) {
     fallbackClient.connect(targetDevice.host, () => {
       console.log('✅ Connected to Chromecast for fallback');
       
-      fallbackClient.launch('CC1AD845', (err, player) => {
-        if (err) {
-          console.error('❌ Failed to launch Default Media Receiver:', err.message);
-          fallbackClient.close();
-          reject(err);
-          return;
+      // Create channels
+      const connection = fallbackClient.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.tp.connection', 'JSON');
+      const heartbeat = fallbackClient.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.tp.heartbeat', 'JSON');
+      const receiver = fallbackClient.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.receiver', 'JSON');
+      
+      // Establish virtual connection
+      connection.send({ type: 'CONNECT' });
+      
+      // Start heartbeat
+      const heartbeatInterval = setInterval(() => {
+        heartbeat.send({ type: 'PING' });
+      }, 5000);
+      
+      heartbeat.on('message', (data) => {
+        if (data.type === 'PONG') {
+          console.log('💓 Fallback heartbeat');
         }
-
-        console.log('✅ Default Media Receiver launched');
-        
-        const media = {
-          contentId: url,
-          contentType: 'text/html',
-          streamType: 'BUFFERED'
-        };
-
-        player.load(media, { autoplay: true }, (err, status) => {
-          if (err) {
-            console.error('❌ Failed to load content:', err.message);
-            fallbackClient.close();
-            reject(err);
+      });
+      
+      // Launch Default Media Receiver
+      console.log('Launching Default Media Receiver: CC1AD845');
+      receiver.send({ type: 'LAUNCH', appId: 'CC1AD845', requestId: 1 });
+      
+      const launchTimeout = setTimeout(() => {
+        clearInterval(heartbeatInterval);
+        console.error('❌ Launch timeout');
+        fallbackClient.close();
+        reject(new Error('Launch timeout'));
+      }, 15000);
+      
+      receiver.on('message', (data) => {
+        if (data.type === 'RECEIVER_STATUS') {
+          const apps = data.status?.applications || [];
+          const app = apps.find(a => a.appId === 'CC1AD845');
+          
+          if (app && app.isIdleScreen) {
+            console.log('⏳ Waiting for app to fully launch...');
             return;
           }
-
-          console.log('✅ Content loaded (may not display correctly as it\'s HTML)');
+          
+          if (!app) {
+            return;
+          }
+          
+          clearTimeout(launchTimeout);
+          clearInterval(heartbeatInterval);
+          
+          console.log('✅ Default Media Receiver launched');
+          console.log('⚠️  Loaded URL but it will not display (Default receiver only supports media files)');
+          
           fallbackClient.close();
           resolve();
-        });
+        } else if (data.type === 'LAUNCH_ERROR') {
+          clearTimeout(launchTimeout);
+          clearInterval(heartbeatInterval);
+          console.error(`❌ Failed to launch Default Media Receiver: ${data.reason}`);
+          fallbackClient.close();
+          reject(new Error(`Default receiver launch failed: ${data.reason}`));
+        }
       });
     });
     
