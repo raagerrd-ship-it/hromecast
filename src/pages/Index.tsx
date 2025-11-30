@@ -1,10 +1,6 @@
-import { CastInterface } from "@/components/CastInterface";
 import { ScreensaverSettings, ScreensaverConfig } from "@/components/ScreensaverSettings";
-import { ConnectionStatus } from "@/components/ConnectionStatus";
 import { ChromecastSelector } from "@/components/ChromecastSelector";
-import { useScreensaver } from "@/hooks/useScreensaver";
-import { useChromecast } from "@/hooks/useChromecast";
-import { Monitor, Smartphone, Wifi, WifiOff, Play, Square, Settings, CheckCircle2, XCircle, Clock, Trash2 } from "lucide-react";
+import { Monitor, Smartphone, Play, Square, CheckCircle2, XCircle, Clock, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
@@ -42,7 +38,6 @@ const getOrCreateDeviceId = () => {
 
 const Index = () => {
   const { toast } = useToast();
-  const chromecast = useChromecast();
   const [isLoading, setIsLoading] = useState(true);
   
   const [screensaverConfig, setScreensaverConfig] = useState<ScreensaverConfig>({
@@ -464,14 +459,6 @@ const Index = () => {
     });
   };
 
-  // Track connection state changes
-  useEffect(() => {
-    if (chromecast.isConnected && chromecast.currentDevice) {
-      addActivityLog('connection', 'Connected to Chromecast', chromecast.currentDevice.friendlyName);
-    } else if (!chromecast.isConnected && activityLogs.length > 0 && activityLogs[0].type === 'connection') {
-      addActivityLog('connection', 'Disconnected from Chromecast');
-    }
-  }, [chromecast.isConnected, chromecast.currentDevice]);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -502,7 +489,7 @@ const Index = () => {
   const getLogIcon = (type: ActivityLog['type']) => {
     switch (type) {
       case 'connection':
-        return <Wifi className="h-4 w-4 text-blue-500" />;
+        return <Monitor className="h-4 w-4 text-blue-500" />;
       case 'cast':
         return <Monitor className="h-4 w-4 text-green-500" />;
       case 'bridge':
@@ -525,28 +512,6 @@ const Index = () => {
     }
   };
 
-  const screensaverStatus = useScreensaver({
-    isConnected: chromecast.isConnected,
-    isCasting: chromecast.isCasting,
-    lastActivityTime: chromecast.lastActivityTime,
-    screensaverConfig,
-    onStartScreensaver: handleStartScreensaver,
-    onLog: addActivityLog,
-  });
-
-  // Force re-render every second to update idle time display
-  const [, setTick] = useState(0);
-  useEffect(() => {
-    if (!chromecast.isConnected || !screensaverConfig.enabled) {
-      return;
-    }
-
-    const interval = setInterval(() => {
-      setTick(t => t + 1);
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [chromecast.isConnected, screensaverConfig.enabled]);
 
   return (
     <div className="min-h-screen bg-gradient-bg">
@@ -566,21 +531,6 @@ const Index = () => {
 
         {/* Main Interface */}
         <main className="space-y-6">
-          <ConnectionStatus 
-            isConnected={chromecast.isConnected}
-            deviceName={chromecast.currentDevice?.friendlyName}
-            hasAutoConnect={chromecast.isAvailable && !chromecast.isConnected}
-            screensaverEnabled={screensaverConfig.enabled}
-            idleTimeSeconds={screensaverStatus.idleTimeSeconds}
-            timeUntilScreensaverSeconds={screensaverStatus.timeUntilScreensaverSeconds}
-            lastSavedDeviceName={
-              !chromecast.isConnected && localStorage.getItem('chromecast-last-device')
-                ? JSON.parse(localStorage.getItem('chromecast-last-device') || '{}').friendlyName
-                : undefined
-            }
-            onReconnect={chromecast.requestSession}
-          />
-          
           <ChromecastSelector
             deviceId={getOrCreateDeviceId()}
             selectedChromecastId={selectedChromecastId}
@@ -590,10 +540,6 @@ const Index = () => {
           <ScreensaverSettings
             currentSettings={screensaverConfig}
             onSave={setScreensaverConfig}
-            chromecast={{
-              ...chromecast,
-              ...screensaverStatus,
-            }}
           />
 
           {/* Cast Preview */}
