@@ -16,12 +16,14 @@ export interface ScreensaverConfig {
   enabled: boolean;
   url: string;
   idleTimeout: number; // in minutes
+  checkInterval: number; // in seconds
 }
 
 export const ScreensaverSettings = ({ onSave, currentSettings }: ScreensaverSettingsProps) => {
   const [enabled, setEnabled] = useState(currentSettings.enabled);
   const [url, setUrl] = useState(currentSettings.url);
   const [idleTimeout, setIdleTimeout] = useState(currentSettings.idleTimeout);
+  const [checkInterval, setCheckInterval] = useState(currentSettings.checkInterval);
   const { toast } = useToast();
 
   const handleSave = () => {
@@ -34,7 +36,7 @@ export const ScreensaverSettings = ({ onSave, currentSettings }: ScreensaverSett
       return;
     }
 
-    onSave({ enabled, url, idleTimeout });
+    onSave({ enabled, url, idleTimeout, checkInterval });
     toast({
       title: "Settings Saved",
       description: "Screensaver settings have been updated",
@@ -94,6 +96,23 @@ export const ScreensaverSettings = ({ onSave, currentSettings }: ScreensaverSett
               />
               <p className="text-sm text-muted-foreground">
                 Start screensaver after {idleTimeout} minute{idleTimeout !== 1 ? 's' : ''} of inactivity
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="check-interval">
+                Check Interval (seconds)
+              </Label>
+              <Input
+                id="check-interval"
+                type="number"
+                min="5"
+                max="300"
+                value={checkInterval}
+                onChange={(e) => setCheckInterval(parseInt(e.target.value) || 10)}
+              />
+              <p className="text-sm text-muted-foreground">
+                Check for idle status every {checkInterval} second{checkInterval !== 1 ? 's' : ''}
               </p>
             </div>
           </>
