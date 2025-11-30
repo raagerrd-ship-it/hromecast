@@ -132,63 +132,53 @@ async function getScreensaverSettings() {
 
 // Check if Chromecast is idle (no active sessions)
 async function isChromecastIdle() {
-  const selectedDevice = await getSelectedChromecast();
-  const targetDevice = selectedDevice || currentDevice;
+  // Get the player to check
+  let playerToCheck = null;
   
-  if (!targetDevice) {
-    console.log('⚠️  No target device available for idle check');
+  const selectedDevice = await getSelectedChromecast();
+  if (selectedDevice) {
+    // Find player for selected device
+    for (const [key, device] of discoveredDevices) {
+      if (device.host === selectedDevice.host && device.player) {
+        playerToCheck = device.player;
+        break;
+      }
+    }
+  }
+  
+  if (!playerToCheck) {
+    playerToCheck = currentDevice;
+  }
+  
+  if (!playerToCheck) {
+    console.log('⚠️  No device available for idle check');
     return false;
   }
   
   return new Promise((resolve) => {
-    const checkClient = new castv2.Client();
-    
-    // Set timeout to avoid hanging
+    // Set timeout
     const timeout = setTimeout(() => {
       console.log('⏱️  Idle check timeout - assuming busy');
-      checkClient.close();
       resolve(false);
     }, 5000);
     
-    checkClient.connect(targetDevice.host, () => {
-      const connection = checkClient.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.tp.connection', 'JSON');
-      const receiver = checkClient.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.receiver', 'JSON');
-      
-      // Connect first
-      connection.send({ type: 'CONNECT' });
-      
-      // Request receiver status
-      receiver.send({ type: 'GET_STATUS', requestId: 1 });
-      
-      receiver.on('message', (data) => {
-        if (data.type === 'RECEIVER_STATUS') {
-          clearTimeout(timeout);
-          connection.send({ type: 'CLOSE' });
-          checkClient.close();
-          
-          const apps = data.status?.applications || [];
-          
-          // Check if any app is running (except backdrop)
-          const activeApps = apps.filter(app => 
-            app.appId !== 'E8C28D3C' // Backdrop app ID
-          );
-          
-          if (activeApps.length === 0) {
-            console.log('✅ Chromecast is idle (no active apps)');
-            resolve(true);
-          } else {
-            console.log(`⏸️  Chromecast is busy (${activeApps.length} active app(s)): ${activeApps.map(a => a.displayName).join(', ')}`);
-            resolve(false);
-          }
-        }
-      });
-    });
-    
-    checkClient.on('error', (err) => {
+    playerToCheck.status((err, status) => {
       clearTimeout(timeout);
-      console.error('❌ Error checking idle status:', err.message);
-      checkClient.close();
-      resolve(false);
+      
+      if (err) {
+        console.error('❌ Error checking idle status:', err.message);
+        resolve(false);
+        return;
+      }
+      
+      // Check if player is idle (not playing anything)
+      if (!status || status.playerState === 'IDLE' || !status.playerState) {
+        console.log('✅ Chromecast is idle');
+        resolve(true);
+      } else {
+        console.log(`⏸️  Chromecast is busy (state: ${status.playerState})`);
+        resolve(false);
+      }
     });
   });
 }
