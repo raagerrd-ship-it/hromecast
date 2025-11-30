@@ -45,16 +45,13 @@ export const useChromecast = () => {
     (availability: string) => {
       if (availability === 'available') {
         console.log('Chromecast devices available');
+        setIsAvailable(true);
       } else {
         console.log('No Chromecast devices available');
-        toast({
-          title: 'No Devices Found',
-          description: 'Make sure your Chromecast is on the same network.',
-          variant: 'destructive',
-        });
+        setIsAvailable(false);
       }
     },
-    [toast]
+    []
   );
 
   const initializeCastApi = useCallback(() => {
@@ -78,13 +75,12 @@ export const useChromecast = () => {
       apiConfig,
       () => {
         console.log('Cast API initialized successfully');
-        setIsAvailable(true);
       },
       (error: any) => {
         console.error('Error initializing Cast API:', error);
         toast({
           title: 'Cast API Error',
-          description: 'Failed to initialize Chromecast. Make sure you have a Chromecast on your network.',
+          description: 'Failed to initialize Chromecast.',
           variant: 'destructive',
         });
       }
