@@ -1,6 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
-const { Client, DefaultMediaReceiver } = require('castv2-client');
-const Bonjour = require('bonjour-service');
+const Chromecasts = require('chromecasts');
 require('dotenv').config();
 
 // Configuration
@@ -18,118 +17,47 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Chromecast state
-let chromecastDevices = new Map();
-let currentClient = null;
+const chromecasts = new Chromecasts();
+let currentDevice = null;
 
 // Discover Chromecast devices
 function discoverDevices() {
   console.log('🔍 Scanning for Chromecast devices on local network...');
   
-  const bonjour = new Bonjour();
-  const browser = bonjour.find({ type: 'googlecast' });
-  
-  browser.on('up', (service) => {
-    const deviceName = service.txt?.fn || service.name;
-    const deviceHost = service.referer?.address || service.host;
+  chromecasts.on('update', (player) => {
+    console.log(`✅ Found Chromecast: ${player.name} at ${player.host}`);
     
-    console.log(`✅ Found Chromecast: ${deviceName} at ${deviceHost}:${service.port}`);
-    
-    chromecastDevices.set(deviceName, {
-      name: deviceName,
-      host: deviceHost,
-      port: service.port,
-      txtRecord: service.txt
-    });
-  });
-  
-  browser.on('down', (service) => {
-    const deviceName = service.txt?.fn || service.name;
-    console.log(`❌ Chromecast offline: ${deviceName}`);
-    chromecastDevices.delete(deviceName);
-  });
-  
-  return browser;
-}
-
-// Connect to Chromecast
-async function connectToChromecast(device) {
-  return new Promise((resolve, reject) => {
-    const client = new Client();
-    
-    client.connect(device.host, () => {
-      console.log(`🔗 Connected to ${device.name}`);
-      currentClient = client;
-      resolve(client);
-    });
-    
-    client.on('error', (err) => {
-      console.error(`❌ Error connecting to ${device.name}:`, err.message);
-      currentClient = null;
-      reject(err);
-    });
+    // Use the first device found
+    if (!currentDevice) {
+      currentDevice = player;
+      console.log(`🎯 Using device: ${player.name}`);
+    }
   });
 }
 
 // Cast media to Chromecast
 async function castMedia(url) {
-  if (chromecastDevices.size === 0) {
+  if (!currentDevice) {
     throw new Error('No Chromecast devices found on network');
   }
   
-  // Get first available device
-  const device = Array.from(chromecastDevices.values())[0];
-  console.log(`📺 Casting to ${device.name}: ${url}`);
+  console.log(`📺 Casting to ${currentDevice.name}: ${url}`);
   
-  try {
-    // Connect if not already connected
-    if (!currentClient) {
-      await connectToChromecast(device);
-    }
-    
-    // Launch DefaultMediaReceiver
-    await new Promise((resolve, reject) => {
-      currentClient.launch(DefaultMediaReceiver, (err, player) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        
-        // Load media - use text/html for viewer pages
-        const media = {
-          contentId: url,
-          contentType: 'text/html',
-          streamType: 'BUFFERED',
-          metadata: {
-            type: 0,
-            metadataType: 0,
-            title: 'Website Viewer',
-            images: []
-          }
-        };
-        
-        player.load(media, { autoplay: true }, (err, status) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          
-          console.log('✅ Media loaded successfully');
-          console.log('Status:', status);
-          resolve(status);
-        });
-      });
+  return new Promise((resolve, reject) => {
+    currentDevice.play(url, {
+      type: 'text/html',
+      title: 'Website Viewer'
+    }, (err) => {
+      if (err) {
+        console.error('❌ Cast error:', err.message);
+        reject(err);
+        return;
+      }
+      
+      console.log('✅ Media loaded successfully');
+      resolve({ success: true });
     });
-    
-    return { success: true };
-  } catch (error) {
-    console.error('❌ Cast error:', error.message);
-    // Reset connection on error
-    if (currentClient) {
-      currentClient.close();
-      currentClient = null;
-    }
-    throw error;
-  }
+  });
 }
 
 // Process pending commands
@@ -236,13 +164,14 @@ async function main() {
   console.log('');
   
   // Discover Chromecast devices
-  const browser = discoverDevices();
+  discoverDevices();
   
   // Wait a bit for discovery
-  await new Promise(resolve => setTimeout(resolve, 3000));
+  await new Promise(resolve => setTimeout(resolve, 5000));
   
-  if (chromecastDevices.size === 0) {
+  if (!currentDevice) {
     console.warn('⚠️  No Chromecast devices found. Make sure your Chromecast is on the same network.');
+    console.warn('⚠️  Bridge will keep running and retry when commands arrive.');
   }
   
   // Subscribe to realtime updates
@@ -263,11 +192,8 @@ async function main() {
   process.on('SIGINT', () => {
     console.log('\n🛑 Stopping bridge service...');
     clearInterval(pollInterval);
-    browser.stop();
     channel.unsubscribe();
-    if (currentClient) {
-      currentClient.close();
-    }
+    chromecasts.destroy();
     process.exit(0);
   });
 }
