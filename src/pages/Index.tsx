@@ -431,6 +431,12 @@ const Index = () => {
             idleTimeSeconds={screensaverStatus.idleTimeSeconds}
             timeUntilScreensaverSeconds={screensaverStatus.timeUntilScreensaverSeconds}
             checkIntervalSeconds={screensaverStatus.checkIntervalSeconds}
+            lastSavedDeviceName={
+              !chromecast.isConnected && localStorage.getItem('chromecast-last-device')
+                ? JSON.parse(localStorage.getItem('chromecast-last-device') || '{}').friendlyName
+                : undefined
+            }
+            onReconnect={chromecast.requestSession}
           />
           
           <CastInterface onCast={handleCast} chromecast={chromecast} />
