@@ -196,29 +196,67 @@ const Index = () => {
 
   const handleCast = async (url: string) => {
     try {
-      console.log("Direct casting URL:", url);
+      console.log("Processing URL for casting:", url);
       addActivityLog('cast', 'Preparing to cast URL', url);
       
-      // Generate viewer URL that wraps the target website
-      const baseUrl = window.location.origin;
-      const viewerUrl = `${baseUrl}/viewer?url=${encodeURIComponent(url)}`;
-      
-      console.log("Viewer URL:", viewerUrl);
-      addActivityLog('cast', 'Casting viewer URL', viewerUrl);
-      
-      // Cast directly via Chromecast SDK with error callback
-      chromecast.loadMedia(viewerUrl, (errorMsg) => {
-        addActivityLog('error', 'Cast failed', errorMsg);
+      // Call the render-website function to generate viewer URL
+      const { data: renderData, error: renderError } = await supabase.functions.invoke('render-website', {
+        body: { url, action: 'video' }
       });
+
+      if (renderError) {
+        console.error("Error from render function:", renderError);
+        addActivityLog('error', 'Failed to render website', renderError.message);
+        toast({
+          title: "Rendering Failed",
+          description: renderError.message || "Failed to prepare website for casting",
+          variant: "destructive",
+        });
+        return null;
+      }
+
+      console.log("Render response:", renderData);
+      addActivityLog('cast', 'Website rendered successfully', `Viewer URL: ${renderData.viewerUrl}`);
       
-      return viewerUrl;
+      // Queue cast command for bridge service
+      const deviceId = getOrCreateDeviceId();
+      const castUrl = renderData.videoUrl || renderData.viewerUrl;
+      const { data: queueData, error: queueError } = await supabase.functions.invoke('queue-cast', {
+        body: { 
+          deviceId,
+          url: castUrl,
+          commandType: 'cast'
+        }
+      });
+
+      if (queueError) {
+        console.error("Error queueing cast command:", queueError);
+        addActivityLog('error', 'Failed to queue cast command', queueError.message);
+        toast({
+          title: "Queue Failed",
+          description: "Failed to queue cast command",
+          variant: "destructive",
+        });
+        return null;
+      }
+
+      addActivityLog('bridge', 'Command sent to bridge service', `Device: ${deviceId}, URL: ${castUrl.substring(0, 50)}...`);
+      toast({
+        title: "Cast Queued",
+        description: "Your local bridge will process this cast shortly",
+      });
+
+      console.log("Cast command queued:", queueData);
+      
+      // Return the cast URL for reference
+      return castUrl;
       
     } catch (error) {
-      console.error("Error casting website:", error);
+      console.error("Error processing website:", error);
       addActivityLog('error', 'Unexpected error occurred', String(error));
       toast({
-        title: "Casting Failed",
-        description: "Failed to start casting",
+        title: "Processing Failed",
+        description: "An unexpected error occurred",
         variant: "destructive",
       });
       return null;
@@ -229,13 +267,8 @@ const Index = () => {
     console.log("Starting screensaver with URL:", url);
     addActivityLog('cast', 'Screensaver activated', `Auto-casting: ${url}`);
     
-    try {
-      // Cast directly and wait for result
-      await handleCast(url);
-    } catch (error) {
-      console.error("Screensaver cast error:", error);
-      addActivityLog('error', 'Screensaver cast failed', String(error));
-    }
+    // Queue screensaver cast through bridge service (same as regular casts)
+    await handleCast(url);
   };
 
   // Fetch recent commands for bridge
