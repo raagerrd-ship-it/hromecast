@@ -113,7 +113,8 @@ export const useScreensaver = ({
       console.log('[Screensaver] 🛑 Cleaning up monitoring');
       clearInterval(interval);
     };
-  }, [screensaverConfig.enabled, screensaverConfig.checkInterval, screensaverConfig.idleTimeout, screensaverConfig.url, checkIdleStatus]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screensaverConfig.enabled, screensaverConfig.checkInterval, screensaverConfig.idleTimeout, screensaverConfig.url]);
 
   // Reset screensaver state when casting starts or connection changes
   useEffect(() => {
