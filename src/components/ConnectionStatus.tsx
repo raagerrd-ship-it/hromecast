@@ -62,17 +62,6 @@ export const ConnectionStatus = ({
     );
   }
 
-  if (hasAutoConnect) {
-    return (
-      <Alert>
-        <Monitor className="h-4 w-4" />
-        <AlertDescription>
-          Auto-connecting to your last Chromecast device...
-        </AlertDescription>
-      </Alert>
-    );
-  }
-
   return (
     <Card className="bg-muted/50 border-border/50">
       <CardContent className="p-4 flex items-center gap-3">
