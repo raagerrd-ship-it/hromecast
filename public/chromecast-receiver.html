@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Chromecast Website Receiver</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: #000;
+      color: #fff;
+      font-family: Arial, sans-serif;
+    }
+    
+    #content {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+    
+    #status {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      z-index: 1000;
+    }
+    
+    #loading {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 24px;
+      z-index: 999;
+    }
+  </style>
+  <script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
+</head>
+<body>
+  <div id="status">Ready to cast...</div>
+  <div id="loading" style="display:none;">Loading website...</div>
+  <iframe id="content" style="display:none;"></iframe>
+  
+  <script>
+    const context = cast.framework.CastReceiverContext.getInstance();
+    const playerManager = context.getPlayerManager();
+    
+    const statusEl = document.getElementById('status');
+    const loadingEl = document.getElementById('loading');
+    const contentEl = document.getElementById('content');
+    
+    // Custom message handler for loading websites
+    context.addCustomMessageListener('urn:x-cast:com.website.cast', (customEvent) => {
+      const data = customEvent.data;
+      console.log('Received custom message:', data);
+      
+      if (data.type === 'LOAD_WEBSITE') {
+        loadWebsite(data.url);
+      }
+    });
+    
+    // Override default media load behavior
+    playerManager.setMessageInterceptor(
+      cast.framework.messages.MessageType.LOAD,
+      (loadRequestData) => {
+        console.log('Load request:', loadRequestData);
+        
+        if (loadRequestData.media && loadRequestData.media.contentId) {
+          const url = loadRequestData.media.contentId;
+          
+          // Check if this is an HTML/website URL
+          if (loadRequestData.media.contentType === 'text/html' || 
+              url.startsWith('http://') || 
+              url.startsWith('https://')) {
+            loadWebsite(url);
+            return null; // Block default media handling
+          }
+        }
+        
+        return loadRequestData;
+      }
+    );
+    
+    function loadWebsite(url) {
+      console.log('Loading website:', url);
+      statusEl.textContent = 'Loading: ' + url;
+      loadingEl.style.display = 'block';
+      contentEl.style.display = 'none';
+      
+      // Load the URL in the iframe
+      contentEl.src = url;
+      
+      contentEl.onload = () => {
+        console.log('Website loaded successfully');
+        statusEl.textContent = 'Connected';
+        loadingEl.style.display = 'none';
+        contentEl.style.display = 'block';
+        
+        // Hide status after 3 seconds
+        setTimeout(() => {
+          statusEl.style.display = 'none';
+        }, 3000);
+      };
+      
+      contentEl.onerror = () => {
+        console.error('Failed to load website');
+        statusEl.textContent = 'Error loading website';
+        loadingEl.style.display = 'none';
+      };
+    }
+    
+    // Start the receiver
+    const options = new cast.framework.CastReceiverOptions();
+    options.disableIdleTimeout = true;
+    
+    context.start(options);
+    console.log('Chromecast receiver started');
+  </script>
+</body>
+</html>
