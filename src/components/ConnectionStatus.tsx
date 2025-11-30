@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { Wifi, WifiOff, Monitor } from "lucide-react";
+import { Wifi, WifiOff, Monitor, RotateCw } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 
 interface ConnectionStatusProps {
   isConnected: boolean;
@@ -10,6 +11,8 @@ interface ConnectionStatusProps {
   idleTimeSeconds?: number;
   timeUntilScreensaverSeconds?: number;
   checkIntervalSeconds?: number;
+  lastSavedDeviceName?: string;
+  onReconnect?: () => void;
 }
 
 export const ConnectionStatus = ({ 
@@ -20,6 +23,8 @@ export const ConnectionStatus = ({
   idleTimeSeconds,
   timeUntilScreensaverSeconds,
   checkIntervalSeconds,
+  lastSavedDeviceName,
+  onReconnect,
 }: ConnectionStatusProps) => {
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -76,8 +81,25 @@ export const ConnectionStatus = ({
         <WifiOff className="h-5 w-5 text-muted-foreground" />
         <div className="flex-1">
           <p className="text-sm font-medium text-muted-foreground">Not connected</p>
-          <p className="text-xs text-muted-foreground">Connect to enable screensaver</p>
+          {lastSavedDeviceName ? (
+            <p className="text-xs text-muted-foreground">
+              Last device: {lastSavedDeviceName}
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">Connect to enable screensaver</p>
+          )}
         </div>
+        {lastSavedDeviceName && onReconnect && (
+          <Button 
+            size="sm" 
+            variant="outline" 
+            onClick={onReconnect}
+            className="gap-2"
+          >
+            <RotateCw className="h-4 w-4" />
+            Reconnect
+          </Button>
+        )}
       </CardContent>
     </Card>
   );
