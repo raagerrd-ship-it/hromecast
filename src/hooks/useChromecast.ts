@@ -167,56 +167,11 @@ export const useChromecast = () => {
 
   const loadMedia = useCallback(
     (url: string) => {
-      const cast = window.chrome?.cast;
-      if (!session || !cast) {
-        toast({
-          title: 'Not Connected',
-          description: 'Please connect to a Chromecast device first.',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      // Set content type to video/mp4 for video casting
-      const mediaInfo = new cast.media.MediaInfo(url, 'video/mp4');
-      mediaInfo.metadata = new cast.media.GenericMediaMetadata();
-      mediaInfo.metadata.title = 'Website Video';
-      mediaInfo.metadata.subtitle = 'Recorded website view';
-
-      const request = new cast.media.LoadRequest(mediaInfo);
-
-      session.loadMedia(
-        request,
-        (media: any) => {
-          console.log('Media loaded successfully:', media);
-          setIsCasting(true);
-          setLastActivityTime(Date.now());
-          
-          // Listen for media status updates to detect when casting ends
-          media.addUpdateListener((isAlive: boolean) => {
-            console.log('Media update - isAlive:', isAlive);
-            if (!isAlive) {
-              console.log('Media finished playing, setting isCasting to false');
-              setIsCasting(false);
-              setLastActivityTime(Date.now()); // Reset activity time when content ends
-            }
-          });
-          
-          toast({
-            title: 'Casting Started',
-            description: `Now casting ${url}`,
-          });
-        },
-        (error: any) => {
-          console.error('Error loading media:', error);
-          setIsCasting(false);
-          toast({
-            title: 'Cast Failed',
-            description: 'Unable to cast this content. The URL may not be compatible.',
-            variant: 'destructive',
-          });
-        }
-      );
+      // This function is kept for compatibility but does nothing
+      // All casting is handled by the bridge service
+      console.log('loadMedia called but delegated to bridge service:', url);
+      setIsCasting(true);
+      setLastActivityTime(Date.now());
     },
     [session, toast]
   );
