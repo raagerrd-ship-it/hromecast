@@ -25,6 +25,7 @@ let discoveredDevices = new Map();
 let currentDevice = null;
 let client = null;
 let lastScreensaverCheck = 0;
+let isScreensaverActive = false; // Track if screensaver is currently casting
 const SCREENSAVER_CHECK_INTERVAL = 60000;
 
 // Report discovered devices to database
@@ -176,6 +177,12 @@ async function checkAndActivateScreensaver() {
   
   lastScreensaverCheck = now;
   
+  // Skip check if screensaver is already active
+  if (isScreensaverActive) {
+    console.log('⏸️  [AUTO-SCREENSAVER] Screensaver already active, skipping check');
+    return;
+  }
+  
   console.log('\n🔍 [AUTO-SCREENSAVER] Checking if screensaver should activate...');
   
   // Get screensaver settings
@@ -209,7 +216,8 @@ async function checkAndActivateScreensaver() {
   
   try {
     await castMedia(settings.url);
-    console.log('✅ [AUTO-SCREENSAVER] Screensaver activated successfully');
+    isScreensaverActive = true; // Mark screensaver as active
+    console.log('✅ [AUTO-SCREENSAVER] Screensaver activated successfully - will stay active until manually stopped');
   } catch (error) {
     console.error('❌ [AUTO-SCREENSAVER] Failed to activate:', error.message);
   }
@@ -468,6 +476,7 @@ async function processPendingCommands() {
 
     try {
       if (command.command_type === 'cast') {
+        isScreensaverActive = false; // Reset when user manually casts something
         await castMedia(command.url);
       }
 
