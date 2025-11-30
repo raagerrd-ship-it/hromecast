@@ -103,7 +103,7 @@ export const useScreensaver = ({
       console.log('[Screensaver] Cleaning up monitoring');
       clearInterval(interval);
     };
-  }, [screensaverConfig.enabled, screensaverConfig.checkInterval, screensaverConfig.idleTimeout, screensaverConfig.url, checkIdleStatus]);
+  }, [screensaverConfig.enabled, screensaverConfig.checkInterval, screensaverConfig.idleTimeout, screensaverConfig.url]);
 
   // Reset screensaver state when casting starts or connection changes
   useEffect(() => {
