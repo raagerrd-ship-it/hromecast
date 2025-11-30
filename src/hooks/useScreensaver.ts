@@ -45,11 +45,12 @@ export const useScreensaver = ({
       return;
     }
 
-    // Check every 10 seconds
-    const interval = setInterval(checkIdleStatus, 10000);
+    // Check at the configured interval
+    const intervalMs = screensaverConfig.checkInterval * 1000;
+    const interval = setInterval(checkIdleStatus, intervalMs);
 
     return () => clearInterval(interval);
-  }, [checkIdleStatus, screensaverConfig.enabled]);
+  }, [checkIdleStatus, screensaverConfig.enabled, screensaverConfig.checkInterval]);
 
   // Reset screensaver state when casting starts
   useEffect(() => {

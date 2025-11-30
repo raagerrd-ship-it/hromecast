@@ -19,10 +19,10 @@ const Index = () => {
       try {
         return JSON.parse(saved);
       } catch {
-        return { enabled: false, url: "", idleTimeout: 5 };
+        return { enabled: false, url: "", idleTimeout: 5, checkInterval: 10 };
       }
     }
-    return { enabled: false, url: "", idleTimeout: 5 };
+    return { enabled: false, url: "", idleTimeout: 5, checkInterval: 10 };
   });
 
   useEffect(() => {
