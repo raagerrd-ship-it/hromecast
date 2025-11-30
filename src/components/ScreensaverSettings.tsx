@@ -1,11 +1,12 @@
-import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { Monitor, Save, Wifi, WifiOff } from "lucide-react";
+import { Monitor, Save, Wifi, WifiOff, Clock } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
+import { useState, useEffect } from "react";
 
 interface ChromecastHook {
   isAvailable: boolean;
@@ -13,6 +14,9 @@ interface ChromecastHook {
   currentDevice: { friendlyName: string; id: string } | null;
   isCasting: boolean;
   lastActivityTime: number;
+  idleTimeSeconds: number;
+  timeUntilScreensaverSeconds: number;
+  progressPercentage: number;
   requestSession: () => void;
   loadMedia: (url: string) => void;
   stopCasting: () => void;
@@ -146,6 +150,29 @@ export const ScreensaverSettings = ({ onSave, currentSettings, chromecast }: Scr
 
         {enabled && (
           <>
+            {/* Timeline Progress Bar */}
+            <div className="space-y-2 p-4 bg-muted/50 rounded-lg border">
+              <div className="flex items-center justify-between text-sm">
+                <span className="flex items-center gap-2 text-muted-foreground">
+                  <Clock className="h-4 w-4" />
+                  Next check in
+                </span>
+                <span className="font-mono font-medium">
+                  {Math.floor(chromecast.timeUntilScreensaverSeconds / 60)}m {chromecast.timeUntilScreensaverSeconds % 60}s
+                </span>
+              </div>
+              
+              <Progress 
+                value={chromecast.progressPercentage} 
+                className="h-2"
+              />
+              
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>Idle: {Math.floor(chromecast.idleTimeSeconds / 60)}m {chromecast.idleTimeSeconds % 60}s</span>
+                <span>Timeout: {idleTimeout}m</span>
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="screensaver-url">Screensaver URL</Label>
               <Input
@@ -171,23 +198,6 @@ export const ScreensaverSettings = ({ onSave, currentSettings, chromecast }: Scr
               />
               <p className="text-sm text-muted-foreground">
                 Start screensaver after {idleTimeout} minute{idleTimeout !== 1 ? 's' : ''} of inactivity
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="check-interval">
-                Check Interval (seconds)
-              </Label>
-              <Input
-                id="check-interval"
-                type="number"
-                min="5"
-                max="300"
-                value={checkInterval}
-                onChange={(e) => setCheckInterval(parseInt(e.target.value) || 10)}
-              />
-              <p className="text-sm text-muted-foreground">
-                Check for idle status every {checkInterval} second{checkInterval !== 1 ? 's' : ''}
               </p>
             </div>
           </>
