@@ -598,7 +598,7 @@ const Index = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="relative w-full max-w-md mx-auto aspect-video bg-muted rounded-lg overflow-hidden border">
+                <div className="relative w-full max-w-2xl mx-auto aspect-video bg-muted rounded-lg overflow-hidden border">
                   <iframe
                     src={screensaverConfig.url}
                     className="w-full h-full"
