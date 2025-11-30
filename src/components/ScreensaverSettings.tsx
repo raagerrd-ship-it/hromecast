@@ -4,12 +4,24 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { Monitor, Save } from "lucide-react";
+import { Monitor, Save, Wifi, WifiOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+interface ChromecastHook {
+  isAvailable: boolean;
+  isConnected: boolean;
+  currentDevice: { friendlyName: string; id: string } | null;
+  isCasting: boolean;
+  lastActivityTime: number;
+  requestSession: () => void;
+  loadMedia: (url: string) => void;
+  stopCasting: () => void;
+}
 
 interface ScreensaverSettingsProps {
   onSave: (settings: ScreensaverConfig) => void;
   currentSettings: ScreensaverConfig;
+  chromecast: ChromecastHook;
 }
 
 export interface ScreensaverConfig {
@@ -19,7 +31,7 @@ export interface ScreensaverConfig {
   checkInterval: number; // in seconds
 }
 
-export const ScreensaverSettings = ({ onSave, currentSettings }: ScreensaverSettingsProps) => {
+export const ScreensaverSettings = ({ onSave, currentSettings, chromecast }: ScreensaverSettingsProps) => {
   const [enabled, setEnabled] = useState(currentSettings.enabled);
   const [url, setUrl] = useState(currentSettings.url);
   const [idleTimeout, setIdleTimeout] = useState(currentSettings.idleTimeout);
@@ -63,6 +75,49 @@ export const ScreensaverSettings = ({ onSave, currentSettings }: ScreensaverSett
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Chromecast Device Selection */}
+        <div className="space-y-2">
+          <Label>Chromecast Device</Label>
+          {chromecast.isConnected && chromecast.currentDevice ? (
+            <div className="flex items-center justify-between p-3 bg-primary/10 border border-primary/20 rounded-lg">
+              <div className="flex items-center gap-3">
+                <Wifi className="h-4 w-4 text-primary" />
+                <div>
+                  <p className="text-sm font-medium">{chromecast.currentDevice.friendlyName}</p>
+                  <p className="text-xs text-muted-foreground">Connected</p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={chromecast.stopCasting}
+              >
+                Disconnect
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between p-3 bg-muted/50 border border-border/50 rounded-lg">
+              <div className="flex items-center gap-3">
+                <WifiOff className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Not Connected</p>
+                  <p className="text-xs text-muted-foreground">
+                    {chromecast.isAvailable ? 'Click to select device' : 'No devices available'}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={chromecast.requestSession}
+                disabled={!chromecast.isAvailable}
+              >
+                Connect
+              </Button>
+            </div>
+          )}
+        </div>
+
         <div className="flex items-center justify-between">
           <Label htmlFor="screensaver-enabled" className="flex flex-col gap-1">
             <span>Enable Screensaver</span>
