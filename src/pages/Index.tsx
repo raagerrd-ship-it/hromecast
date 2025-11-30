@@ -585,6 +585,32 @@ const Index = () => {
             }}
           />
 
+          {/* Cast Preview */}
+          {screensaverConfig.enabled && screensaverConfig.url && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Monitor className="h-5 w-5" />
+                  Cast Preview
+                </CardTitle>
+                <CardDescription>
+                  Live preview of what will be cast to your Chromecast
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="relative aspect-video bg-muted rounded-lg overflow-hidden border">
+                  <iframe
+                    src={screensaverConfig.url}
+                    className="w-full h-full"
+                    title="Cast Preview"
+                    sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Bridge Service Section */}
           <Card>
             <CardHeader>
