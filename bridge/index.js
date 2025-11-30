@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { Client, DefaultMediaReceiver } from 'castv2-client';
-import mdns from 'mdns';
+import Bonjour from 'bonjour-service';
 import dotenv from 'dotenv';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -33,11 +33,12 @@ let currentClient = null;
 function discoverDevices() {
   console.log('🔍 Scanning for Chromecast devices on local network...');
   
-  const browser = mdns.createBrowser(mdns.tcp('googlecast'));
+  const bonjour = new Bonjour();
+  const browser = bonjour.find({ type: 'googlecast' });
   
-  browser.on('serviceUp', (service) => {
-    const deviceName = service.txtRecord?.fn || service.name;
-    const deviceHost = service.addresses?.[0] || service.host;
+  browser.on('up', (service) => {
+    const deviceName = service.txt?.fn || service.name;
+    const deviceHost = service.referer?.address || service.host;
     
     console.log(`✅ Found Chromecast: ${deviceName} at ${deviceHost}:${service.port}`);
     
@@ -45,17 +46,15 @@ function discoverDevices() {
       name: deviceName,
       host: deviceHost,
       port: service.port,
-      txtRecord: service.txtRecord
+      txtRecord: service.txt
     });
   });
   
-  browser.on('serviceDown', (service) => {
-    const deviceName = service.txtRecord?.fn || service.name;
+  browser.on('down', (service) => {
+    const deviceName = service.txt?.fn || service.name;
     console.log(`❌ Chromecast offline: ${deviceName}`);
     chromecastDevices.delete(deviceName);
   });
-  
-  browser.start();
   
   return browser;
 }
