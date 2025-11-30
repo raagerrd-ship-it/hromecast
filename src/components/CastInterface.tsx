@@ -2,8 +2,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Wifi, Cast, Play, Pause, Square, Loader2 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { Wifi, Cast, Square, Loader2, AlertCircle } from "lucide-react";
+import { useChromecast } from "@/hooks/useChromecast";
 
 interface CastInterfaceProps {
   onCast: (url: string) => void;
@@ -11,51 +11,55 @@ interface CastInterfaceProps {
 
 export const CastInterface = ({ onCast }: CastInterfaceProps) => {
   const [url, setUrl] = useState("");
-  const [isConnected, setIsConnected] = useState(false);
   const [isCasting, setIsCasting] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
+  const {
+    isAvailable,
+    isConnected,
+    currentDevice,
+    requestSession,
+    loadMedia,
+    stopCasting,
+  } = useChromecast();
 
   const handleConnect = () => {
-    setIsLoading(true);
-    // Simulate Chromecast connection
-    setTimeout(() => {
-      setIsConnected(true);
-      setIsLoading(false);
-      toast({
-        title: "Connected",
-        description: "Successfully connected to Chromecast device",
-      });
-    }, 1500);
+    requestSession();
   };
 
-  const handleCast = () => {
+  const handleCast = async () => {
     if (!url) {
-      toast({
-        title: "URL Required",
-        description: "Please enter a website URL to cast",
-        variant: "destructive",
-      });
       return;
     }
+
+    // First, fetch the content through our edge function
+    await onCast(url);
+    
+    // Then try to cast it
     setIsCasting(true);
-    onCast(url);
-    toast({
-      title: "Casting Started",
-      description: `Now casting ${url}`,
-    });
+    loadMedia(url);
   };
 
   const handleStop = () => {
     setIsCasting(false);
-    toast({
-      title: "Casting Stopped",
-      description: "Playback has been stopped",
-    });
+    stopCasting();
   };
 
   return (
     <div className="w-full max-w-2xl mx-auto space-y-6">
+      {/* Cast SDK Status */}
+      {!isAvailable && (
+        <Card className="p-4 border-destructive/50 bg-destructive/10">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="h-5 w-5 text-destructive" />
+            <div>
+              <p className="text-sm font-medium">Chromecast Not Available</p>
+              <p className="text-xs text-muted-foreground">
+                Make sure your Chromecast is on the same network as this device.
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Connection Status */}
       <Card className="p-6 border-border/50 backdrop-blur-sm bg-card/80">
         <div className="flex items-center justify-between">
@@ -66,26 +70,17 @@ export const CastInterface = ({ onCast }: CastInterfaceProps) => {
             <div>
               <h3 className="font-semibold">Chromecast Status</h3>
               <p className="text-sm text-muted-foreground">
-                {isConnected ? "Connected to Living Room TV" : "Not Connected"}
+                {isConnected ? `Connected to ${currentDevice?.friendlyName}` : "Not Connected"}
               </p>
             </div>
           </div>
           <Button
             onClick={handleConnect}
-            disabled={isConnected || isLoading}
+            disabled={!isAvailable || isConnected}
             variant="outline"
             size="sm"
           >
-            {isLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Connecting
-              </>
-            ) : isConnected ? (
-              "Connected"
-            ) : (
-              "Connect"
-            )}
+            {isConnected ? "Connected" : "Connect"}
           </Button>
         </div>
       </Card>
@@ -130,14 +125,9 @@ export const CastInterface = ({ onCast }: CastInterfaceProps) => {
             </div>
             <p className="text-sm text-muted-foreground truncate">{url}</p>
             <div className="flex gap-2">
-              <Button variant="outline" size="icon">
-                <Play className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" size="icon">
-                <Pause className="h-4 w-4" />
-              </Button>
-              <Button variant="destructive" size="icon" onClick={handleStop}>
+              <Button variant="destructive" size="sm" onClick={handleStop} className="w-full">
                 <Square className="h-4 w-4" />
+                Stop Casting
               </Button>
             </div>
           </div>
