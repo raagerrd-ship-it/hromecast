@@ -206,8 +206,10 @@ const Index = () => {
       console.log("Viewer URL:", viewerUrl);
       addActivityLog('cast', 'Casting viewer URL', viewerUrl);
       
-      // Cast directly via Chromecast SDK
-      chromecast.loadMedia(viewerUrl);
+      // Cast directly via Chromecast SDK with error callback
+      chromecast.loadMedia(viewerUrl, (errorMsg) => {
+        addActivityLog('error', 'Cast failed', errorMsg);
+      });
       
       return viewerUrl;
       
