@@ -1,5 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
 const Chromecasts = require('chromecasts');
+const Bonjour = require('bonjour-service');
 require('dotenv').config();
 
 // Configuration
@@ -19,7 +20,9 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Chromecast state
 const chromecasts = new Chromecasts();
+const bonjour = Bonjour();
 let discoveredDevices = new Map();
+let chromecastPlayers = new Map(); // Map of host -> chromecasts player
 let currentDevice = null;
 let activeSession = null;
 let lastScreensaverCheck = 0;
@@ -233,38 +236,68 @@ async function checkAndActivateScreensaver() {
   }
 }
 
-// Discover Chromecast devices using chromecasts library
+// Discover Chromecast devices using Bonjour (works!) + chromecasts players
 function discoverDevices() {
   return new Promise((resolve) => {
-    console.log('🔍 Scanning for Chromecast devices on local network...');
+    console.log('🔍 Scanning for Chromecast devices on local network (Bonjour)...');
     
-    chromecasts.on('update', async (player) => {
-      console.log(`✅ Found Chromecast: ${player.name} at ${player.host}`);
+    const browser = bonjour.find({ type: 'googlecast' });
+    
+    // Stop discovery after 8 seconds
+    const discoveryTimeout = setTimeout(() => {
+      browser.stop();
+      resolve();
+    }, 8000);
+    
+    browser.on('up', async (service) => {
+      const deviceKey = `${service.referer.address}:${service.port}`;
       
-      const deviceKey = `${player.host}:8009`;
       if (!discoveredDevices.has(deviceKey)) {
-        discoveredDevices.set(deviceKey, {
-          name: player.name,
-          host: player.host,
-          port: 8009,
-          player: player
+        console.log(`✅ Found Chromecast via Bonjour: ${service.name} at ${service.referer.address}:${service.port}`);
+        
+        // Create chromecasts player for this device
+        console.log(`📡 Connecting chromecasts player to ${service.referer.address}...`);
+        
+        // Connect to this specific device using chromecasts
+        chromecasts.on('update', (player) => {
+          if (player.host === service.referer.address) {
+            console.log(`✅ Chromecasts player connected: ${player.name}`);
+            
+            discoveredDevices.set(deviceKey, {
+              name: service.name,
+              host: service.referer.address,
+              port: service.port,
+              player: player
+            });
+            
+            chromecastPlayers.set(service.referer.address, player);
+            
+            // Use first device as default
+            if (!currentDevice) {
+              currentDevice = player;
+              console.log(`🎯 Using device: ${player.name}`);
+            }
+          }
         });
         
+        // Also add basic info without player (as fallback)
+        if (!discoveredDevices.has(deviceKey)) {
+          discoveredDevices.set(deviceKey, {
+            name: service.name,
+            host: service.referer.address,
+            port: service.port,
+            player: null
+          });
+        }
+        
         // Report to database
-        await reportDiscoveredDevice(player.name, player.host, 8009);
-      }
-      
-      // Use the first device found if none selected
-      if (!currentDevice) {
-        currentDevice = player;
-        console.log(`🎯 Using device: ${player.name}`);
+        await reportDiscoveredDevice(service.name, service.referer.address, service.port);
       }
     });
     
-    // Give it 8 seconds to discover devices
-    setTimeout(() => {
-      resolve();
-    }, 8000);
+    browser.on('error', (error) => {
+      console.error('Bonjour browser error:', error);
+    });
   });
 }
 
@@ -491,6 +524,7 @@ async function main() {
     clearInterval(screensaverInterval);
     await channel.unsubscribe();
     chromecasts.destroy();
+    bonjour.destroy();
     process.exit(0);
   });
 }
