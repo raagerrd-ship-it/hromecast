@@ -40,11 +40,11 @@ serve(async (req) => {
       );
     }
 
-    // Generate a viewer URL that redirects to the target
-    const viewerUrl = `${req.headers.get('origin') || 'https://db36ca02-4c2b-4e0e-a58f-a351aa767ebf.lovableproject.com'}/viewer?url=${encodeURIComponent(url)}`;
+    // Use static viewer for better Chromecast compatibility
+    const viewerUrl = `${req.headers.get('origin') || 'https://db36ca02-4c2b-4e0e-a58f-a351aa767ebf.lovableproject.com'}/viewer-static.html?url=${encodeURIComponent(url)}`;
 
-    console.log('Generated viewer URL:', viewerUrl);
-    console.log('Using viewer URL for casting');
+    console.log('Generated static viewer URL:', viewerUrl);
+    console.log('Using static viewer for casting');
     
     return new Response(
       JSON.stringify({ 
@@ -52,7 +52,7 @@ serve(async (req) => {
         url,
         viewerUrl,
         contentType: 'text/html',
-        message: 'Viewer redirect enabled',
+        message: 'Static viewer enabled',
         timestamp: new Date().toISOString()
       }),
       { 
