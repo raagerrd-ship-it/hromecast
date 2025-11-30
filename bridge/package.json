@@ -2,10 +2,10 @@
   "name": "chromecast-bridge",
   "version": "1.0.0",
   "description": "Local bridge service for controlling Chromecast from Supabase",
-  "main": "index.js",
+  "main": "index.cjs",
   "scripts": {
-    "start": "node index.js",
-    "dev": "node --watch index.js"
+    "start": "node index.cjs",
+    "dev": "node --watch index.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.3",
