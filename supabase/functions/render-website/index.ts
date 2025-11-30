@@ -67,6 +67,64 @@ serve(async (req) => {
       );
     }
 
+    // For video action, create a video recording of the website
+    if (action === 'video') {
+      // Use urlbox.io API for video recording
+      const apiKey = Deno.env.get('URLBOX_API_KEY');
+      const apiSecret = Deno.env.get('URLBOX_API_SECRET');
+      
+      if (!apiKey || !apiSecret) {
+        return new Response(
+          JSON.stringify({ 
+            error: 'Video recording requires URLBOX_API_KEY and URLBOX_API_SECRET to be configured',
+            message: 'Please add your Urlbox.io API credentials to use video recording'
+          }),
+          { 
+            status: 400, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        );
+      }
+
+      // Generate HMAC for urlbox request
+      const encoder = new TextEncoder();
+      const queryString = `url=${encodeURIComponent(url)}&format=mp4&width=1920&height=1080&video=true&video_duration=10`;
+      const key = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(apiSecret),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+      );
+      const signature = await crypto.subtle.sign(
+        'HMAC',
+        key,
+        encoder.encode(queryString)
+      );
+      const token = Array.from(new Uint8Array(signature))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+
+      const videoUrl = `https://api.urlbox.io/v1/${apiKey}/${token}/mp4?${queryString}`;
+      
+      console.log('Generated video URL for:', url);
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          url,
+          viewerUrl,
+          videoUrl,
+          contentType: 'video/mp4',
+          timestamp: new Date().toISOString()
+        }),
+        { 
+          status: 200, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
     // Default: return viewer URL for casting
     return new Response(
       JSON.stringify({ 

@@ -10,9 +10,9 @@ const Index = () => {
     try {
       console.log("Processing URL for casting:", url);
       
-      // Call the render-website function to generate a viewer URL
+      // Call the render-website function to generate a video
       const { data: renderData, error: renderError } = await supabase.functions.invoke('render-website', {
-        body: { url, action: 'viewer' }
+        body: { url, action: 'video' }
       });
 
       if (renderError) {
@@ -27,8 +27,8 @@ const Index = () => {
 
       console.log("Render response:", renderData);
       
-      // Return the viewer URL that can be cast
-      return renderData.viewerUrl;
+      // Return the video URL that can be cast
+      return renderData.videoUrl;
       
     } catch (error) {
       console.error("Error processing website:", error);
