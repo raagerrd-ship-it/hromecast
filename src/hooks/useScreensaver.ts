@@ -20,6 +20,7 @@ export const useScreensaver = ({
 }: UseScreensaverProps) => {
   const [isScreensaverActive, setIsScreensaverActive] = useState(false);
   const lastCastTimeRef = useRef<number>(0); // Use ref for immediate updates
+  const intervalRef = useRef<NodeJS.Timeout | null>(null); // Store interval ID
   const MIN_CAST_INTERVAL_MS = 60000; // Minimum 60 seconds between casts
 
   // Use ref to always get the latest values without causing re-renders
@@ -80,6 +81,13 @@ export const useScreensaver = ({
       console.log(`[Screensaver] Setting cooldown timer for ${MIN_CAST_INTERVAL_MS / 1000}s`);
       onLog?.('cast', 'Screensaver idle timeout reached', `Triggering after ${Math.floor(idleTimeMs / 1000)}s idle`);
       
+      // IMMEDIATELY clear the interval to prevent additional triggers
+      if (intervalRef.current) {
+        console.log('[Screensaver] 🛑 Clearing interval to prevent re-triggers');
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      
       // Set cooldown IMMEDIATELY using ref (before async call)
       lastCastTimeRef.current = now;
       setIsScreensaverActive(true);
@@ -110,6 +118,12 @@ export const useScreensaver = ({
   ]);
 
   useEffect(() => {
+    // Clear any existing interval first
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+
     if (!screensaverConfig.enabled) {
       onLog?.('connection', 'Screensaver monitoring disabled', 'Enable in settings to activate');
       return;
@@ -127,7 +141,7 @@ export const useScreensaver = ({
 
     // Check at the configured interval
     const intervalMs = screensaverConfig.checkInterval * 1000;
-    const interval = setInterval(() => {
+    intervalRef.current = setInterval(() => {
       console.log('[Screensaver] ⏰ Running periodic check via interval');
       checkIdleStatus();
     }, intervalMs);
@@ -138,7 +152,10 @@ export const useScreensaver = ({
 
     return () => {
       console.log('[Screensaver] 🛑 Cleaning up monitoring');
-      clearInterval(interval);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screensaverConfig.enabled, screensaverConfig.checkInterval, screensaverConfig.idleTimeout, screensaverConfig.url, isScreensaverActive]);
