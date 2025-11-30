@@ -10,9 +10,9 @@ const Index = () => {
     try {
       console.log("Processing URL for casting:", url);
       
-      // Call the render-website function to generate a screenshot for casting
+      // Call the render-website function to generate a viewer URL
       const { data: renderData, error: renderError } = await supabase.functions.invoke('render-website', {
-        body: { url, action: 'screenshot' }
+        body: { url, action: 'viewer' }
       });
 
       if (renderError) {
@@ -27,8 +27,8 @@ const Index = () => {
 
       console.log("Render response:", renderData);
       
-      // Return the screenshot URL that can be cast to Chromecast
-      return renderData.screenshotUrl;
+      // Return the viewer URL that can be cast
+      return renderData.viewerUrl;
       
     } catch (error) {
       console.error("Error processing website:", error);

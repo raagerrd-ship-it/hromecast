@@ -149,18 +149,10 @@ export const useChromecast = () => {
         return;
       }
 
-      // Determine content type based on URL
-      let contentType = 'image/png';
-      if (url.includes('.mp4') || url.includes('video')) {
-        contentType = 'video/mp4';
-      } else if (url.includes('.jpg') || url.includes('.jpeg')) {
-        contentType = 'image/jpeg';
-      }
-
-      const mediaInfo = new cast.media.MediaInfo(url, contentType);
+      const mediaInfo = new cast.media.MediaInfo(url, 'text/html');
       mediaInfo.metadata = new cast.media.GenericMediaMetadata();
-      mediaInfo.metadata.title = 'Website Screenshot';
-      mediaInfo.metadata.subtitle = 'Captured website view';
+      mediaInfo.metadata.title = 'Website Cast';
+      mediaInfo.metadata.subtitle = url;
 
       const request = new cast.media.LoadRequest(mediaInfo);
 
@@ -170,7 +162,7 @@ export const useChromecast = () => {
           console.log('Media loaded successfully:', media);
           toast({
             title: 'Casting Started',
-            description: 'Website screenshot is now on your TV',
+            description: `Now casting ${url}`,
           });
         },
         (error: any) => {
