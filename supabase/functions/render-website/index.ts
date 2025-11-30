@@ -40,11 +40,11 @@ serve(async (req) => {
       );
     }
 
-    // Use static viewer for better Chromecast compatibility
-    const viewerUrl = `${req.headers.get('origin') || 'https://db36ca02-4c2b-4e0e-a58f-a351aa767ebf.lovableproject.com'}/viewer-static.html?url=${encodeURIComponent(url)}`;
+    // Cast the URL directly - Chromecast will load it in its own browser
+    const viewerUrl = url;
 
-    console.log('Generated static viewer URL:', viewerUrl);
-    console.log('Using static viewer for casting');
+    console.log('Casting URL directly:', viewerUrl);
+    console.log('Letting Chromecast load the URL natively');
     
     return new Response(
       JSON.stringify({ 
@@ -52,7 +52,7 @@ serve(async (req) => {
         url,
         viewerUrl,
         contentType: 'text/html',
-        message: 'Static viewer enabled',
+        message: 'Direct URL casting enabled',
         timestamp: new Date().toISOString()
       }),
       { 
