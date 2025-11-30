@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      cast_commands: {
+        Row: {
+          command_type: string
+          created_at: string
+          device_id: string
+          error_message: string | null
+          id: string
+          processed_at: string | null
+          status: string
+          url: string
+        }
+        Insert: {
+          command_type: string
+          created_at?: string
+          device_id: string
+          error_message?: string | null
+          id?: string
+          processed_at?: string | null
+          status?: string
+          url: string
+        }
+        Update: {
+          command_type?: string
+          created_at?: string
+          device_id?: string
+          error_message?: string | null
+          id?: string
+          processed_at?: string | null
+          status?: string
+          url?: string
+        }
+        Relationships: []
+      }
       screensaver_settings: {
         Row: {
           check_interval: number

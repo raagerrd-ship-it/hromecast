@@ -126,7 +126,34 @@ const Index = () => {
 
       console.log("Render response:", renderData);
       
-      // Return the video URL that can be cast
+      // Queue cast command for bridge service
+      const deviceId = getOrCreateDeviceId();
+      const { data: queueData, error: queueError } = await supabase.functions.invoke('queue-cast', {
+        body: { 
+          deviceId,
+          url: renderData.videoUrl,
+          commandType: 'cast'
+        }
+      });
+
+      if (queueError) {
+        console.error("Error queueing cast command:", queueError);
+        toast({
+          title: "Queue Failed",
+          description: "Failed to queue cast command",
+          variant: "destructive",
+        });
+        return null;
+      }
+
+      toast({
+        title: "Cast Queued",
+        description: "Your local bridge will process this cast shortly",
+      });
+
+      console.log("Cast command queued:", queueData);
+      
+      // Return the video URL for reference
       return renderData.videoUrl;
       
     } catch (error) {
