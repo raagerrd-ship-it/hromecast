@@ -130,7 +130,7 @@ export const useScreensaver = ({
       setIsScreensaverActive(false);
       onLog?.('connection', 'Screensaver reset', 'Casting activity detected');
     }
-  }, [isCasting, onLog]);
+  }, [isCasting]); // Remove onLog from dependencies to prevent infinite loop
 
   // Calculate status information
   const idleTimeMs = Date.now() - lastActivityTime;
