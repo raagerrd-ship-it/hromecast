@@ -19,6 +19,8 @@ export const useScreensaver = ({
   onLog,
 }: UseScreensaverProps) => {
   const [isScreensaverActive, setIsScreensaverActive] = useState(false);
+  const [lastCastTime, setLastCastTime] = useState<number>(0);
+  const MIN_CAST_INTERVAL_MS = 30000; // Minimum 30 seconds between casts
 
   // Use ref to always get the latest values without causing re-renders
   const checkIdleStatus = useCallback(async () => {
@@ -30,6 +32,14 @@ export const useScreensaver = ({
       lastActivityTime: new Date(lastActivityTime).toISOString(),
       idleTimeout: screensaverConfig.idleTimeout
     });
+
+    // Check cooldown first - prevent re-casting too soon
+    const timeSinceLastCast = now - lastCastTime;
+    if (lastCastTime > 0 && timeSinceLastCast < MIN_CAST_INTERVAL_MS) {
+      const remainingCooldown = Math.floor((MIN_CAST_INTERVAL_MS - timeSinceLastCast) / 1000);
+      console.log(`[Screensaver] Check skipped - cooling down (${remainingCooldown}s remaining)`);
+      return;
+    }
 
     // If screensaver is already active, don't trigger again
     if (isScreensaverActive) {
@@ -69,6 +79,7 @@ export const useScreensaver = ({
       
       // Set active BEFORE calling to prevent multiple triggers
       setIsScreensaverActive(true);
+      setLastCastTime(now);
       
       try {
         console.log('[Screensaver] Calling onStartScreensaver with URL:', screensaverConfig.url);
@@ -80,6 +91,7 @@ export const useScreensaver = ({
         onLog?.('error', 'Screensaver cast failed', String(error));
         // Reset on error so it can retry
         setIsScreensaverActive(false);
+        setLastCastTime(0);
       }
     }
   }, [
@@ -88,6 +100,8 @@ export const useScreensaver = ({
     screensaverConfig.idleTimeout,
     isScreensaverActive,
     lastActivityTime,
+    lastCastTime,
+    MIN_CAST_INTERVAL_MS,
     onStartScreensaver,
     onLog,
   ]);
@@ -130,6 +144,7 @@ export const useScreensaver = ({
       if (timeSinceActivity < 5000) {
         console.log('[Screensaver] User activity detected, resetting screensaver');
         setIsScreensaverActive(false);
+        setLastCastTime(0); // Reset cooldown on user activity
         onLog?.('connection', 'Screensaver deactivated', 'User activity detected');
       }
     }
