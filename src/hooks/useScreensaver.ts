@@ -20,12 +20,14 @@ export const useScreensaver = ({
 }: UseScreensaverProps) => {
   const [isScreensaverActive, setIsScreensaverActive] = useState(false);
 
+  // Use ref to always get the latest values without causing re-renders
   const checkIdleStatus = useCallback(async () => {
-    console.log('[Screensaver] checkIdleStatus called', {
+    const now = Date.now();
+    console.log('[Screensaver] checkIdleStatus called at', new Date().toISOString(), {
       enabled: screensaverConfig.enabled,
       url: screensaverConfig.url,
       isScreensaverActive,
-      lastActivityTime,
+      lastActivityTime: new Date(lastActivityTime).toISOString(),
       idleTimeout: screensaverConfig.idleTimeout
     });
 
@@ -33,7 +35,6 @@ export const useScreensaver = ({
     // The bridge service will handle the Chromecast connection
     if (!screensaverConfig.enabled) {
       console.log('[Screensaver] Check skipped - disabled');
-      onLog?.('connection', 'Screensaver check skipped', 'Screensaver is disabled');
       return;
     }
 
@@ -48,7 +49,7 @@ export const useScreensaver = ({
       return;
     }
 
-    const idleTimeMs = Date.now() - lastActivityTime;
+    const idleTimeMs = now - lastActivityTime;
     const idleTimeoutMs = screensaverConfig.idleTimeout * 60 * 1000;
     const remainingMs = idleTimeoutMs - idleTimeMs;
 
@@ -56,22 +57,31 @@ export const useScreensaver = ({
       idleTimeMs,
       idleTimeoutMs,
       remainingMs,
-      remainingSeconds: Math.floor(remainingMs / 1000)
+      remainingSeconds: Math.floor(remainingMs / 1000),
+      shouldTrigger: remainingMs <= 0
     });
 
     // Log the check status
     if (remainingMs > 0) {
       onLog?.('connection', 'Screensaver idle check', `${Math.floor(remainingMs / 1000)}s until activation`);
     } else {
-      console.log('[Screensaver] TRIGGERING NOW');
+      console.log('[Screensaver] ⚡ TRIGGERING SCREENSAVER NOW ⚡');
       onLog?.('cast', 'Screensaver idle timeout reached', `Triggering after ${Math.floor(idleTimeMs / 1000)}s idle`);
       setIsScreensaverActive(true);
-      await onStartScreensaver(screensaverConfig.url);
-      console.log('[Screensaver] onStartScreensaver completed');
-      // Don't auto-reset - only reset when casting state changes or user interacts
+      
+      try {
+        console.log('[Screensaver] Calling onStartScreensaver with URL:', screensaverConfig.url);
+        await onStartScreensaver(screensaverConfig.url);
+        console.log('[Screensaver] ✅ onStartScreensaver completed successfully');
+      } catch (error) {
+        console.error('[Screensaver] ❌ onStartScreensaver failed:', error);
+        onLog?.('error', 'Screensaver cast failed', String(error));
+      }
     }
   }, [
-    screensaverConfig,
+    screensaverConfig.enabled,
+    screensaverConfig.url,
+    screensaverConfig.idleTimeout,
     isScreensaverActive,
     lastActivityTime,
     onStartScreensaver,
@@ -85,25 +95,25 @@ export const useScreensaver = ({
     }
 
     // Log monitoring start
-    console.log('[Screensaver] Setting up monitoring', screensaverConfig);
+    console.log('[Screensaver] 🚀 Setting up monitoring', screensaverConfig);
     onLog?.('connection', 'Screensaver monitoring started', `Checking every ${screensaverConfig.checkInterval}s, timeout: ${screensaverConfig.idleTimeout}m`);
 
     // Check at the configured interval
     const intervalMs = screensaverConfig.checkInterval * 1000;
     const interval = setInterval(() => {
-      console.log('[Screensaver] Running periodic check');
+      console.log('[Screensaver] ⏰ Running periodic check via interval');
       checkIdleStatus();
     }, intervalMs);
 
     // Run check immediately on start
-    console.log('[Screensaver] Running initial check');
+    console.log('[Screensaver] 🎬 Running initial check');
     checkIdleStatus();
 
     return () => {
-      console.log('[Screensaver] Cleaning up monitoring');
+      console.log('[Screensaver] 🛑 Cleaning up monitoring');
       clearInterval(interval);
     };
-  }, [screensaverConfig.enabled, screensaverConfig.checkInterval, screensaverConfig.idleTimeout, screensaverConfig.url]);
+  }, [screensaverConfig.enabled, screensaverConfig.checkInterval, screensaverConfig.idleTimeout, screensaverConfig.url, checkIdleStatus]);
 
   // Reset screensaver state when casting starts or connection changes
   useEffect(() => {
