@@ -166,23 +166,27 @@ export const useChromecast = () => {
   }, [isAvailable, sessionListener, toast]);
 
   const loadMedia = useCallback(
-    (url: string) => {
+    (url: string, onError?: (error: string) => void) => {
       if (!session) {
+        const errorMsg = 'Connect to a Chromecast device first.';
         toast({
           title: 'Not Connected',
-          description: 'Connect to a Chromecast device first.',
+          description: errorMsg,
           variant: 'destructive',
         });
+        onError?.(errorMsg);
         return;
       }
 
       const cast = window.chrome?.cast;
       if (!cast) {
+        const errorMsg = 'Chromecast API is not loaded.';
         toast({
           title: 'Cast API Not Available',
-          description: 'Chromecast API is not loaded.',
+          description: errorMsg,
           variant: 'destructive',
         });
+        onError?.(errorMsg);
         return;
       }
 
@@ -207,11 +211,13 @@ export const useChromecast = () => {
         },
         (error) => {
           console.error('Error loading media:', error);
+          const errorMsg = `Failed to start casting: ${error.description || error.code || 'Unknown error'}`;
           toast({
             title: 'Cast Failed',
             description: 'Failed to start casting. Try reconnecting.',
             variant: 'destructive',
           });
+          onError?.(errorMsg);
         }
       );
     },
