@@ -247,15 +247,6 @@ function discoverDevices() {
         
         // Report this device to database
         await reportDiscoveredDevice(service.name, service.referer.address, service.port);
-        
-        // If no current device, use this as default
-        if (!currentDevice) {
-          currentDevice = {
-            name: service.name,
-            host: service.referer.address,
-            port: service.port
-          };
-        }
       }
     });
     
@@ -536,16 +527,13 @@ async function main() {
         };
         console.log(`🎯 Auto-selected previously chosen device: ${currentDevice.name}`);
       } else {
-        console.log('⚠️  Previously selected device not found in current scan, using first discovered device');
+        console.log('⚠️  Previously selected device not found in current scan');
+        console.log('⚠️  No device auto-selected - please choose a device via web interface');
       }
     }
-  }
-  
-  if (!currentDevice && discoveredDevices.size > 0) {
-    // Use first discovered device as default
-    const firstDevice = Array.from(discoveredDevices.values())[0];
-    currentDevice = firstDevice;
-    console.log(`🎯 Using first discovered device as default: ${currentDevice.name}`);
+  } else {
+    console.log('ℹ️  No previously selected device found');
+    console.log('ℹ️  Please choose a device via web interface');
   }
 
   // Subscribe to realtime updates
