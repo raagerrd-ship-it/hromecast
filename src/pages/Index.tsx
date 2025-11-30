@@ -255,8 +255,32 @@ const Index = () => {
     console.log("Starting screensaver with URL:", url);
     addActivityLog('cast', 'Screensaver activated', `Auto-casting: ${url}`);
     
-    // Queue screensaver cast through bridge service (same as regular casts)
-    await handleCast(url);
+    // Queue screensaver cast directly without viewer wrapper
+    const deviceId = getOrCreateDeviceId();
+    const { data: queueData, error: queueError } = await supabase.functions.invoke('queue-cast', {
+      body: { 
+        deviceId,
+        url: url, // Cast URL directly
+        commandType: 'cast'
+      }
+    });
+
+    if (queueError) {
+      console.error("Error queueing screensaver command:", queueError);
+      addActivityLog('error', 'Failed to queue screensaver', queueError.message);
+      toast({
+        title: "Screensaver Failed",
+        description: "Failed to queue screensaver cast",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    addActivityLog('bridge', 'Screensaver queued to bridge', `Device: ${deviceId}, URL: ${url}`);
+    toast({
+      title: "Screensaver Started",
+      description: "Bridge will cast to Chromecast",
+    });
   };
 
   // Fetch recent commands for bridge and add to activity log
