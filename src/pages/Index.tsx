@@ -1,6 +1,7 @@
 import { CastInterface } from "@/components/CastInterface";
 import { ScreensaverSettings, ScreensaverConfig } from "@/components/ScreensaverSettings";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
+import { ChromecastSelector } from "@/components/ChromecastSelector";
 import { useScreensaver } from "@/hooks/useScreensaver";
 import { useChromecast } from "@/hooks/useChromecast";
 import { Monitor, Smartphone, Wifi, WifiOff, Play, Square, Settings, CheckCircle2, XCircle, Clock, Trash2 } from "lucide-react";
@@ -50,6 +51,8 @@ const Index = () => {
     idleTimeout: 5,
     checkInterval: 10,
   });
+  
+  const [selectedChromecastId, setSelectedChromecastId] = useState<string | null>(null);
 
   // Bridge Service State
   const [isServiceActive, setIsServiceActive] = useState(false);
@@ -100,6 +103,7 @@ const Index = () => {
             idleTimeout: data.idle_timeout,
             checkInterval: data.check_interval,
           });
+          setSelectedChromecastId(data.selected_chromecast_id || null);
         }
       } catch (error) {
         console.error('Error loading settings:', error);
@@ -164,6 +168,7 @@ const Index = () => {
             url: screensaverConfig.url,
             idle_timeout: screensaverConfig.idleTimeout,
             check_interval: screensaverConfig.checkInterval,
+            selected_chromecast_id: selectedChromecastId,
           }, {
             onConflict: 'device_id'
           });
@@ -180,7 +185,7 @@ const Index = () => {
     };
 
     saveSettings();
-  }, [screensaverConfig, isLoading]);
+  }, [screensaverConfig, selectedChromecastId, isLoading]);
 
   const handleCast = async (url: string) => {
     try {
@@ -574,6 +579,12 @@ const Index = () => {
                 : undefined
             }
             onReconnect={chromecast.requestSession}
+          />
+          
+          <ChromecastSelector
+            deviceId={getOrCreateDeviceId()}
+            selectedChromecastId={selectedChromecastId}
+            onChromecastSelected={setSelectedChromecastId}
           />
           
           <ScreensaverSettings

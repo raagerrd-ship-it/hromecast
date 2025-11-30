@@ -47,6 +47,36 @@ export type Database = {
         }
         Relationships: []
       }
+      discovered_chromecasts: {
+        Row: {
+          chromecast_host: string
+          chromecast_name: string
+          chromecast_port: number
+          created_at: string
+          device_id: string
+          id: string
+          last_seen: string
+        }
+        Insert: {
+          chromecast_host: string
+          chromecast_name: string
+          chromecast_port?: number
+          created_at?: string
+          device_id: string
+          id?: string
+          last_seen?: string
+        }
+        Update: {
+          chromecast_host?: string
+          chromecast_name?: string
+          chromecast_port?: number
+          created_at?: string
+          device_id?: string
+          id?: string
+          last_seen?: string
+        }
+        Relationships: []
+      }
       screensaver_settings: {
         Row: {
           check_interval: number
@@ -55,6 +85,7 @@ export type Database = {
           enabled: boolean
           id: string
           idle_timeout: number
+          selected_chromecast_id: string | null
           updated_at: string
           url: string | null
         }
@@ -65,6 +96,7 @@ export type Database = {
           enabled?: boolean
           id?: string
           idle_timeout?: number
+          selected_chromecast_id?: string | null
           updated_at?: string
           url?: string | null
         }
@@ -75,10 +107,19 @@ export type Database = {
           enabled?: boolean
           id?: string
           idle_timeout?: number
+          selected_chromecast_id?: string | null
           updated_at?: string
           url?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "screensaver_settings_selected_chromecast_id_fkey"
+            columns: ["selected_chromecast_id"]
+            isOneToOne: false
+            referencedRelation: "discovered_chromecasts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
