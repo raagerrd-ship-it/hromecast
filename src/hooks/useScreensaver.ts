@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useState, useRef } from "react";
 import { ScreensaverConfig } from "@/components/ScreensaverSettings";
 
 interface UseScreensaverProps {
@@ -19,7 +19,7 @@ export const useScreensaver = ({
   onLog,
 }: UseScreensaverProps) => {
   const [isScreensaverActive, setIsScreensaverActive] = useState(false);
-  const [lastCastTime, setLastCastTime] = useState<number>(0);
+  const lastCastTimeRef = useRef<number>(0); // Use ref for immediate updates
   const MIN_CAST_INTERVAL_MS = 60000; // Minimum 60 seconds between casts
 
   // Use ref to always get the latest values without causing re-renders
@@ -30,14 +30,15 @@ export const useScreensaver = ({
       url: screensaverConfig.url,
       isScreensaverActive,
       lastActivityTime: new Date(lastActivityTime).toISOString(),
-      idleTimeout: screensaverConfig.idleTimeout
+      idleTimeout: screensaverConfig.idleTimeout,
+      lastCastTime: lastCastTimeRef.current ? new Date(lastCastTimeRef.current).toISOString() : 'never'
     });
 
     // Check cooldown first - prevent re-casting too soon
-    const timeSinceLastCast = now - lastCastTime;
-    if (lastCastTime > 0 && timeSinceLastCast < MIN_CAST_INTERVAL_MS) {
+    const timeSinceLastCast = now - lastCastTimeRef.current;
+    if (lastCastTimeRef.current > 0 && timeSinceLastCast < MIN_CAST_INTERVAL_MS) {
       const remainingCooldown = Math.floor((MIN_CAST_INTERVAL_MS - timeSinceLastCast) / 1000);
-      console.log(`[Screensaver] ⏸️  COOLDOWN ACTIVE - ${remainingCooldown}s remaining (last cast: ${new Date(lastCastTime).toISOString()})`);
+      console.log(`[Screensaver] ⏸️  COOLDOWN ACTIVE - ${remainingCooldown}s remaining (last cast: ${new Date(lastCastTimeRef.current).toISOString()})`);
       onLog?.('connection', 'Screensaver cooldown active', `${remainingCooldown}s until next cast allowed`);
       return;
     }
@@ -79,9 +80,9 @@ export const useScreensaver = ({
       console.log(`[Screensaver] Setting cooldown timer for ${MIN_CAST_INTERVAL_MS / 1000}s`);
       onLog?.('cast', 'Screensaver idle timeout reached', `Triggering after ${Math.floor(idleTimeMs / 1000)}s idle`);
       
-      // Set active AND cooldown BEFORE calling to prevent multiple triggers
+      // Set cooldown IMMEDIATELY using ref (before async call)
+      lastCastTimeRef.current = now;
       setIsScreensaverActive(true);
-      setLastCastTime(now);
       
       try {
         console.log('[Screensaver] Calling onStartScreensaver with URL:', screensaverConfig.url);
@@ -94,7 +95,7 @@ export const useScreensaver = ({
         onLog?.('error', 'Screensaver cast failed', String(error));
         // Reset on error so it can retry
         setIsScreensaverActive(false);
-        setLastCastTime(0);
+        lastCastTimeRef.current = 0;
       }
     }
   }, [
@@ -103,7 +104,6 @@ export const useScreensaver = ({
     screensaverConfig.idleTimeout,
     isScreensaverActive,
     lastActivityTime,
-    lastCastTime,
     MIN_CAST_INTERVAL_MS,
     onStartScreensaver,
     onLog,
@@ -147,7 +147,7 @@ export const useScreensaver = ({
       if (timeSinceActivity < 5000) {
         console.log('[Screensaver] User activity detected, resetting screensaver');
         setIsScreensaverActive(false);
-        setLastCastTime(0); // Reset cooldown on user activity
+        lastCastTimeRef.current = 0; // Reset cooldown on user activity
         onLog?.('connection', 'Screensaver deactivated', 'User activity detected');
       }
     }
