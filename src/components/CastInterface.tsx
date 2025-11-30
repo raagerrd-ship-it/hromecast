@@ -6,7 +6,7 @@ import { Wifi, Cast, Square, Loader2, AlertCircle } from "lucide-react";
 import { useChromecast } from "@/hooks/useChromecast";
 
 interface CastInterfaceProps {
-  onCast: (url: string) => void;
+  onCast: (url: string) => Promise<string | null>;
 }
 
 export const CastInterface = ({ onCast }: CastInterfaceProps) => {
@@ -30,12 +30,17 @@ export const CastInterface = ({ onCast }: CastInterfaceProps) => {
       return;
     }
 
-    // First, fetch the content through our edge function
-    await onCast(url);
+    // Process the URL and get the viewer URL
+    const viewerUrl = await onCast(url);
     
-    // Then try to cast it
+    if (!viewerUrl) {
+      return; // Error already handled by onCast
+    }
+
+    // Cast the viewer URL to Chromecast
     setIsCasting(true);
-    loadMedia(url);
+    console.log("Casting viewer URL to Chromecast:", viewerUrl);
+    loadMedia(viewerUrl);
   };
 
   const handleStop = () => {
