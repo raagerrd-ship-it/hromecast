@@ -24,6 +24,22 @@ const Viewer = () => {
       setError("Invalid URL format");
       setIsLoading(false);
     }
+
+    // Keep-alive mechanism to prevent Chromecast timeout
+    const keepAlive = setInterval(() => {
+      console.log('Keep-alive ping:', new Date().toISOString());
+    }, 5000);
+
+    // Auto-dismiss loading screen after 10 seconds
+    const loadingTimeout = setTimeout(() => {
+      console.log('Auto-dismissing loading screen');
+      setIframeLoaded(true);
+    }, 10000);
+
+    return () => {
+      clearInterval(keepAlive);
+      clearTimeout(loadingTimeout);
+    };
   }, [url]);
 
   if (error) {
@@ -56,6 +72,7 @@ const Viewer = () => {
           <div className="text-center space-y-4">
             <Loader2 className="h-16 w-16 animate-spin text-primary mx-auto" />
             <p className="text-lg text-muted-foreground">Loading content...</p>
+            <p className="text-sm text-muted-foreground/60">Please wait while the page loads</p>
           </div>
         </div>
       )}
@@ -63,12 +80,10 @@ const Viewer = () => {
         src={url!}
         className="w-full h-full border-0"
         title="Website Viewer"
-        sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals allow-downloads allow-top-navigation"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
         loading="eager"
         onLoad={() => {
           console.log('Iframe loaded successfully');
-          setTimeout(() => setIframeLoaded(true), 500);
+          setTimeout(() => setIframeLoaded(true), 1000);
         }}
         onError={(e) => {
           console.error('Iframe load error:', e);
