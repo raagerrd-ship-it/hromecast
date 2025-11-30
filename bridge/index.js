@@ -19,6 +19,30 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Chromecast state
 const chromecasts = new Chromecasts();
 let currentDevice = null;
+let activeSession = null;
+
+// Keep session alive
+function keepSessionAlive() {
+  if (activeSession && currentDevice) {
+    try {
+      // Ping the device to keep connection alive
+      currentDevice.status((err, status) => {
+        if (err) {
+          console.error('❌ Keep-alive error:', err.message);
+          activeSession = null;
+        } else {
+          console.log('💓 Keep-alive successful');
+        }
+      });
+    } catch (error) {
+      console.error('❌ Keep-alive exception:', error.message);
+      activeSession = null;
+    }
+  }
+}
+
+// Start keep-alive interval
+setInterval(keepSessionAlive, 5000);
 
 // Discover Chromecast devices
 function discoverDevices() {
@@ -57,6 +81,7 @@ async function castMedia(url) {
       }
       
       console.log('✅ Media loaded successfully');
+      activeSession = { url, startTime: Date.now() };
       resolve({ success: true });
     });
   });
