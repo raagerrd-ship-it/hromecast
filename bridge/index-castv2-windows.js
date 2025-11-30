@@ -324,9 +324,19 @@ async function castMedia(url) {
           clearTimeout(launchTimeout);
           clearInterval(heartbeatInterval);
           console.error(`❌ Failed to launch custom receiver app: ${data.reason}`);
-          console.log('💡 Custom receiver app (FE376873) not found or not published');
-          console.log('💡 Make sure the app is registered and published in Google Cast Developer Console');
-          console.log('📝 Receiver URL should be: https://hromecast.lovable.app/chromecast-receiver.html');
+          console.log(`💡 Custom receiver app (${CUSTOM_APP_ID}) error: ${data.reason}`);
+          
+          if (data.reason === 'NOT_ALLOWED') {
+            console.log('🔒 NOT_ALLOWED means:');
+            console.log('   - Your Chromecast device serial number must be registered in Cast Developer Console');
+            console.log('   - The app and device must be in the SAME Developer Console account');
+            console.log('   - The app must be Published (not just saved)');
+            console.log('   - Wait 15 minutes after registering device, then restart Chromecast');
+          } else if (data.reason === 'NOT_FOUND') {
+            console.log('🔍 NOT_FOUND means the receiver URL is incorrect or unreachable');
+            console.log(`📝 Verify URL in Cast Console: https://db36ca02-4c2b-4e0e-a58f-a351aa767ebf.lovableproject.com/chromecast-receiver.html`);
+          }
+          
           client.close();
           reject(new Error(`Custom receiver not available: ${data.reason}`));
           return;
