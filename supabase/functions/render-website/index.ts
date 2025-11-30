@@ -40,17 +40,19 @@ serve(async (req) => {
       );
     }
 
-    // Return the URL directly for Chromecast to load
-    // This bypasses the iframe wrapper which was causing loading issues
-    console.log('Using direct URL for casting');
+    // Generate a viewer URL that redirects to the target
+    const viewerUrl = `${req.headers.get('origin') || 'https://db36ca02-4c2b-4e0e-a58f-a351aa767ebf.lovableproject.com'}/viewer?url=${encodeURIComponent(url)}`;
+
+    console.log('Generated viewer URL:', viewerUrl);
+    console.log('Using viewer URL for casting');
     
     return new Response(
       JSON.stringify({ 
         success: true,
         url,
-        viewerUrl: url,  // Use direct URL instead of viewer wrapper
+        viewerUrl,
         contentType: 'text/html',
-        message: 'Direct URL casting',
+        message: 'Viewer redirect enabled',
         timestamp: new Date().toISOString()
       }),
       { 
