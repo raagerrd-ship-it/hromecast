@@ -609,22 +609,6 @@ const Index = () => {
                   <p className="text-xs text-muted-foreground">Device ID</p>
                   <p className="text-sm font-mono">{bridgeDeviceId}</p>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={async () => {
-                    const newId = `bridge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-                    setBridgeDeviceId(newId);
-                    await Preferences.set({ key: 'bridge_device_id', value: newId });
-                    addActivityLog('bridge', 'Generated new device ID', newId);
-                    toast({
-                      title: "New Device ID",
-                      description: "Bridge will restart with new ID",
-                    });
-                  }}
-                >
-                  Regenerate
-                </Button>
               </div>
 
               <div className="flex gap-3">
