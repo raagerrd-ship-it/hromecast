@@ -335,11 +335,13 @@ async function castMedia(url, retryCount = 0) {
         }
         
         if (data.type === 'RECEIVER_STATUS') {
+          // First response - need to launch app
           if (!appLaunched) {
-            // Check if wrong app is running
+            // Check if wrong app is running first
             if (data.status && data.status.applications && data.status.applications.length > 0) {
               const runningApp = data.status.applications[0];
               
+              // Skip backdrop/screensaver
               if (runningApp.appId !== CUSTOM_APP_ID && runningApp.appId !== 'E8C28D3C') {
                 console.log(`⚠️  Wrong app running (${runningApp.displayName}), stopping it...`);
                 receiver.send({ type: 'STOP', requestId: 3, sessionId: runningApp.sessionId });
@@ -358,12 +360,14 @@ async function castMedia(url, retryCount = 0) {
               }
             }
             
+            // No app running or only backdrop - launch our app
             console.log(`🚀 Launching custom receiver app: ${CUSTOM_APP_ID}`);
             receiver.send({ type: 'LAUNCH', appId: CUSTOM_APP_ID, requestId: 2 });
             appLaunched = true;
             return;
           }
           
+          // Subsequent responses - check if app launched successfully
           if (data.status && data.status.applications && data.status.applications.length > 0) {
             const app = data.status.applications[0];
             console.log('📱 App launched:', app.displayName, 'AppId:', app.appId);
@@ -409,8 +413,6 @@ async function castMedia(url, retryCount = 0) {
                 resolve({ success: true });
               }
             });
-          } else {
-            console.log('⚠️  No applications running in receiver status');
           }
         }
       });
