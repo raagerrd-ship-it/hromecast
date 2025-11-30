@@ -327,11 +327,14 @@ async function castMedia(url) {
           console.log(`💡 Custom receiver app (${CUSTOM_APP_ID}) error: ${data.reason}`);
           
           if (data.reason === 'NOT_ALLOWED') {
-            console.log('🔒 NOT_ALLOWED means:');
-            console.log('   - Your Chromecast device serial number must be registered in Cast Developer Console');
-            console.log('   - The app and device must be in the SAME Developer Console account');
-            console.log('   - The app must be Published (not just saved)');
-            console.log('   - Wait 15 minutes after registering device, then restart Chromecast');
+            console.log('🔒 NOT_ALLOWED - trying Default Media Receiver as fallback...');
+            clearTimeout(launchTimeout);
+            clearInterval(heartbeatInterval);
+            client.close();
+            
+            // Try Default Media Receiver as fallback
+            tryDefaultMediaReceiver(targetDevice, url).then(resolve).catch(reject);
+            return;
           } else if (data.reason === 'NOT_FOUND') {
             console.log('🔍 NOT_FOUND means the receiver URL is incorrect or unreachable');
             console.log(`📝 Verify URL in Cast Console: https://db36ca02-4c2b-4e0e-a58f-a351aa767ebf.lovableproject.com/chromecast-receiver.html`);
@@ -415,6 +418,54 @@ async function castMedia(url) {
     
     client.on('error', (err) => {
       console.error('❌ Client error:', err.message);
+      reject(err);
+    });
+  });
+}
+
+async function tryDefaultMediaReceiver(targetDevice, url) {
+  return new Promise((resolve, reject) => {
+    console.log('📺 Attempting to use Default Media Receiver (CC1AD845)...');
+    console.log('⚠️  Note: Default receiver cannot display websites, only media files');
+    
+    const fallbackClient = new castv2.Client();
+    
+    fallbackClient.connect(targetDevice.host, () => {
+      console.log('✅ Connected to Chromecast for fallback');
+      
+      fallbackClient.launch('CC1AD845', (err, player) => {
+        if (err) {
+          console.error('❌ Failed to launch Default Media Receiver:', err.message);
+          fallbackClient.close();
+          reject(err);
+          return;
+        }
+
+        console.log('✅ Default Media Receiver launched');
+        
+        const media = {
+          contentId: url,
+          contentType: 'text/html',
+          streamType: 'BUFFERED'
+        };
+
+        player.load(media, { autoplay: true }, (err, status) => {
+          if (err) {
+            console.error('❌ Failed to load content:', err.message);
+            fallbackClient.close();
+            reject(err);
+            return;
+          }
+
+          console.log('✅ Content loaded (may not display correctly as it\'s HTML)');
+          fallbackClient.close();
+          resolve();
+        });
+      });
+    });
+    
+    fallbackClient.on('error', (err) => {
+      console.error('❌ Fallback client error:', err.message);
       reject(err);
     });
   });
