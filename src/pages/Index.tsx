@@ -240,7 +240,7 @@ const Index = () => {
         return null;
       }
 
-      addActivityLog('cast', 'Cast queued successfully', `Command ID: ${queueData.id}`);
+      addActivityLog('bridge', 'Command sent to bridge service', `Device: ${deviceId}, URL: ${castUrl.substring(0, 50)}...`);
       toast({
         title: "Cast Queued",
         description: "Your local bridge will process this cast shortly",
@@ -265,6 +265,7 @@ const Index = () => {
 
   const handleStartScreensaver = async (url: string) => {
     console.log("Starting screensaver with URL:", url);
+    addActivityLog('cast', 'Screensaver activated', `Auto-casting: ${url}`);
     
     // Queue screensaver cast through bridge service (same as regular casts)
     await handleCast(url);
