@@ -9,7 +9,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const DEVICE_ID = process.env.DEVICE_ID || 'default-bridge';
 const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL || '5000');
-const CUSTOM_APP_ID = 'FE376873'; // Your custom receiver
+const CUSTOM_APP_ID = 'C5A8C2D0'; // Test receiver app
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   console.error('Error: SUPABASE_URL and SUPABASE_ANON_KEY must be set in .env file');
