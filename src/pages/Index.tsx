@@ -156,6 +156,20 @@ const Index = () => {
     onStartScreensaver: handleStartScreensaver,
   });
 
+  // Force re-render every second to update idle time display
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!chromecast.isConnected || !screensaverConfig.enabled) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setTick(t => t + 1);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [chromecast.isConnected, screensaverConfig.enabled]);
+
   return (
     <div className="min-h-screen bg-gradient-bg">
       <div className="container mx-auto px-4 py-12">
