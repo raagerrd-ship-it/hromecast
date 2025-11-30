@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cast Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: #000;
+            color: #fff;
+            font-family: Arial, sans-serif;
+        }
+        #content {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        #loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">Loading...</div>
+    <iframe id="content" style="display:none;"></iframe>
+    
+    <script>
+        // Keep connection alive
+        setInterval(() => {
+            console.log('Keep-alive:', new Date().toISOString());
+        }, 2000);
+        
+        // Get URL from query parameter
+        const params = new URLSearchParams(window.location.search);
+        const targetUrl = params.get('url');
+        
+        if (targetUrl) {
+            const iframe = document.getElementById('content');
+            const loading = document.getElementById('loading');
+            
+            // Load content
+            iframe.src = targetUrl;
+            
+            // Show content after short delay
+            setTimeout(() => {
+                iframe.style.display = 'block';
+                loading.style.display = 'none';
+            }, 2000);
+            
+            // Log loading
+            iframe.onload = () => console.log('Content loaded');
+            iframe.onerror = () => console.error('Content error');
+        } else {
+            document.getElementById('loading').textContent = 'No URL provided';
+        }
+    </script>
+</body>
+</html>
