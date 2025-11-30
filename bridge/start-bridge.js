@@ -245,29 +245,36 @@ async function checkAndActivateScreensaver() {
 
 // Discover Chromecast devices using chromecasts library
 function discoverDevices() {
-  console.log('🔍 Scanning for Chromecast devices on local network...');
-  
-  chromecasts.on('update', async (player) => {
-    console.log(`✅ Found Chromecast: ${player.name} at ${player.host}`);
+  return new Promise((resolve) => {
+    console.log('🔍 Scanning for Chromecast devices on local network...');
     
-    const deviceKey = `${player.host}:8009`;
-    if (!discoveredDevices.has(deviceKey)) {
-      discoveredDevices.set(deviceKey, {
-        name: player.name,
-        host: player.host,
-        port: 8009,
-        player: player
-      });
+    chromecasts.on('update', async (player) => {
+      console.log(`✅ Found Chromecast: ${player.name} at ${player.host}`);
       
-      // Report to database
-      await reportDiscoveredDevice(player.name, player.host, 8009);
-    }
+      const deviceKey = `${player.host}:8009`;
+      if (!discoveredDevices.has(deviceKey)) {
+        discoveredDevices.set(deviceKey, {
+          name: player.name,
+          host: player.host,
+          port: 8009,
+          player: player
+        });
+        
+        // Report to database
+        await reportDiscoveredDevice(player.name, player.host, 8009);
+      }
+      
+      // Use the first device found if none selected
+      if (!currentDevice) {
+        currentDevice = player;
+        console.log(`🎯 Using device: ${player.name}`);
+      }
+    });
     
-    // Use the first device found if none selected
-    if (!currentDevice) {
-      currentDevice = player;
-      console.log(`🎯 Using device: ${player.name}`);
-    }
+    // Give it 8 seconds to discover devices
+    setTimeout(() => {
+      resolve();
+    }, 8000);
   });
 }
 
@@ -428,17 +435,17 @@ async function main() {
   console.log('');
 
   // Discover devices (one-time scan at startup)
-  const browser = await discoverDevices();
+  await discoverDevices();
 
   console.log(`\n📊 Discovery complete: Found ${discoveredDevices.size} device(s)`);
   
   if (discoveredDevices.size === 0) {
     console.error('❌ No Chromecast devices found. Make sure your device is on the same network.');
     console.log('💡 Tip: Check Windows Firewall settings - it may be blocking mDNS/Bonjour');
-    process.exit(1);
+    console.log('⚠️  Bridge will continue running and monitor for commands...');
+  } else {
+    console.log('✅ All devices reported to database');
   }
-  
-  console.log('✅ All devices reported to database');
   
   // Check if user has previously selected a device
   const settings = await getScreensaverSettings();
@@ -493,11 +500,7 @@ async function main() {
     clearInterval(pollInterval);
     clearInterval(screensaverInterval);
     await channel.unsubscribe();
-    if (client) {
-      client.close();
-    }
-    browser.stop();
-    Bonjour.destroy();
+    chromecasts.destroy();
     process.exit(0);
   });
 }
