@@ -41,17 +41,9 @@ export const CastInterface = ({ onCast, chromecast }: CastInterfaceProps) => {
       return;
     }
 
-    // Process the URL and get the viewer URL
-    const viewerUrl = await onCast(url);
-    
-    if (!viewerUrl) {
-      return; // Error already handled by onCast
-    }
-
-    // Cast the viewer URL to Chromecast
+    // Queue cast command for bridge service
     setIsCasting(true);
-    console.log("Casting viewer URL to Chromecast:", viewerUrl);
-    loadMedia(viewerUrl);
+    await onCast(url);
   };
 
   const handleStop = () => {
