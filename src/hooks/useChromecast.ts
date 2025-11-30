@@ -21,6 +21,8 @@ export const useChromecast = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [currentDevice, setCurrentDevice] = useState<ChromecastDevice | null>(null);
   const [session, setSession] = useState<chrome.cast.Session | null>(null);
+  const [isCasting, setIsCasting] = useState(false);
+  const [lastActivityTime, setLastActivityTime] = useState(Date.now());
   const { toast } = useToast();
 
   const sessionListener = useCallback((castSession: any) => {
@@ -161,6 +163,8 @@ export const useChromecast = () => {
         request,
         (media: any) => {
           console.log('Media loaded successfully:', media);
+          setIsCasting(true);
+          setLastActivityTime(Date.now());
           toast({
             title: 'Casting Started',
             description: `Now casting ${url}`,
@@ -168,6 +172,7 @@ export const useChromecast = () => {
         },
         (error: any) => {
           console.error('Error loading media:', error);
+          setIsCasting(false);
           toast({
             title: 'Cast Failed',
             description: 'Unable to cast this content. The URL may not be compatible.',
@@ -187,6 +192,7 @@ export const useChromecast = () => {
           setIsConnected(false);
           setCurrentDevice(null);
           setSession(null);
+          setIsCasting(false);
           toast({
             title: 'Casting Stopped',
             description: 'Disconnected from Chromecast',
@@ -203,6 +209,8 @@ export const useChromecast = () => {
     isAvailable,
     isConnected,
     currentDevice,
+    isCasting,
+    lastActivityTime,
     requestSession,
     loadMedia,
     stopCasting,

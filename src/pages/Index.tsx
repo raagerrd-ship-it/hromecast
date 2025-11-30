@@ -1,10 +1,33 @@
 import { CastInterface } from "@/components/CastInterface";
+import { ScreensaverSettings, ScreensaverConfig } from "@/components/ScreensaverSettings";
+import { useScreensaver } from "@/hooks/useScreensaver";
+import { useChromecast } from "@/hooks/useChromecast";
 import { Monitor } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useState, useEffect } from "react";
+
+const SCREENSAVER_CONFIG_KEY = "chromecast-screensaver-config";
 
 const Index = () => {
   const { toast } = useToast();
+  const chromecast = useChromecast();
+  
+  const [screensaverConfig, setScreensaverConfig] = useState<ScreensaverConfig>(() => {
+    const saved = localStorage.getItem(SCREENSAVER_CONFIG_KEY);
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return { enabled: false, url: "", idleTimeout: 5 };
+      }
+    }
+    return { enabled: false, url: "", idleTimeout: 5 };
+  });
+
+  useEffect(() => {
+    localStorage.setItem(SCREENSAVER_CONFIG_KEY, JSON.stringify(screensaverConfig));
+  }, [screensaverConfig]);
 
   const handleCast = async (url: string) => {
     try {
@@ -41,6 +64,22 @@ const Index = () => {
     }
   };
 
+  const handleStartScreensaver = async (url: string) => {
+    console.log("Starting screensaver with URL:", url);
+    const castUrl = await handleCast(url);
+    if (castUrl) {
+      chromecast.loadMedia(castUrl);
+    }
+  };
+
+  useScreensaver({
+    isConnected: chromecast.isConnected,
+    isCasting: chromecast.isCasting,
+    lastActivityTime: chromecast.lastActivityTime,
+    screensaverConfig,
+    onStartScreensaver: handleStartScreensaver,
+  });
+
   return (
     <div className="min-h-screen bg-gradient-bg">
       <div className="container mx-auto px-4 py-12">
@@ -58,8 +97,13 @@ const Index = () => {
         </header>
 
         {/* Main Interface */}
-        <main>
-          <CastInterface onCast={handleCast} />
+        <main className="space-y-6">
+          <CastInterface onCast={handleCast} chromecast={chromecast} />
+          
+          <ScreensaverSettings
+            currentSettings={screensaverConfig}
+            onSave={setScreensaverConfig}
+          />
         </main>
 
         {/* Info Cards */}
