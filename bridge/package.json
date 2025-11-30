@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.3",
+    "castv2": "^0.1.10",
     "castv2-client": "^1.2.0",
     "bonjour-hap": "^3.8.0",
     "dotenv": "^16.3.1"
