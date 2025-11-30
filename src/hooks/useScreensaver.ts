@@ -20,7 +20,7 @@ export const useScreensaver = ({
 }: UseScreensaverProps) => {
   const [isScreensaverActive, setIsScreensaverActive] = useState(false);
   const [lastCastTime, setLastCastTime] = useState<number>(0);
-  const MIN_CAST_INTERVAL_MS = 30000; // Minimum 30 seconds between casts
+  const MIN_CAST_INTERVAL_MS = 60000; // Minimum 60 seconds between casts
 
   // Use ref to always get the latest values without causing re-renders
   const checkIdleStatus = useCallback(async () => {
@@ -37,7 +37,8 @@ export const useScreensaver = ({
     const timeSinceLastCast = now - lastCastTime;
     if (lastCastTime > 0 && timeSinceLastCast < MIN_CAST_INTERVAL_MS) {
       const remainingCooldown = Math.floor((MIN_CAST_INTERVAL_MS - timeSinceLastCast) / 1000);
-      console.log(`[Screensaver] Check skipped - cooling down (${remainingCooldown}s remaining)`);
+      console.log(`[Screensaver] ⏸️  COOLDOWN ACTIVE - ${remainingCooldown}s remaining (last cast: ${new Date(lastCastTime).toISOString()})`);
+      onLog?.('connection', 'Screensaver cooldown active', `${remainingCooldown}s until next cast allowed`);
       return;
     }
 
@@ -75,9 +76,10 @@ export const useScreensaver = ({
       onLog?.('connection', 'Screensaver idle check', `${Math.floor(remainingMs / 1000)}s until activation`);
     } else {
       console.log('[Screensaver] ⚡ TRIGGERING SCREENSAVER NOW ⚡');
+      console.log(`[Screensaver] Setting cooldown timer for ${MIN_CAST_INTERVAL_MS / 1000}s`);
       onLog?.('cast', 'Screensaver idle timeout reached', `Triggering after ${Math.floor(idleTimeMs / 1000)}s idle`);
       
-      // Set active BEFORE calling to prevent multiple triggers
+      // Set active AND cooldown BEFORE calling to prevent multiple triggers
       setIsScreensaverActive(true);
       setLastCastTime(now);
       
@@ -85,7 +87,8 @@ export const useScreensaver = ({
         console.log('[Screensaver] Calling onStartScreensaver with URL:', screensaverConfig.url);
         await onStartScreensaver(screensaverConfig.url);
         console.log('[Screensaver] ✅ onStartScreensaver completed successfully');
-        onLog?.('cast', 'Screensaver activated', 'Cast command sent successfully');
+        console.log(`[Screensaver] 🔒 Cooldown active until: ${new Date(now + MIN_CAST_INTERVAL_MS).toISOString()}`);
+        onLog?.('cast', 'Screensaver activated', `Cast sent - 60s cooldown active`);
       } catch (error) {
         console.error('[Screensaver] ❌ onStartScreensaver failed:', error);
         onLog?.('error', 'Screensaver cast failed', String(error));
