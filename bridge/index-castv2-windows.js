@@ -249,8 +249,8 @@ function discoverDevices() {
   });
 }
 
-// Cast URL using castv2-client
-async function castMedia(url) {
+// Cast URL using castv2-client with reconnection handling
+async function castMedia(url, retryCount = 0) {
   const selectedDevice = await getSelectedChromecast();
   const targetDevice = selectedDevice || currentDevice;
   
@@ -268,6 +268,26 @@ async function castMedia(url) {
     console.log(`📺 Connecting to ${targetDevice.name} at ${targetDevice.host}...`);
     
     client = new castv2.Client();
+    let heartbeatInterval = null;
+    let launchTimeout = null;
+    
+    const cleanup = () => {
+      if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+      }
+      if (launchTimeout) {
+        clearTimeout(launchTimeout);
+        launchTimeout = null;
+      }
+      if (client) {
+        try {
+          client.close();
+        } catch (e) {
+          // Ignore close errors
+        }
+      }
+    };
     
     client.connect(targetDevice.host, () => {
       console.log('✅ Connected to Chromecast');
@@ -278,8 +298,13 @@ async function castMedia(url) {
       
       connection.send({ type: 'CONNECT' });
       
-      const heartbeatInterval = setInterval(() => {
-        heartbeat.send({ type: 'PING' });
+      heartbeatInterval = setInterval(() => {
+        try {
+          heartbeat.send({ type: 'PING' });
+        } catch (e) {
+          console.error('Heartbeat failed:', e.message);
+          cleanup();
+        }
       }, 5000);
       
       heartbeat.on('message', (data) => {
@@ -291,10 +316,9 @@ async function castMedia(url) {
       console.log('📡 Getting receiver status...');
       receiver.send({ type: 'GET_STATUS', requestId: 1 });
       
-      const launchTimeout = setTimeout(() => {
+      launchTimeout = setTimeout(() => {
         console.error('⏱️  Timeout waiting for receiver response');
-        clearInterval(heartbeatInterval);
-        client.close();
+        cleanup();
         reject(new Error('Receiver timeout'));
       }, 15000);
       
@@ -304,16 +328,36 @@ async function castMedia(url) {
         console.log('📨 Receiver message:', JSON.stringify(data, null, 2));
         
         if (data.type === 'LAUNCH_ERROR') {
-          clearTimeout(launchTimeout);
-          clearInterval(heartbeatInterval);
+          cleanup();
           console.error(`❌ Failed to launch custom receiver app: ${data.reason}`);
-          client.close();
           reject(new Error(`Custom receiver not available: ${data.reason}`));
           return;
         }
         
         if (data.type === 'RECEIVER_STATUS') {
           if (!appLaunched) {
+            // Check if wrong app is running
+            if (data.status && data.status.applications && data.status.applications.length > 0) {
+              const runningApp = data.status.applications[0];
+              
+              if (runningApp.appId !== CUSTOM_APP_ID && runningApp.appId !== 'E8C28D3C') {
+                console.log(`⚠️  Wrong app running (${runningApp.displayName}), stopping it...`);
+                receiver.send({ type: 'STOP', requestId: 3, sessionId: runningApp.sessionId });
+                
+                // Close connection and retry after app stops
+                setTimeout(() => {
+                  cleanup();
+                  if (retryCount < 2) {
+                    console.log('🔄 Reconnecting after stopping wrong app...');
+                    castMedia(url, retryCount + 1).then(resolve).catch(reject);
+                  } else {
+                    reject(new Error('Failed to stop running app after multiple attempts'));
+                  }
+                }, 2000);
+                return;
+              }
+            }
+            
             console.log(`🚀 Launching custom receiver app: ${CUSTOM_APP_ID}`);
             receiver.send({ type: 'LAUNCH', appId: CUSTOM_APP_ID, requestId: 2 });
             appLaunched = true;
@@ -321,20 +365,16 @@ async function castMedia(url) {
           }
           
           if (data.status && data.status.applications && data.status.applications.length > 0) {
-            clearTimeout(launchTimeout);
-            clearInterval(heartbeatInterval);
-            
             const app = data.status.applications[0];
             console.log('📱 App launched:', app.displayName, 'AppId:', app.appId);
             
             if (app.appId !== CUSTOM_APP_ID) {
-              console.log('⚠️  Wrong app running, stopping it first...');
-              receiver.send({ type: 'STOP', requestId: 3, sessionId: app.sessionId });
-              setTimeout(() => {
-                receiver.send({ type: 'LAUNCH', appId: CUSTOM_APP_ID, requestId: 4 });
-              }, 1000);
+              console.log('⚠️  Still wrong app, will retry...');
               return;
             }
+            
+            clearTimeout(launchTimeout);
+            clearInterval(heartbeatInterval);
             
             const sessionId = app.sessionId;
             const transportId = app.transportId;
@@ -378,7 +418,13 @@ async function castMedia(url) {
     
     client.on('error', (err) => {
       console.error('❌ Client error:', err.message);
+      cleanup();
       reject(err);
+    });
+    
+    client.on('close', () => {
+      console.log('🔌 Connection closed');
+      cleanup();
     });
   });
 }
