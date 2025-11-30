@@ -317,10 +317,11 @@ async function castMedia(url, retryCount = 0) {
       receiver.send({ type: 'GET_STATUS', requestId: 1 });
       
       launchTimeout = setTimeout(() => {
-        console.error('⏱️  Timeout waiting for receiver response');
+        console.error('⏱️  Timeout waiting for receiver response (60s)');
+        console.log('Last appLaunched state:', appLaunched);
         cleanup();
-        reject(new Error('Receiver timeout'));
-      }, 15000);
+        reject(new Error('Receiver timeout - Custom receiver may not be accessible'));
+      }, 60000);
       
       let appLaunched = false;
       
@@ -362,6 +363,7 @@ async function castMedia(url, retryCount = 0) {
             
             // No app running or only backdrop - launch our app
             console.log(`🚀 Launching custom receiver app: ${CUSTOM_APP_ID}`);
+            console.log(`⚠️  IMPORTANT: Make sure Custom Receiver URL in Google Cast Console is set to your deployed URL + /chromecast-receiver.html`);
             receiver.send({ type: 'LAUNCH', appId: CUSTOM_APP_ID, requestId: 2 });
             appLaunched = true;
             return;
