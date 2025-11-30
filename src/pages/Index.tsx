@@ -3,10 +3,12 @@ import { ScreensaverSettings, ScreensaverConfig } from "@/components/Screensaver
 import { ConnectionStatus } from "@/components/ConnectionStatus";
 import { useScreensaver } from "@/hooks/useScreensaver";
 import { useChromecast } from "@/hooks/useChromecast";
-import { Monitor } from "lucide-react";
+import { Monitor, Smartphone } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 
 const SCREENSAVER_CONFIG_KEY = "chromecast-screensaver-config";
 const DEVICE_ID_KEY = "chromecast-device-id";
@@ -201,7 +203,15 @@ const Index = () => {
     <div className="min-h-screen bg-gradient-bg">
       <div className="container mx-auto px-4 py-12">
         {/* Header */}
-        <header className="text-center mb-12 space-y-4">
+        <header className="text-center mb-12 space-y-4 relative">
+          <div className="absolute top-0 right-0">
+            <Button asChild variant="outline" size="sm">
+              <Link to="/bridge" className="flex items-center gap-2">
+                <Smartphone className="h-4 w-4" />
+                Bridge Service
+              </Link>
+            </Button>
+          </div>
           <div className="inline-flex items-center justify-center p-3 rounded-2xl bg-primary/10 mb-4">
             <Monitor className="h-8 w-8 text-primary" />
           </div>
