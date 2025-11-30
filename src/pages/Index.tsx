@@ -534,6 +534,7 @@ const Index = () => {
           <ScreensaverSettings
             currentSettings={screensaverConfig}
             onSave={setScreensaverConfig}
+            chromecast={chromecast}
           />
 
           {/* Bridge Service Section */}
