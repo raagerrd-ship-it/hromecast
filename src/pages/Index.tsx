@@ -1,34 +1,14 @@
 import { ScreensaverSettings, ScreensaverConfig } from "@/components/ScreensaverSettings";
 import { ChromecastSelector } from "@/components/ChromecastSelector";
-import { Monitor, Smartphone, Play, Square, CheckCircle2, XCircle, Clock, Trash2 } from "lucide-react";
+import { Monitor, Play } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Preferences } from '@capacitor/preferences';
 
 const SCREENSAVER_CONFIG_KEY = "chromecast-screensaver-config";
 const DEVICE_ID_KEY = "chromecast-device-id";
-
-interface CommandStatus {
-  id: string;
-  url: string;
-  status: string;
-  created_at: string;
-  error_message?: string;
-}
-
-interface ActivityLog {
-  id: string;
-  timestamp: Date;
-  type: 'connection' | 'cast' | 'bridge' | 'error';
-  message: string;
-  details?: string;
-}
 
 const getOrCreateDeviceId = () => {
   const deviceId = "device-1764517968693-qxx7xr08y";
@@ -48,26 +28,6 @@ const Index = () => {
   });
   
   const [selectedChromecastId, setSelectedChromecastId] = useState<string | null>(null);
-
-  // Bridge Service State
-  const [isServiceActive, setIsServiceActive] = useState(false);
-  const [bridgeDeviceId, setBridgeDeviceId] = useState("");
-  const [recentCommands, setRecentCommands] = useState<CommandStatus[]>([]);
-  const [isBridgeConfigured, setIsBridgeConfigured] = useState(false);
-  const [pollInterval, setPollInterval] = useState<number | null>(null);
-  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
-
-  // Helper function to add activity log
-  const addActivityLog = (type: ActivityLog['type'], message: string, details?: string) => {
-    const newLog: ActivityLog = {
-      id: `${Date.now()}-${Math.random()}`,
-      timestamp: new Date(),
-      type,
-      message,
-      details,
-    };
-    setActivityLogs(prev => [newLog, ...prev].slice(0, 50)); // Keep last 50 logs
-  };
 
   // Load settings from database on mount
   useEffect(() => {
@@ -108,45 +68,7 @@ const Index = () => {
     };
 
     loadSettings();
-    loadBridgeConfiguration();
   }, []);
-
-  // Load bridge configuration
-  const loadBridgeConfiguration = async () => {
-    try {
-      const deviceId = "device-1764517968693-qxx7xr08y";
-      await Preferences.set({ key: 'bridge_device_id', value: deviceId });
-      
-      setBridgeDeviceId(deviceId);
-      setIsBridgeConfigured(true);
-      
-      // Auto-start bridge service after configuration is loaded
-      setTimeout(() => {
-        setIsServiceActive(true);
-        addActivityLog('bridge', 'Bridge service auto-started', `Device ID: ${deviceId}`);
-      }, 1500);
-    } catch (error) {
-      console.error('Error loading bridge configuration:', error);
-    }
-  };
-
-  const saveBridgeConfiguration = async () => {
-    try {
-      await Preferences.set({ key: 'bridge_device_id', value: bridgeDeviceId });
-      setIsBridgeConfigured(true);
-      toast({
-        title: "Configuration Saved",
-        description: "Bridge settings have been saved",
-      });
-    } catch (error) {
-      console.error('Error saving configuration:', error);
-      toast({
-        title: "Save Failed",
-        description: "Failed to save configuration",
-        variant: "destructive",
-      });
-    }
-  };
 
   // Save settings to database when changed
   useEffect(() => {
@@ -185,7 +107,6 @@ const Index = () => {
   const handleCast = async (url: string) => {
     try {
       console.log("Processing URL for casting:", url);
-      addActivityLog('cast', 'Preparing to cast URL', url);
       
       // Call the render-website function to generate viewer URL
       const { data: renderData, error: renderError } = await supabase.functions.invoke('render-website', {
@@ -194,7 +115,6 @@ const Index = () => {
 
       if (renderError) {
         console.error("Error from render function:", renderError);
-        addActivityLog('error', 'Failed to render website', renderError.message);
         toast({
           title: "Rendering Failed",
           description: renderError.message || "Failed to prepare website for casting",
@@ -204,7 +124,6 @@ const Index = () => {
       }
 
       console.log("Render response:", renderData);
-      addActivityLog('cast', 'Website rendered successfully', `Viewer URL: ${renderData.viewerUrl}`);
       
       // Queue cast command for bridge service
       const deviceId = getOrCreateDeviceId();
@@ -219,7 +138,6 @@ const Index = () => {
 
       if (queueError) {
         console.error("Error queueing cast command:", queueError);
-        addActivityLog('error', 'Failed to queue cast command', queueError.message);
         toast({
           title: "Queue Failed",
           description: "Failed to queue cast command",
@@ -228,7 +146,6 @@ const Index = () => {
         return null;
       }
 
-      addActivityLog('bridge', 'Command sent to bridge service', `Device: ${deviceId}, URL: ${castUrl.substring(0, 50)}...`);
       toast({
         title: "Cast Queued",
         description: "Your local bridge will process this cast shortly",
@@ -241,7 +158,6 @@ const Index = () => {
       
     } catch (error) {
       console.error("Error processing website:", error);
-      addActivityLog('error', 'Unexpected error occurred', String(error));
       toast({
         title: "Processing Failed",
         description: "An unexpected error occurred",
@@ -253,7 +169,6 @@ const Index = () => {
 
   const handleStartScreensaver = async (url: string) => {
     console.log("Starting screensaver with URL:", url);
-    addActivityLog('cast', 'Screensaver activated', `Auto-casting: ${url}`);
     
     try {
       // First, render the website to get the viewer URL (wraps in iframe for Chromecast)
@@ -263,7 +178,6 @@ const Index = () => {
 
       if (renderError) {
         console.error("Error rendering screensaver:", renderError);
-        addActivityLog('error', 'Failed to render screensaver', renderError.message);
         toast({
           title: "Screensaver Failed",
           description: renderError.message || "Failed to prepare screensaver",
@@ -274,7 +188,6 @@ const Index = () => {
 
       console.log("Screensaver render response:", renderData);
       const viewerUrl = renderData.viewerUrl;
-      addActivityLog('cast', 'Screensaver rendered successfully', `Viewer URL: ${viewerUrl}`);
       
       // Queue the viewer URL (not the raw URL) for bridge service
       const deviceId = getOrCreateDeviceId();
@@ -288,7 +201,6 @@ const Index = () => {
 
       if (queueError) {
         console.error("Error queueing screensaver command:", queueError);
-        addActivityLog('error', 'Failed to queue screensaver', queueError.message);
         toast({
           title: "Screensaver Failed",
           description: "Failed to queue screensaver cast",
@@ -297,14 +209,12 @@ const Index = () => {
         return;
       }
 
-      addActivityLog('bridge', 'Screensaver queued to bridge', `Device: ${deviceId}, URL: ${viewerUrl}`);
       toast({
         title: "Screensaver Started",
         description: "Bridge will cast to Chromecast",
       });
     } catch (error) {
       console.error("Error processing screensaver:", error);
-      addActivityLog('error', 'Screensaver error', String(error));
       toast({
         title: "Screensaver Failed",
         description: "An unexpected error occurred",
@@ -312,206 +222,6 @@ const Index = () => {
       });
     }
   };
-
-  // Fetch recent commands for bridge and add to activity log
-  const fetchRecentCommands = async () => {
-    if (!bridgeDeviceId) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('cast_commands')
-        .select('id, url, status, created_at, error_message')
-        .eq('device_id', bridgeDeviceId)
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      if (error) throw error;
-      setRecentCommands(data || []);
-      
-      // Don't add duplicate logs - the processPendingCommands function already logs command processing
-    } catch (error) {
-      console.error('Error fetching commands:', error);
-    }
-  };
-
-  // Process pending commands for bridge
-  const processPendingCommands = async () => {
-    if (!bridgeDeviceId || !isServiceActive) return;
-
-    try {
-      const { data: commands, error } = await supabase
-        .from('cast_commands')
-        .select('*')
-        .eq('device_id', bridgeDeviceId)
-        .eq('status', 'pending')
-        .order('created_at', { ascending: true })
-        .limit(1);
-
-      if (error) throw error;
-
-      if (commands && commands.length > 0) {
-        const command = commands[0];
-        
-        addActivityLog('bridge', 'Processing cast command', command.url);
-        toast({
-          title: "Processing Cast",
-          description: `Casting: ${command.url.substring(0, 50)}...`,
-        });
-
-        await supabase
-          .from('cast_commands')
-          .update({ status: 'processing' })
-          .eq('id', command.id);
-
-        setTimeout(async () => {
-          await supabase
-            .from('cast_commands')
-            .update({ 
-              status: 'completed',
-              processed_at: new Date().toISOString()
-            })
-            .eq('id', command.id);
-
-          addActivityLog('bridge', 'Cast completed successfully', command.url);
-          toast({
-            title: "Cast Complete",
-            description: "Video is now playing",
-          });
-
-          fetchRecentCommands();
-        }, 2000);
-      }
-    } catch (error) {
-      console.error('Error processing commands:', error);
-      addActivityLog('error', 'Failed to process bridge command', String(error));
-    }
-  };
-
-  // Start bridge service and set up polling
-  useEffect(() => {
-    if (!isServiceActive || !bridgeDeviceId) return;
-
-    const interval = window.setInterval(() => {
-      processPendingCommands();
-      fetchRecentCommands();
-    }, 5000);
-
-    setPollInterval(interval);
-
-    const channel = supabase
-      .channel('cast_commands_mobile')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'cast_commands',
-          filter: `device_id=eq.${bridgeDeviceId}`
-        },
-        () => {
-          processPendingCommands();
-          fetchRecentCommands();
-        }
-      )
-      .subscribe();
-
-    fetchRecentCommands();
-
-    return () => {
-      if (interval) clearInterval(interval);
-      supabase.removeChannel(channel);
-    };
-  }, [isServiceActive, bridgeDeviceId]);
-
-  // Start bridge service
-  const startBridgeService = () => {
-    if (!bridgeDeviceId) {
-      toast({
-        title: "Configuration Required",
-        description: "Please enter a device ID first",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsServiceActive(true);
-    addActivityLog('bridge', 'Bridge service started', `Device ID: ${bridgeDeviceId}`);
-
-    toast({
-      title: "Bridge Service Started",
-      description: "Listening for cast commands",
-    });
-  };
-
-  // Stop bridge service
-  const stopBridgeService = () => {
-    setIsServiceActive(false);
-    addActivityLog('bridge', 'Bridge service stopped');
-    
-    if (pollInterval) {
-      clearInterval(pollInterval);
-      setPollInterval(null);
-    }
-
-    toast({
-      title: "Bridge Service Stopped",
-      description: "No longer listening for commands",
-    });
-  };
-
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return <CheckCircle2 className="h-4 w-4 text-green-500" />;
-      case 'failed':
-        return <XCircle className="h-4 w-4 text-red-500" />;
-      case 'processing':
-        return <Clock className="h-4 w-4 text-blue-500" />;
-      default:
-        return <Clock className="h-4 w-4 text-muted-foreground" />;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return 'bg-green-500/10 text-green-500';
-      case 'failed':
-        return 'bg-red-500/10 text-red-500';
-      case 'processing':
-        return 'bg-blue-500/10 text-blue-500';
-      default:
-        return 'bg-muted text-muted-foreground';
-    }
-  };
-
-  const getLogIcon = (type: ActivityLog['type']) => {
-    switch (type) {
-      case 'connection':
-        return <Monitor className="h-4 w-4 text-blue-500" />;
-      case 'cast':
-        return <Monitor className="h-4 w-4 text-green-500" />;
-      case 'bridge':
-        return <Smartphone className="h-4 w-4 text-purple-500" />;
-      case 'error':
-        return <XCircle className="h-4 w-4 text-red-500" />;
-    }
-  };
-
-  const getLogColor = (type: ActivityLog['type']) => {
-    switch (type) {
-      case 'connection':
-        return 'bg-blue-500/10 text-blue-500 border-blue-500/20';
-      case 'cast':
-        return 'bg-green-500/10 text-green-500 border-green-500/20';
-      case 'bridge':
-        return 'bg-purple-500/10 text-purple-500 border-purple-500/20';
-      case 'error':
-        return 'bg-red-500/10 text-red-500 border-red-500/20';
-    }
-  };
-
 
   return (
     <div className="min-h-screen bg-gradient-bg">
@@ -525,12 +235,17 @@ const Index = () => {
             ChromeCast Screensaver
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Automatically cast content to your Chromecast when idle. Configure your screensaver settings and let the bridge service handle the rest.
+            Automatically cast content to your Chromecast when idle. Configure your screensaver settings below.
           </p>
+          <div className="inline-block px-4 py-2 bg-blue-500/10 text-blue-500 rounded-lg border border-blue-500/20">
+            <p className="text-sm font-medium">
+              💡 Make sure your Bridge Service is running on your local network
+            </p>
+          </div>
         </header>
 
         {/* Main Interface */}
-        <main className="space-y-6">
+        <main className="space-y-6 max-w-3xl mx-auto">
           <ChromecastSelector
             deviceId={getOrCreateDeviceId()}
             selectedChromecastId={selectedChromecastId}
@@ -555,7 +270,7 @@ const Index = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="relative w-full max-w-2xl mx-auto aspect-video bg-muted rounded-lg overflow-hidden border">
+                <div className="relative w-full aspect-video bg-muted rounded-lg overflow-hidden border">
                   <iframe
                     src={screensaverConfig.url}
                     className="w-full h-full"
@@ -577,114 +292,7 @@ const Index = () => {
               </CardContent>
             </Card>
           )}
-
-          {/* Bridge Service Section */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Smartphone className="h-5 w-5" />
-                Bridge Service
-                {isServiceActive ? (
-                  <Badge className="ml-2 bg-green-500/10 text-green-500">
-                    Active
-                  </Badge>
-                ) : (
-                  <Badge className="ml-2 bg-muted text-muted-foreground">
-                    Stopped
-                  </Badge>
-                )}
-              </CardTitle>
-              <CardDescription>
-                Automatically processes cast commands from the main interface
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <div className="flex-1">
-                  <p className="text-xs text-muted-foreground">Device ID</p>
-                  <p className="text-sm font-mono">{bridgeDeviceId}</p>
-                </div>
-              </div>
-
-              <div className="flex gap-3">
-                {!isServiceActive ? (
-                  <Button onClick={startBridgeService} className="flex-1">
-                    <Play className="h-4 w-4 mr-2" />
-                    Start Bridge
-                  </Button>
-                ) : (
-                  <Button onClick={stopBridgeService} variant="destructive" className="flex-1">
-                    <Square className="h-4 w-4 mr-2" />
-                    Stop Bridge
-                  </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
         </main>
-
-        {/* Unified Activity Log */}
-        <div className="mt-8 max-w-4xl mx-auto">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <Clock className="h-5 w-5" />
-                    Activity & Command Log
-                  </CardTitle>
-                  <CardDescription>
-                    Real-time log of all connections, casts, commands, and bridge activity
-                  </CardDescription>
-                </div>
-                {activityLogs.length > 0 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setActivityLogs([])}
-                    className="gap-2"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Clear Log
-                  </Button>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              {activityLogs.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <p className="text-sm">No activity yet</p>
-                  <p className="text-xs mt-1">Connect to a Chromecast or start casting to see logs</p>
-                </div>
-              ) : (
-                <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {activityLogs.map((log) => (
-                    <div
-                      key={log.id}
-                      className={`flex items-start gap-3 p-3 rounded-lg border ${getLogColor(log.type)}`}
-                    >
-                      {getLogIcon(log.type)}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-sm font-medium">{log.message}</p>
-                          <span className="text-xs text-muted-foreground whitespace-nowrap">
-                            {log.timestamp.toLocaleTimeString()}
-                          </span>
-                        </div>
-                        {log.details && (
-                          <p className="text-xs text-muted-foreground mt-1 truncate">
-                            {log.details}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
       </div>
     </div>
   );
