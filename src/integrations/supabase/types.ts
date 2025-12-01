@@ -85,6 +85,8 @@ export type Database = {
           enabled: boolean
           id: string
           idle_timeout: number
+          last_idle_check: string | null
+          screensaver_active: boolean | null
           selected_chromecast_id: string | null
           updated_at: string
           url: string | null
@@ -96,6 +98,8 @@ export type Database = {
           enabled?: boolean
           id?: string
           idle_timeout?: number
+          last_idle_check?: string | null
+          screensaver_active?: boolean | null
           selected_chromecast_id?: string | null
           updated_at?: string
           url?: string | null
@@ -107,6 +111,8 @@ export type Database = {
           enabled?: boolean
           id?: string
           idle_timeout?: number
+          last_idle_check?: string | null
+          screensaver_active?: boolean | null
           selected_chromecast_id?: string | null
           updated_at?: string
           url?: string | null
