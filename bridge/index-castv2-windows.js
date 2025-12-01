@@ -416,15 +416,16 @@ async function castMedia(url, retryCount = 0) {
               autoplay: true
             });
             
+            // For HTML content in custom receiver, we don't always get MEDIA_STATUS back
+            // So we resolve immediately after sending the LOAD command
+            console.log('✅ Load command sent - keeping connection alive indefinitely');
+            // Keep heartbeat running to maintain connection
+            // Don't close client - let it run until manually stopped
+            resolve({ success: true });
+            
+            // Still listen for media messages for debugging
             media.on('message', (data) => {
               console.log('📨 Media message:', JSON.stringify(data, null, 2));
-              if (data.type === 'MEDIA_STATUS') {
-                console.log('✅ Media loaded successfully - keeping connection alive');
-                clearTimeout(launchTimeout);
-                // Don't clear heartbeat interval - keep connection alive
-                // Don't close client - let it run until manually stopped
-                resolve({ success: true });
-              }
             });
           }
         }
