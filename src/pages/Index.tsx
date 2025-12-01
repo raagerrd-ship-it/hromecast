@@ -1,11 +1,13 @@
 import { ScreensaverSettings, ScreensaverConfig } from "@/components/ScreensaverSettings";
 import { ChromecastSelector } from "@/components/ChromecastSelector";
-import { Monitor, Play } from "lucide-react";
+import { Monitor, Play, Activity, CheckCircle, XCircle, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const SCREENSAVER_CONFIG_KEY = "chromecast-screensaver-config";
 const DEVICE_ID_KEY = "chromecast-device-id";
@@ -28,6 +30,8 @@ const Index = () => {
   });
   
   const [selectedChromecastId, setSelectedChromecastId] = useState<string | null>(null);
+  const [activityLog, setActivityLog] = useState<any[]>([]);
+  const [screensaverActive, setScreensaverActive] = useState(false);
 
   // Load settings from database on mount
   useEffect(() => {
@@ -68,6 +72,53 @@ const Index = () => {
     };
 
     loadSettings();
+
+    // Fetch activity log
+    const fetchActivityLog = async () => {
+      try {
+        const deviceId = getOrCreateDeviceId();
+        const { data, error } = await supabase
+          .from('cast_commands')
+          .select('*')
+          .eq('device_id', deviceId)
+          .order('created_at', { ascending: false })
+          .limit(20);
+
+        if (error) throw error;
+        setActivityLog(data || []);
+
+        // Check if screensaver is currently active
+        const activeCommand = data?.find(
+          (cmd) => cmd.status === 'processed' && cmd.command_type === 'cast'
+        );
+        setScreensaverActive(!!activeCommand);
+      } catch (error) {
+        console.error('Error fetching activity log:', error);
+      }
+    };
+
+    fetchActivityLog();
+
+    // Subscribe to realtime updates
+    const channel = supabase
+      .channel('cast_commands_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'cast_commands',
+          filter: `device_id=eq.${getOrCreateDeviceId()}`
+        },
+        () => {
+          fetchActivityLog();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Save settings to database when changed
@@ -300,6 +351,77 @@ const Index = () => {
               </CardContent>
             </Card>
           )}
+
+          {/* Activity Log */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Activity className="h-5 w-5" />
+                    Activity Log
+                  </CardTitle>
+                  <CardDescription>
+                    Recent cast commands and screensaver status
+                  </CardDescription>
+                </div>
+                {screensaverActive && (
+                  <Badge variant="default" className="gap-1">
+                    <CheckCircle className="h-3 w-3" />
+                    Screensaver Active
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-64">
+                {activityLog.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Activity className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                    <p className="text-sm">No activity yet</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {activityLog.map((log) => (
+                      <div
+                        key={log.id}
+                        className="flex items-start gap-3 p-3 rounded-lg border bg-muted/30"
+                      >
+                        <div className="mt-0.5">
+                          {log.status === 'processed' ? (
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                          ) : log.status === 'failed' ? (
+                            <XCircle className="h-4 w-4 text-red-500" />
+                          ) : (
+                            <Clock className="h-4 w-4 text-yellow-500" />
+                          )}
+                        </div>
+                        <div className="flex-1 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium capitalize">
+                              {log.command_type}
+                            </span>
+                            <Badge variant="outline" className="text-xs">
+                              {log.status}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {log.url}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(log.created_at).toLocaleString()}
+                          </p>
+                          {log.error_message && (
+                            <p className="text-xs text-red-500">{log.error_message}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </ScrollArea>
+            </CardContent>
+          </Card>
         </main>
       </div>
     </div>
