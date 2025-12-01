@@ -63,6 +63,7 @@ const Index = () => {
             checkInterval: data.check_interval,
           });
           setSelectedChromecastId(data.selected_chromecast_id || null);
+          setScreensaverActive(data.screensaver_active || false);
         }
       } catch (error) {
         console.error('Error loading settings:', error);
@@ -86,12 +87,6 @@ const Index = () => {
 
         if (error) throw error;
         setActivityLog(data || []);
-
-        // Check if screensaver is currently active
-        const activeCommand = data?.find(
-          (cmd) => cmd.status === 'processed' && cmd.command_type === 'cast'
-        );
-        setScreensaverActive(!!activeCommand);
       } catch (error) {
         console.error('Error fetching activity log:', error);
       }
@@ -99,8 +94,8 @@ const Index = () => {
 
     fetchActivityLog();
 
-    // Subscribe to realtime updates
-    const channel = supabase
+    // Subscribe to realtime updates for activity log
+    const activityChannel = supabase
       .channel('cast_commands_changes')
       .on(
         'postgres_changes',
@@ -116,8 +111,29 @@ const Index = () => {
       )
       .subscribe();
 
+    // Subscribe to screensaver status changes
+    const statusChannel = supabase
+      .channel('screensaver_status_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'screensaver_settings',
+          filter: `device_id=eq.${getOrCreateDeviceId()}`
+        },
+        (payload) => {
+          console.log('Screensaver status update:', payload);
+          if (payload.new) {
+            setScreensaverActive(payload.new.screensaver_active || false);
+          }
+        }
+      )
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(activityChannel);
+      supabase.removeChannel(statusChannel);
     };
   }, []);
 

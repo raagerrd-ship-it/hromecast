@@ -206,8 +206,25 @@ async function checkAndActivateScreensaver() {
   // Check if Chromecast is idle
   const isIdle = await isChromecastIdle();
   
+  // Update last check timestamp
+  await supabase
+    .from('screensaver_settings')
+    .update({
+      last_idle_check: new Date().toISOString()
+    })
+    .eq('device_id', DEVICE_ID);
+  
   if (!isIdle) {
     console.log('⏭️  [AUTO-SCREENSAVER] Device busy, skipping');
+    
+    // Mark screensaver as inactive if device is busy
+    if (isScreensaverActive) {
+      isScreensaverActive = false;
+      await supabase
+        .from('screensaver_settings')
+        .update({ screensaver_active: false })
+        .eq('device_id', DEVICE_ID);
+    }
     return;
   }
   
@@ -216,10 +233,29 @@ async function checkAndActivateScreensaver() {
   
   try {
     await castMedia(settings.url);
-    isScreensaverActive = true; // Mark screensaver as active
+    isScreensaverActive = true; // Mark screensaver as active locally
+    
+    // Update database status
+    await supabase
+      .from('screensaver_settings')
+      .update({
+        screensaver_active: true,
+        last_idle_check: new Date().toISOString()
+      })
+      .eq('device_id', DEVICE_ID);
+    
     console.log('✅ [AUTO-SCREENSAVER] Screensaver activated successfully - will stay active until manually stopped');
   } catch (error) {
     console.error('❌ [AUTO-SCREENSAVER] Failed to activate:', error.message);
+    
+    // Mark as inactive in database on failure
+    await supabase
+      .from('screensaver_settings')
+      .update({
+        screensaver_active: false,
+        last_idle_check: new Date().toISOString()
+      })
+      .eq('device_id', DEVICE_ID);
   }
 }
 
