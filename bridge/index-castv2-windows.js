@@ -417,7 +417,9 @@ async function castMedia(url, retryCount = 0) {
             });
             
             // For HTML content in custom receiver, we don't always get MEDIA_STATUS back
-            // So we resolve immediately after sending the LOAD command
+            // Clear timeout and resolve immediately after sending the LOAD command
+            clearTimeout(launchTimeout);
+            launchTimeout = null;
             console.log('✅ Load command sent - keeping connection alive indefinitely');
             // Keep heartbeat running to maintain connection
             // Don't close client - let it run until manually stopped
