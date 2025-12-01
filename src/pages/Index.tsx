@@ -277,8 +277,16 @@ const Index = () => {
                     title="Cast Preview"
                     sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    style={{
+                      border: 'none',
+                      transform: 'scale(1)',
+                      transformOrigin: 'top left'
+                    }}
                   />
                 </div>
+                <p className="text-xs text-muted-foreground text-center">
+                  Preview format: 16:9 (1920×1080 TV format)
+                </p>
                 
                 <div className="flex justify-center">
                   <Button 
