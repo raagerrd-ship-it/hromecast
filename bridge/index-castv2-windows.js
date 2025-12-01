@@ -325,11 +325,21 @@ async function castMedia(url, retryCount = 0) {
       receiver.send({ type: 'GET_STATUS', requestId: 1 });
       
       launchTimeout = setTimeout(() => {
-        console.error('⏱️  Timeout waiting for receiver response (60s)');
+        console.error('⏱️  Timeout waiting for receiver response (120s)');
         console.log('Last appLaunched state:', appLaunched);
+        console.log('Retry count:', retryCount);
         cleanup();
-        reject(new Error('Receiver timeout - Custom receiver may not be accessible'));
-      }, 60000);
+        
+        // Retry on timeout if haven't exceeded retry limit
+        if (retryCount < 2) {
+          console.log('🔄 Retrying cast due to timeout...');
+          setTimeout(() => {
+            castMedia(url, retryCount + 1).then(resolve).catch(reject);
+          }, 3000);
+        } else {
+          reject(new Error('Receiver timeout - Custom receiver may not be accessible'));
+        }
+      }, 120000);
       
       let appLaunched = false;
       
