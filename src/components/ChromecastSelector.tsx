@@ -154,32 +154,19 @@ export const ChromecastSelector = ({
 
             {/* Selected Device Display */}
             {selectedChromecastId && (
-              <div className="space-y-2 mt-4">
-                <Label className="text-xs text-muted-foreground">Selected Device:</Label>
+              <div className="mt-4">
                 {chromecasts
                   .filter((chromecast) => chromecast.id === selectedChromecastId)
                   .map((chromecast) => (
                     <div
                       key={chromecast.id}
-                      className="flex items-center justify-between p-3 rounded-lg border border-primary bg-primary/5"
+                      className="flex items-center gap-3 p-3 rounded-lg border border-primary bg-primary/5"
                     >
-                      <div className="flex items-center gap-3">
-                        <Monitor className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                          <p className="text-sm font-medium">{chromecast.chromecast_name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {chromecast.chromecast_host}:{chromecast.chromecast_port}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">
-                          {formatLastSeen(chromecast.last_seen)}
-                        </span>
-                        <Badge variant="default" className="text-xs">
-                          Active
-                        </Badge>
-                      </div>
+                      <Monitor className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <p className="text-sm font-medium truncate flex-1">{chromecast.chromecast_name}</p>
+                      <Badge variant="default" className="text-xs shrink-0">
+                        Active
+                      </Badge>
                     </div>
                   ))}
               </div>
