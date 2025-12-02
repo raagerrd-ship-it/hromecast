@@ -140,12 +140,7 @@ export const ChromecastSelector = ({
                   </SelectItem>
                   {chromecasts.map((chromecast) => (
                     <SelectItem key={chromecast.id} value={chromecast.id}>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{chromecast.chromecast_name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {chromecast.chromecast_host}
-                        </span>
-                      </div>
+                      <span className="truncate">{chromecast.chromecast_name}</span>
                     </SelectItem>
                   ))}
                 </SelectContent>
