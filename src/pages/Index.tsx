@@ -3,12 +3,11 @@ import { ChromecastSelector } from "@/components/ChromecastSelector";
 import { Monitor, Play, Activity, CheckCircle, XCircle, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-
 const SCREENSAVER_CONFIG_KEY = "chromecast-screensaver-config";
 const DEVICE_ID_KEY = "chromecast-device-id";
 
@@ -32,6 +31,21 @@ const Index = () => {
   const [selectedChromecastId, setSelectedChromecastId] = useState<string | null>(null);
   const [activityLog, setActivityLog] = useState<any[]>([]);
   const [screensaverActive, setScreensaverActive] = useState(false);
+  const [previewScale, setPreviewScale] = useState(0.35);
+  const previewContainerRef = useRef<HTMLDivElement>(null);
+
+  // Calculate preview scale based on container width
+  useEffect(() => {
+    const updateScale = () => {
+      if (previewContainerRef.current) {
+        const containerWidth = previewContainerRef.current.offsetWidth;
+        setPreviewScale(containerWidth / 1920);
+      }
+    };
+    updateScale();
+    window.addEventListener('resize', updateScale);
+    return () => window.removeEventListener('resize', updateScale);
+  }, [screensaverConfig.enabled, screensaverConfig.url]);
 
   // Load settings from database on mount
   useEffect(() => {
@@ -337,22 +351,32 @@ const Index = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="relative w-full aspect-video bg-muted rounded-lg overflow-hidden border">
-                  <iframe
-                    src={screensaverConfig.url}
-                    className="w-full h-full"
-                    title="Cast Preview"
-                    sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                <div 
+                  ref={previewContainerRef}
+                  className="relative w-full aspect-video bg-muted rounded-lg overflow-hidden border"
+                >
+                  <div 
+                    className="absolute top-0 left-0"
                     style={{
-                      border: 'none',
-                      transform: 'scale(1)',
-                      transformOrigin: 'top left'
+                      width: '1920px',
+                      height: '1080px',
+                      transform: `scale(${previewScale})`,
+                      transformOrigin: 'top left',
                     }}
-                  />
+                  >
+                    <iframe
+                      src={screensaverConfig.url}
+                      width="1920"
+                      height="1080"
+                      title="Cast Preview"
+                      sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      style={{ border: 'none' }}
+                    />
+                  </div>
                 </div>
                 <p className="text-xs text-muted-foreground text-center">
-                  Preview format: 16:9 (1920×1080 TV format)
+                  1920×1080 scaled to fit
                 </p>
                 
                 <div className="flex justify-center">
