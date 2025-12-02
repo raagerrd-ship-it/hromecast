@@ -306,162 +306,171 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gradient-bg">
-      <div className="container mx-auto px-4 py-12">
+      <div className="container mx-auto px-4 py-8 md:py-12">
         {/* Header */}
-        <header className="text-center mb-12 space-y-4">
-          <div className="inline-flex items-center justify-center p-3 rounded-2xl bg-primary/10 mb-4">
-            <Monitor className="h-8 w-8 text-primary" />
+        <header className="text-center mb-10 space-y-3">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 shadow-lg shadow-primary/10 mb-2">
+            <Monitor className="h-7 w-7 text-primary" />
           </div>
-          <h1 className="text-5xl font-bold bg-gradient-primary bg-clip-text text-transparent">
+          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-primary bg-clip-text text-transparent tracking-tight">
             ChromeCast Screensaver
           </h1>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Automatically cast content to your Chromecast when idle. Configure your screensaver settings below.
+          <p className="text-muted-foreground max-w-xl mx-auto">
+            Automatically cast content to your Chromecast when idle
           </p>
-          <div className="inline-block px-4 py-2 bg-blue-500/10 text-blue-500 rounded-lg border border-blue-500/20">
-            <p className="text-sm font-medium">
-              💡 Make sure your Bridge Service is running on your local network
-            </p>
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/5 text-primary/80 rounded-full text-sm border border-primary/10">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+            </span>
+            Bridge Service Required
           </div>
         </header>
 
-        {/* Main Interface */}
-        <main className="space-y-6 max-w-3xl mx-auto">
-          <ChromecastSelector
-            deviceId={getOrCreateDeviceId()}
-            selectedChromecastId={selectedChromecastId}
-            onChromecastSelected={setSelectedChromecastId}
-          />
-          
-          <ScreensaverSettings
-            currentSettings={screensaverConfig}
-            onSave={setScreensaverConfig}
-          />
+        {/* Main Grid Layout */}
+        <main className="max-w-5xl mx-auto">
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* Left Column - Settings */}
+            <div className="space-y-6">
+              <ChromecastSelector
+                deviceId={getOrCreateDeviceId()}
+                selectedChromecastId={selectedChromecastId}
+                onChromecastSelected={setSelectedChromecastId}
+              />
+              
+              <ScreensaverSettings
+                currentSettings={screensaverConfig}
+                onSave={setScreensaverConfig}
+              />
+            </div>
 
-          {/* Cast Preview */}
-          {screensaverConfig.enabled && screensaverConfig.url && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Monitor className="h-5 w-5" />
-                  Cast Preview
-                </CardTitle>
-                <CardDescription>
-                  Live preview of what will be cast to your Chromecast
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div 
-                  ref={previewContainerRef}
-                  className="relative w-full aspect-video bg-muted rounded-lg overflow-hidden border"
-                >
-                  <div 
-                    className="absolute top-0 left-0"
-                    style={{
-                      width: '1920px',
-                      height: '1080px',
-                      transform: `scale(${previewScale})`,
-                      transformOrigin: 'top left',
-                    }}
-                  >
-                    <iframe
-                      src={screensaverConfig.url}
-                      width="1920"
-                      height="1080"
-                      title="Cast Preview"
-                      sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      style={{ border: 'none' }}
-                    />
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground text-center">
-                  1920×1080 scaled to fit
-                </p>
-                
-                <div className="flex justify-center">
-                  <Button 
-                    onClick={() => handleStartScreensaver(screensaverConfig.url!)}
-                    className="gap-2"
-                  >
-                    <Play className="h-4 w-4" />
-                    Test Cast Now
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Activity Log */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <Activity className="h-5 w-5" />
-                    Activity Log
-                  </CardTitle>
-                  <CardDescription>
-                    Recent cast commands and screensaver status
-                  </CardDescription>
-                </div>
-                {screensaverActive && (
-                  <Badge variant="default" className="gap-1">
-                    <CheckCircle className="h-3 w-3" />
-                    Screensaver Active
-                  </Badge>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-64">
-                {activityLog.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Activity className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                    <p className="text-sm">No activity yet</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {activityLog.map((log) => (
-                      <div
-                        key={log.id}
-                        className="flex items-start gap-3 p-3 rounded-lg border bg-muted/30"
+            {/* Right Column - Preview & Activity */}
+            <div className="space-y-6">
+              {/* Cast Preview */}
+              {screensaverConfig.enabled && screensaverConfig.url && (
+                <Card className="overflow-hidden border-primary/20">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Monitor className="h-4 w-4 text-primary" />
+                      Live Preview
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      Exact TV output (1920×1080)
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3 pt-0">
+                    <div 
+                      ref={previewContainerRef}
+                      className="relative w-full aspect-video bg-black rounded-lg overflow-hidden ring-1 ring-border shadow-inner"
+                    >
+                      <div 
+                        className="absolute top-0 left-0"
+                        style={{
+                          width: '1920px',
+                          height: '1080px',
+                          transform: `scale(${previewScale})`,
+                          transformOrigin: 'top left',
+                        }}
                       >
-                        <div className="mt-0.5">
-                          {log.status === 'processed' ? (
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                          ) : log.status === 'failed' ? (
-                            <XCircle className="h-4 w-4 text-red-500" />
-                          ) : (
-                            <Clock className="h-4 w-4 text-yellow-500" />
-                          )}
-                        </div>
-                        <div className="flex-1 space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium capitalize">
-                              {log.command_type}
-                            </span>
-                            <Badge variant="outline" className="text-xs">
-                              {log.status}
-                            </Badge>
-                          </div>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {log.url}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(log.created_at).toLocaleString()}
-                          </p>
-                          {log.error_message && (
-                            <p className="text-xs text-red-500">{log.error_message}</p>
-                          )}
-                        </div>
+                        <iframe
+                          src={screensaverConfig.url}
+                          width="1920"
+                          height="1080"
+                          title="Cast Preview"
+                          sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          style={{ border: 'none' }}
+                        />
                       </div>
-                    ))}
+                    </div>
+                    
+                    <Button 
+                      onClick={() => handleStartScreensaver(screensaverConfig.url!)}
+                      className="w-full gap-2"
+                      size="sm"
+                    >
+                      <Play className="h-4 w-4" />
+                      Test Cast Now
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Activity Log */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <Activity className="h-4 w-4 text-primary" />
+                        Activity Log
+                      </CardTitle>
+                      <CardDescription className="text-xs">
+                        Recent commands
+                      </CardDescription>
+                    </div>
+                    {screensaverActive && (
+                      <Badge className="gap-1 bg-green-500/10 text-green-500 border-green-500/20">
+                        <span className="relative flex h-1.5 w-1.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span>
+                        </span>
+                        Active
+                      </Badge>
+                    )}
                   </div>
-                )}
-              </ScrollArea>
-            </CardContent>
-          </Card>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <ScrollArea className="h-72">
+                    {activityLog.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                        <Activity className="h-10 w-10 mb-2 opacity-20" />
+                        <p className="text-sm">No activity yet</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {activityLog.map((log) => (
+                          <div
+                            key={log.id}
+                            className="flex items-start gap-2.5 p-2.5 rounded-lg border bg-muted/20 hover:bg-muted/40 transition-colors"
+                          >
+                            <div className="mt-0.5">
+                              {log.status === 'processed' ? (
+                                <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+                              ) : log.status === 'failed' ? (
+                                <XCircle className="h-3.5 w-3.5 text-red-500" />
+                              ) : (
+                                <Clock className="h-3.5 w-3.5 text-yellow-500" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0 space-y-0.5">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-medium capitalize">
+                                  {log.command_type}
+                                </span>
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                  {log.status}
+                                </Badge>
+                              </div>
+                              <p className="text-[10px] text-muted-foreground truncate">
+                                {log.url}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground/60">
+                                {new Date(log.created_at).toLocaleString()}
+                              </p>
+                              {log.error_message && (
+                                <p className="text-[10px] text-red-400">{log.error_message}</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </main>
       </div>
     </div>
