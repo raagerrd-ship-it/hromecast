@@ -102,13 +102,11 @@ export const ChromecastSelector = ({
           </div>
           <Button
             variant="outline"
-            size="sm"
+            size="icon"
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="gap-2"
           >
             <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Refresh
           </Button>
         </div>
       </CardHeader>
