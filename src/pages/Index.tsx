@@ -345,7 +345,14 @@ const Index = () => {
                             {log.command_type}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {new Date(log.created_at).toLocaleTimeString()}
+                            {(() => {
+                              const date = new Date(log.created_at);
+                              const today = new Date();
+                              const isToday = date.toDateString() === today.toDateString();
+                              return isToday 
+                                ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                : `${date.toLocaleDateString([], { day: 'numeric', month: 'short' })} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                            })()}
                           </p>
                         </div>
                         <Badge variant="outline" className="text-[10px] flex-shrink-0">
