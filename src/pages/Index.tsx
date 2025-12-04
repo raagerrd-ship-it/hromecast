@@ -35,11 +35,11 @@ const Index = () => {
   const [currentTime, setCurrentTime] = useState(Date.now());
   const previewContainerRef = useRef<HTMLDivElement>(null);
 
-  // Update current time every 30 seconds for footer status
+  // Update current time every 10 seconds for footer status
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentTime(Date.now());
-    }, 30000);
+    }, 10000);
     return () => clearInterval(interval);
   }, []);
 
