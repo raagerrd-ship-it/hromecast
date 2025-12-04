@@ -75,6 +75,9 @@ const Index = () => {
           });
           setSelectedChromecastId(data.selected_chromecast_id || null);
           setScreensaverActive(data.screensaver_active || false);
+          if (data.last_idle_check) {
+            setLastBridgeActivity(new Date(data.last_idle_check));
+          }
         }
       } catch (error) {
         console.error('Error loading settings:', error);
@@ -95,12 +98,6 @@ const Index = () => {
 
         if (error) throw error;
         setActivityLog(data || []);
-        
-        // Update last bridge activity based on most recent processed command
-        const lastProcessed = data?.find(d => d.status === 'completed' || d.status === 'processed');
-        if (lastProcessed?.processed_at) {
-          setLastBridgeActivity(new Date(lastProcessed.processed_at));
-        }
       } catch (error) {
         console.error('Error fetching activity log:', error);
       }
@@ -138,6 +135,9 @@ const Index = () => {
         (payload) => {
           if (payload.new) {
             setScreensaverActive(payload.new.screensaver_active || false);
+            if (payload.new.last_idle_check) {
+              setLastBridgeActivity(new Date(payload.new.last_idle_check));
+            }
           }
         }
       )
