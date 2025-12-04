@@ -32,7 +32,16 @@ const Index = () => {
   const [screensaverActive, setScreensaverActive] = useState(false);
   const [previewScale, setPreviewScale] = useState(0.35);
   const [lastBridgeActivity, setLastBridgeActivity] = useState<Date | null>(null);
+  const [currentTime, setCurrentTime] = useState(Date.now());
   const previewContainerRef = useRef<HTMLDivElement>(null);
+
+  // Update current time every 30 seconds for footer status
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const updateScale = () => {
@@ -425,13 +434,13 @@ const Index = () => {
       <footer className="flex-shrink-0 px-4 py-3 sm:px-6 border-t border-border bg-card/50">
         <div className="max-w-lg mx-auto flex items-center justify-center gap-2">
           <span className={`h-1.5 w-1.5 rounded-full ${
-            lastBridgeActivity && (Date.now() - lastBridgeActivity.getTime()) < 300000
+            lastBridgeActivity && (currentTime - lastBridgeActivity.getTime()) < 300000
               ? 'bg-primary'
               : 'bg-muted-foreground/50'
           }`} />
           <p className="text-xs text-muted-foreground">
             {lastBridgeActivity 
-              ? `Bridge ${(Date.now() - lastBridgeActivity.getTime()) < 300000 ? 'online' : 'offline'} · ${lastBridgeActivity.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+              ? `Bridge ${(currentTime - lastBridgeActivity.getTime()) < 300000 ? 'online' : 'offline'} · ${lastBridgeActivity.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
               : 'No bridge connection'}
           </p>
         </div>
