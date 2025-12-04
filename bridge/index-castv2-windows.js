@@ -149,7 +149,6 @@ async function isChromecastIdle() {
           const ourAppRunning = apps.some(app => app.appId === CUSTOM_APP_ID);
           
           if (ourAppRunning) {
-            console.log('✅ Our screensaver is already running');
             isScreensaverActive = true; // Sync local state
             resolve({ status: 'our_app' });
           } else if (otherApps.length === 0) {
@@ -213,11 +212,9 @@ async function checkAndActivateScreensaver() {
       last_idle_check: new Date().toISOString()
     })
     .eq('device_id', DEVICE_ID);
-  console.log(`📊 [AUTO-SCREENSAVER] Status: ${result.status}`);
-  
   // Handle different states
   if (result.status === 'our_app') {
-    console.log('✅ [AUTO-SCREENSAVER] Our app running, all good');
+    console.log('✅ [AUTO-SCREENSAVER] Our app already running');
     return;
   }
   
