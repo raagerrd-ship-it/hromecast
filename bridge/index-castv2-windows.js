@@ -127,7 +127,7 @@ async function isChromecastIdle() {
     const timeout = setTimeout(() => {
       console.log('⏱️  Idle check timeout - assuming busy');
       checkClient.close();
-      resolve(false);
+      resolve({ status: 'error' });
     }, 5000);
     
     checkClient.connect(targetDevice.host, () => {
@@ -149,15 +149,15 @@ async function isChromecastIdle() {
           const ourAppRunning = apps.some(app => app.appId === CUSTOM_APP_ID);
           
           if (ourAppRunning) {
-            console.log('✅ Our screensaver is already running - skipping');
+            console.log('✅ Our screensaver is already running');
             isScreensaverActive = true; // Sync local state
-            resolve(false); // Return false to skip re-casting
+            resolve({ status: 'our_app' });
           } else if (otherApps.length === 0) {
             console.log('✅ Chromecast is idle (no active apps)');
-            resolve(true);
+            resolve({ status: 'idle' });
           } else {
             console.log(`⏸️  Chromecast is busy (${otherApps.length} other app(s): ${otherApps.map(a => a.displayName || a.appId).join(', ')})`);
-            resolve(false);
+            resolve({ status: 'busy', apps: otherApps.map(a => a.displayName || a.appId) });
           }
         }
       });
@@ -167,7 +167,7 @@ async function isChromecastIdle() {
       clearTimeout(timeout);
       console.error('❌ Error checking idle status:', err.message);
       checkClient.close();
-      resolve(false);
+      resolve({ status: 'error' });
     });
   });
 }
@@ -209,8 +209,8 @@ async function checkAndActivateScreensaver() {
     return;
   }
   
-  // Check if Chromecast is idle
-  const isIdle = await isChromecastIdle();
+  // Check Chromecast status
+  const result = await isChromecastIdle();
   
   // Update last check timestamp
   await supabase
@@ -220,7 +220,13 @@ async function checkAndActivateScreensaver() {
     })
     .eq('device_id', DEVICE_ID);
   
-  if (!isIdle) {
+  // Handle different states
+  if (result.status === 'our_app') {
+    // Our screensaver is already running - nothing to do
+    return;
+  }
+  
+  if (result.status === 'busy' || result.status === 'error') {
     console.log('⏭️  [AUTO-SCREENSAVER] Device busy, skipping');
     
     // Mark screensaver as inactive if device is busy (someone else took over)
@@ -243,6 +249,8 @@ async function checkAndActivateScreensaver() {
     }
     return;
   }
+  
+  // status === 'idle' - activate screensaver
   
   // Cast screensaver
   console.log(`🎬 [AUTO-SCREENSAVER] Activating screensaver: ${settings.url}`);
