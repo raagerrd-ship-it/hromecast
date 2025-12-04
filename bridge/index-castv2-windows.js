@@ -213,10 +213,11 @@ async function checkAndActivateScreensaver() {
       last_idle_check: new Date().toISOString()
     })
     .eq('device_id', DEVICE_ID);
+  console.log(`📊 [AUTO-SCREENSAVER] Status: ${result.status}`);
   
   // Handle different states
   if (result.status === 'our_app') {
-    // Our screensaver is already running - nothing to do
+    console.log('✅ [AUTO-SCREENSAVER] Our app running, all good');
     return;
   }
   
