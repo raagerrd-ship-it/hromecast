@@ -445,19 +445,24 @@ async function castMedia(url, retryCount = 0) {
               
               // Skip backdrop/screensaver
               if (runningApp.appId !== CUSTOM_APP_ID && runningApp.appId !== 'E8C28D3C') {
-                console.log(`⚠️  Wrong app running (${runningApp.displayName}), stopping it...`);
-                receiver.send({ type: 'STOP', requestId: 3, sessionId: runningApp.sessionId });
+                console.log(`⚠️  Wrong app running (${runningApp.displayName}), someone else took over`);
                 
-                // Close connection and retry after app stops
-                setTimeout(() => {
-                  cleanup();
-                  if (retryCount < 2) {
-                    console.log('🔄 Reconnecting after stopping wrong app...');
-                    castMedia(url, retryCount + 1).then(resolve).catch(reject);
-                  } else {
-                    reject(new Error('Failed to stop running app after multiple attempts'));
-                  }
-                }, 2000);
+                // Log stop event if screensaver was active
+                if (isScreensaverActive) {
+                  isScreensaverActive = false;
+                  supabase.from('cast_commands').insert({
+                    device_id: DEVICE_ID,
+                    command_type: 'screensaver_stop',
+                    url: url,
+                    status: 'completed',
+                    processed_at: new Date().toISOString()
+                  });
+                  supabase.from('screensaver_settings').update({ screensaver_active: false }).eq('device_id', DEVICE_ID);
+                  console.log('📝 Logged screensaver_stop (another app took over)');
+                }
+                
+                cleanup();
+                reject(new Error(`Another app running: ${runningApp.displayName}`));
                 return;
               }
             }
@@ -476,7 +481,21 @@ async function castMedia(url, retryCount = 0) {
             console.log('📱 App launched:', app.displayName, 'AppId:', app.appId);
             
             if (app.appId !== CUSTOM_APP_ID) {
-              console.log('⚠️  Still wrong app, will retry...');
+              console.log('⚠️  Wrong app detected during cast');
+              
+              // Log stop event if screensaver was active
+              if (isScreensaverActive) {
+                isScreensaverActive = false;
+                supabase.from('cast_commands').insert({
+                  device_id: DEVICE_ID,
+                  command_type: 'screensaver_stop',
+                  url: url,
+                  status: 'completed',
+                  processed_at: new Date().toISOString()
+                });
+                supabase.from('screensaver_settings').update({ screensaver_active: false }).eq('device_id', DEVICE_ID);
+                console.log('📝 Logged screensaver_stop (wrong app during cast)');
+              }
               return;
             }
             
