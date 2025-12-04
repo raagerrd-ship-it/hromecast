@@ -5,7 +5,7 @@ const Bonjour = require('bonjour-hap');
 require('dotenv').config();
 
 // Version
-const VERSION = '1.0.1';
+const VERSION = '1.0.2';
 
 // Configuration
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -205,6 +205,9 @@ async function checkAndActivateScreensaver() {
     return;
   }
   
+  // Capture state before checking (isChromecastIdle may modify isScreensaverActive)
+  const wasScreensaverActive = isScreensaverActive;
+  
   // Check Chromecast status
   const result = await isChromecastIdle();
   
@@ -220,8 +223,7 @@ async function checkAndActivateScreensaver() {
     console.log('✅ [AUTO-SCREENSAVER] Our app already running');
     
     // If we just discovered our app is running (e.g. after bridge restart), log it
-    if (!isScreensaverActive) {
-      isScreensaverActive = true;
+    if (!wasScreensaverActive) {
       await Promise.all([
         supabase.from('cast_commands').insert({
           device_id: DEVICE_ID,
