@@ -31,8 +31,6 @@ const Index = () => {
   const [selectedChromecastId, setSelectedChromecastId] = useState<string | null>(null);
   const [activityLog, setActivityLog] = useState<any[]>([]);
   const [screensaverActive, setScreensaverActive] = useState(false);
-  const [checkCount, setCheckCount] = useState(0);
-  const [lastCheck, setLastCheck] = useState<string | null>(null);
   const [previewScale, setPreviewScale] = useState(0.35);
   const previewContainerRef = useRef<HTMLDivElement>(null);
 
@@ -77,8 +75,6 @@ const Index = () => {
           });
           setSelectedChromecastId(data.selected_chromecast_id || null);
           setScreensaverActive(data.screensaver_active || false);
-          setCheckCount(data.check_count || 0);
-          setLastCheck(data.last_idle_check || null);
         }
       } catch (error) {
         console.error('Error loading settings:', error);
@@ -137,8 +133,6 @@ const Index = () => {
         (payload) => {
           if (payload.new) {
             setScreensaverActive(payload.new.screensaver_active || false);
-            setCheckCount(payload.new.check_count || 0);
-            setLastCheck(payload.new.last_idle_check || null);
           }
         }
       )
@@ -266,8 +260,6 @@ const Index = () => {
               currentSettings={screensaverConfig}
               onSave={setScreensaverConfig}
               isActive={screensaverActive}
-              checkCount={checkCount}
-              lastCheck={lastCheck}
             />
           </section>
 
