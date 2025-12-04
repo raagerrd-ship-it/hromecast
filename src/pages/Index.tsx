@@ -386,21 +386,23 @@ const Index = () => {
                         return log.command_type;
                       };
 
-                      // Calculate duration for stop events
+                      // Calculate duration for start events (find the next stop)
                       const getDuration = () => {
-                        if (log.command_type !== 'screensaver_stop') return null;
-                        // Find the most recent start before this stop
-                        const startLog = activityLog.slice(index + 1).find(
-                          l => l.command_type === 'screensaver_start' && l.status === 'completed'
+                        if (log.command_type !== 'screensaver_start' && log.command_type !== 'screensaver_resumed') return null;
+                        // Find the next stop after this start (earlier in the array since it's sorted desc)
+                        const stopLog = activityLog.slice(0, index).reverse().find(
+                          l => l.command_type === 'screensaver_stop' && l.status === 'completed'
                         );
-                        if (!startLog) return null;
-                        const startTime = new Date(startLog.created_at).getTime();
-                        const stopTime = new Date(log.created_at).getTime();
+                        if (!stopLog) return null;
+                        const startTime = new Date(log.created_at).getTime();
+                        const stopTime = new Date(stopLog.created_at).getTime();
                         const durationMs = stopTime - startTime;
                         const minutes = Math.floor(durationMs / 60000);
+                        const seconds = Math.floor((durationMs % 60000) / 1000);
                         const hours = Math.floor(minutes / 60);
                         if (hours > 0) return `${hours}h ${minutes % 60}m`;
-                        return `${minutes}m`;
+                        if (minutes > 0) return `${minutes}m`;
+                        return `${seconds}s`;
                       };
 
                       const duration = getDuration();
