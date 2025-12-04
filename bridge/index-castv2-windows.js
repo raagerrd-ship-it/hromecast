@@ -149,9 +149,9 @@ async function isChromecastIdle() {
           const ourAppRunning = apps.some(app => app.appId === CUSTOM_APP_ID);
           
           if (ourAppRunning) {
-            console.log('✅ Our screensaver is already running');
+            console.log('✅ Our screensaver is already running - skipping');
             isScreensaverActive = true; // Sync local state
-            resolve(true); // Consider idle since it's our app
+            resolve(false); // Return false to skip re-casting
           } else if (otherApps.length === 0) {
             console.log('✅ Chromecast is idle (no active apps)');
             resolve(true);
