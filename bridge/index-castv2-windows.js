@@ -183,13 +183,7 @@ async function checkAndActivateScreensaver() {
   
   lastScreensaverCheck = now;
   
-  // Skip check if screensaver is already active
-  if (isScreensaverActive) {
-    console.log('⏸️  [AUTO-SCREENSAVER] Screensaver already active, skipping check');
-    return;
-  }
-  
-  console.log('\n🔍 [AUTO-SCREENSAVER] Checking if screensaver should activate...');
+  console.log('\n🔍 [AUTO-SCREENSAVER] Checking Chromecast status...');
   
   // Get screensaver settings
   const settings = await getScreensaverSettings();
