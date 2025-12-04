@@ -7,6 +7,7 @@ import { useState, useEffect } from "react";
 interface ScreensaverSettingsProps {
   onSave: (settings: ScreensaverConfig) => void;
   currentSettings: ScreensaverConfig;
+  isActive?: boolean;
 }
 
 export interface ScreensaverConfig {
@@ -16,7 +17,7 @@ export interface ScreensaverConfig {
   checkInterval: number;
 }
 
-export const ScreensaverSettings = ({ onSave, currentSettings }: ScreensaverSettingsProps) => {
+export const ScreensaverSettings = ({ onSave, currentSettings, isActive = false }: ScreensaverSettingsProps) => {
   const [enabled, setEnabled] = useState(currentSettings.enabled);
   const [url, setUrl] = useState(currentSettings.url);
   const [idleTimeout, setIdleTimeout] = useState(currentSettings.idleTimeout);
@@ -40,6 +41,12 @@ export const ScreensaverSettings = ({ onSave, currentSettings }: ScreensaverSett
     }
   }, [enabled, url, idleTimeout, checkInterval]);
 
+  const getStatusText = () => {
+    if (!enabled) return 'Disabled';
+    if (isActive) return 'On TV';
+    return 'Waiting';
+  };
+
   return (
     <div className="space-y-4">
       {/* Enable Toggle */}
@@ -48,14 +55,21 @@ export const ScreensaverSettings = ({ onSave, currentSettings }: ScreensaverSett
           <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
             enabled ? 'bg-primary/20' : 'bg-muted'
           }`}>
-            <div className={`w-3 h-3 rounded-full transition-colors ${
-              enabled ? 'bg-primary' : 'bg-muted-foreground'
-            }`} />
+            {enabled && isActive ? (
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-primary" />
+              </span>
+            ) : (
+              <div className={`w-3 h-3 rounded-full transition-colors ${
+                enabled ? 'bg-primary' : 'bg-muted-foreground'
+              }`} />
+            )}
           </div>
           <div>
             <p className="text-sm font-medium">Screensaver</p>
-            <p className="text-xs text-muted-foreground">
-              {enabled ? 'Active' : 'Disabled'}
+            <p className={`text-xs ${enabled && isActive ? 'text-primary' : 'text-muted-foreground'}`}>
+              {getStatusText()}
             </p>
           </div>
         </div>

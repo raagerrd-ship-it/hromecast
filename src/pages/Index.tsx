@@ -255,29 +255,12 @@ const Index = () => {
           </section>
 
           {/* Settings */}
-          <section className="space-y-3">
+          <section>
             <ScreensaverSettings
               currentSettings={screensaverConfig}
               onSave={setScreensaverConfig}
+              isActive={screensaverActive}
             />
-            {screensaverConfig.enabled && (
-              <div className="flex items-center gap-2 px-1">
-                {screensaverActive ? (
-                  <>
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
-                    </span>
-                    <span className="text-sm text-primary font-medium">Active on TV</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="h-2 w-2 rounded-full bg-muted-foreground/40" />
-                    <span className="text-sm text-muted-foreground">Waiting for idle</span>
-                  </>
-                )}
-              </div>
-            )}
           </section>
 
           {/* Preview */}
