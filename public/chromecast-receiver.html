@@ -17,15 +17,15 @@
       background: #000;
       color: #fff;
       font-family: Arial, sans-serif;
-      display: flex;
-      align-items: center;
-      justify-content: center;
     }
     
     #content-wrapper {
       width: 1920px;
       height: 1080px;
-      position: relative;
+      position: absolute;
+      top: 0;
+      left: 0;
+      transform-origin: top left;
     }
     
     #content {
@@ -71,6 +71,26 @@
     const loadingEl = document.getElementById('loading');
     const contentEl = document.getElementById('content');
     const wrapperEl = document.getElementById('content-wrapper');
+    
+    // Scale content to fit screen
+    function scaleToFit() {
+      const screenWidth = window.innerWidth;
+      const screenHeight = window.innerHeight;
+      const scaleX = screenWidth / 1920;
+      const scaleY = screenHeight / 1080;
+      const scale = Math.min(scaleX, scaleY);
+      
+      // Center the content
+      const offsetX = (screenWidth - 1920 * scale) / 2;
+      const offsetY = (screenHeight - 1080 * scale) / 2;
+      
+      wrapperEl.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+      console.log(`Scaled to ${scale.toFixed(3)} (${screenWidth}x${screenHeight})`);
+    }
+    
+    // Scale on load and resize
+    scaleToFit();
+    window.addEventListener('resize', scaleToFit);
     
     // Custom message handler for loading websites
     context.addCustomMessageListener('urn:x-cast:com.website.cast', (customEvent) => {
@@ -118,6 +138,7 @@
         statusEl.textContent = 'Connected';
         loadingEl.style.display = 'none';
         wrapperEl.style.display = 'block';
+        scaleToFit();
         
         // Hide status after 3 seconds
         setTimeout(() => {
