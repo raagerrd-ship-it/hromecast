@@ -21,7 +21,9 @@
     
     #content {
       border: none;
-      transform-origin: top left;
+      position: absolute;
+      top: 0;
+      left: 0;
     }
     
     #status {
@@ -49,7 +51,7 @@
 <body>
   <div id="status">Ready to cast...</div>
   <div id="loading" style="display:none;">Loading website...</div>
-  <iframe id="content" width="1920" height="1080" style="display:none;"></iframe>
+  <iframe id="content" style="display:none;"></iframe>
   
   <script>
     const context = cast.framework.CastReceiverContext.getInstance();
@@ -59,28 +61,22 @@
     const loadingEl = document.getElementById('loading');
     const contentEl = document.getElementById('content');
     
-    // Scale 1920x1080 iframe to fit screen
-    function scaleToFit() {
+    // Set iframe to fill screen exactly
+    function setupIframe() {
       const screenWidth = window.innerWidth;
       const screenHeight = window.innerHeight;
       
-      // Calculate scale to fit 1920x1080 in screen
-      const scaleX = screenWidth / 1920;
-      const scaleY = screenHeight / 1080;
-      const scale = Math.min(scaleX, scaleY);
+      // Set iframe to screen size - website will see this viewport
+      contentEl.width = screenWidth;
+      contentEl.height = screenHeight;
+      contentEl.style.width = screenWidth + 'px';
+      contentEl.style.height = screenHeight + 'px';
       
-      // Center if needed
-      const scaledWidth = 1920 * scale;
-      const scaledHeight = 1080 * scale;
-      const offsetX = (screenWidth - scaledWidth) / 2;
-      const offsetY = (screenHeight - scaledHeight) / 2;
-      
-      contentEl.style.left = offsetX + 'px';
-      contentEl.style.top = offsetY + 'px';
-      contentEl.style.transform = `scale(${scale})`;
-      
-      console.log(`Screen: ${screenWidth}x${screenHeight}, Scale: ${scale.toFixed(3)}`);
+      console.log(`Iframe set to: ${screenWidth}x${screenHeight}`);
     }
+    
+    setupIframe();
+    window.addEventListener('resize', setupIframe);
     
     // Custom message handler for loading websites
     context.addCustomMessageListener('urn:x-cast:com.website.cast', (customEvent) => {
@@ -128,7 +124,6 @@
         statusEl.textContent = 'Connected';
         loadingEl.style.display = 'none';
         contentEl.style.display = 'block';
-        scaleToFit();
         
         // Hide status after 3 seconds
         setTimeout(() => {
