@@ -358,6 +358,12 @@ const Index = () => {
                         if (log.command_type === 'screensaver_stop') {
                           return <StopCircle className="h-4 w-4 text-orange-500" />;
                         }
+                        if (log.command_type === 'bridge_start') {
+                          return <Activity className="h-4 w-4 text-primary" />;
+                        }
+                        if (log.command_type === 'bridge_stop') {
+                          return <Activity className="h-4 w-4 text-muted-foreground" />;
+                        }
                         if (log.status === 'completed' || log.status === 'processed') {
                           return <CheckCircle className="h-4 w-4 text-primary" />;
                         }
@@ -370,6 +376,8 @@ const Index = () => {
                       const getLabel = () => {
                         if (log.command_type === 'screensaver_start') return 'Screensaver started';
                         if (log.command_type === 'screensaver_stop') return 'Screensaver stopped';
+                        if (log.command_type === 'bridge_start') return 'Bridge started';
+                        if (log.command_type === 'bridge_stop') return 'Bridge stopped';
                         if (log.command_type === 'cast') return 'Manual cast';
                         return log.command_type;
                       };

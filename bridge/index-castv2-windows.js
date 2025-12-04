@@ -679,6 +679,16 @@ async function main() {
   console.log('🎬 Starting auto-screensaver monitoring (checks every 60s)...');
   const screensaverInterval = setInterval(checkAndActivateScreensaver, SCREENSAVER_CHECK_INTERVAL);
 
+  // Log bridge start
+  await supabase.from('cast_commands').insert({
+    device_id: DEVICE_ID,
+    command_type: 'bridge_start',
+    url: '',
+    status: 'completed',
+    processed_at: new Date().toISOString()
+  });
+  console.log('📝 Logged bridge start');
+
   // Initial poll
   processPendingCommands();
   
@@ -688,6 +698,17 @@ async function main() {
   // Handle shutdown
   process.on('SIGINT', async () => {
     console.log('\n🛑 Shutting down bridge service...');
+    
+    // Log bridge stop
+    await supabase.from('cast_commands').insert({
+      device_id: DEVICE_ID,
+      command_type: 'bridge_stop',
+      url: '',
+      status: 'completed',
+      processed_at: new Date().toISOString()
+    });
+    console.log('📝 Logged bridge stop');
+    
     clearInterval(pollInterval);
     clearInterval(screensaverInterval);
     await channel.unsubscribe();
