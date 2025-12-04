@@ -144,13 +144,19 @@ async function isChromecastIdle() {
           checkClient.close();
           
           const apps = data.status?.applications || [];
-          const activeApps = apps.filter(app => app.appId !== 'E8C28D3C');
+          // Filter out backdrop (E8C28D3C) and our own screensaver app (FE376873)
+          const otherApps = apps.filter(app => app.appId !== 'E8C28D3C' && app.appId !== CUSTOM_APP_ID);
+          const ourAppRunning = apps.some(app => app.appId === CUSTOM_APP_ID);
           
-          if (activeApps.length === 0) {
+          if (ourAppRunning) {
+            console.log('✅ Our screensaver is already running');
+            isScreensaverActive = true; // Sync local state
+            resolve(true); // Consider idle since it's our app
+          } else if (otherApps.length === 0) {
             console.log('✅ Chromecast is idle (no active apps)');
             resolve(true);
           } else {
-            console.log(`⏸️  Chromecast is busy (${activeApps.length} active app(s))`);
+            console.log(`⏸️  Chromecast is busy (${otherApps.length} other app(s): ${otherApps.map(a => a.displayName || a.appId).join(', ')})`);
             resolve(false);
           }
         }
