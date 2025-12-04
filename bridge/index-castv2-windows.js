@@ -4,6 +4,9 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-hap');
 require('dotenv').config();
 
+// Version
+const VERSION = '1.0.1';
+
 // Configuration
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
@@ -627,7 +630,7 @@ function subscribeToCommands() {
 
 // Main service
 async function main() {
-  console.log('🚀 Starting Chromecast Bridge Service (Windows) with Custom Receiver');
+  console.log(`🚀 Chromecast Bridge v${VERSION}`);
   console.log(`📱 Device ID: ${DEVICE_ID}`);
   console.log(`🎬 Custom App ID: ${CUSTOM_APP_ID}`);
   console.log(`⏱️  Poll interval: ${POLL_INTERVAL}ms`);
