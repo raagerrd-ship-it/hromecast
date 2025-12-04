@@ -1,6 +1,6 @@
 import { ScreensaverSettings, ScreensaverConfig } from "@/components/ScreensaverSettings";
 import { ChromecastSelector } from "@/components/ChromecastSelector";
-import { Play, Activity, CheckCircle, XCircle, Clock, Tv, StopCircle } from "lucide-react";
+import { Play, Activity, CheckCircle, XCircle, Clock, Tv, StopCircle, RotateCcw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useRef } from "react";
@@ -355,6 +355,9 @@ const Index = () => {
                             ? <XCircle className="h-4 w-4 text-destructive" />
                             : <Play className="h-4 w-4 text-primary" />;
                         }
+                        if (log.command_type === 'screensaver_resumed') {
+                          return <RotateCcw className="h-4 w-4 text-primary" />;
+                        }
                         if (log.command_type === 'screensaver_stop') {
                           return <StopCircle className="h-4 w-4 text-orange-500" />;
                         }
@@ -375,6 +378,7 @@ const Index = () => {
 
                       const getLabel = () => {
                         if (log.command_type === 'screensaver_start') return 'Screensaver started';
+                        if (log.command_type === 'screensaver_resumed') return 'Screensaver resumed';
                         if (log.command_type === 'screensaver_stop') return 'Screensaver stopped';
                         if (log.command_type === 'bridge_start') return 'Bridge started';
                         if (log.command_type === 'bridge_stop') return 'Bridge stopped';
