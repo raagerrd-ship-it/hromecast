@@ -20,9 +20,13 @@
     }
     
     #content {
-      width: 100%;
-      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1920px;
+      height: 1080px;
       border: none;
+      transform-origin: top left;
     }
     
     #status {
@@ -50,7 +54,7 @@
 <body>
   <div id="status">Ready to cast...</div>
   <div id="loading" style="display:none;">Loading website...</div>
-  <iframe id="content" style="display:none;"></iframe>
+  <iframe id="content" width="1920" height="1080" style="display:none;"></iframe>
   
   <script>
     const context = cast.framework.CastReceiverContext.getInstance();
@@ -60,8 +64,26 @@
     const loadingEl = document.getElementById('loading');
     const contentEl = document.getElementById('content');
     
-    // Log screen dimensions for debugging
-    console.log(`Screen: ${window.innerWidth}x${window.innerHeight}`);
+    // Scale 1920x1080 iframe to fill screen
+    function scaleToFit() {
+      const screenWidth = window.innerWidth;
+      const screenHeight = window.innerHeight;
+      const scaleX = screenWidth / 1920;
+      const scaleY = screenHeight / 1080;
+      const scale = Math.min(scaleX, scaleY);
+      
+      // Center the content
+      const scaledWidth = 1920 * scale;
+      const scaledHeight = 1080 * scale;
+      const offsetX = (screenWidth - scaledWidth) / 2;
+      const offsetY = (screenHeight - scaledHeight) / 2;
+      
+      contentEl.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+      console.log(`TV: ${screenWidth}x${screenHeight}, Scale: ${scale.toFixed(3)}`);
+    }
+    
+    scaleToFit();
+    window.addEventListener('resize', scaleToFit);
     
     // Custom message handler for loading websites
     context.addCustomMessageListener('urn:x-cast:com.website.cast', (customEvent) => {
@@ -109,6 +131,7 @@
         statusEl.textContent = 'Connected';
         loadingEl.style.display = 'none';
         contentEl.style.display = 'block';
+        scaleToFit();
         
         // Hide status after 3 seconds
         setTimeout(() => {
