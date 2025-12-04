@@ -312,6 +312,7 @@ const Index = () => {
                     width="1920"
                     height="1080"
                     title="Preview"
+                    loading="lazy"
                     sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
                     style={{ border: 'none' }}
                   />
