@@ -1,6 +1,6 @@
 import { ScreensaverSettings, ScreensaverConfig } from "@/components/ScreensaverSettings";
 import { ChromecastSelector } from "@/components/ChromecastSelector";
-import { Play, Activity, CheckCircle, XCircle, Clock, Tv, StopCircle, RefreshCw } from "lucide-react";
+import { Play, Activity, CheckCircle, XCircle, Clock, Tv, StopCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useRef } from "react";
@@ -31,7 +31,6 @@ const Index = () => {
   const [activityLog, setActivityLog] = useState<any[]>([]);
   const [screensaverActive, setScreensaverActive] = useState(false);
   const [previewScale, setPreviewScale] = useState(0.35);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastBridgeActivity, setLastBridgeActivity] = useState<Date | null>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
 
@@ -182,30 +181,6 @@ const Index = () => {
     saveSettings();
   }, [screensaverConfig, selectedChromecastId, isLoading]);
 
-  const handleRefreshActivity = async () => {
-    setIsRefreshing(true);
-    try {
-      const deviceId = getOrCreateDeviceId();
-      const { data, error } = await supabase
-        .from('cast_commands')
-        .select('*')
-        .eq('device_id', deviceId)
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      if (error) throw error;
-      setActivityLog(data || []);
-      
-      const lastProcessed = data?.find(d => d.status === 'completed' || d.status === 'processed');
-      if (lastProcessed?.processed_at) {
-        setLastBridgeActivity(new Date(lastProcessed.processed_at));
-      }
-    } catch (error) {
-      console.error('Error fetching activity log:', error);
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
 
   const handleStartScreensaver = async (url: string) => {
     try {
@@ -343,24 +318,15 @@ const Index = () => {
                 <Activity className="h-4 w-4 text-primary" />
                 <span className="text-sm font-medium">Activity</span>
               </div>
-              <div className="flex items-center gap-2">
-                {screensaverActive && (
-                  <Badge className="gap-1.5 bg-primary/10 text-primary border-0 text-xs">
-                    <span className="relative flex h-1.5 w-1.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
-                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary" />
-                    </span>
-                    Live
-                  </Badge>
-                )}
-                <button
-                  onClick={handleRefreshActivity}
-                  className="p-1.5 rounded-lg hover:bg-secondary/50 text-muted-foreground hover:text-foreground transition-colors"
-                  title="Refresh"
-                >
-                  <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                </button>
-              </div>
+              {screensaverActive && (
+                <Badge className="gap-1.5 bg-primary/10 text-primary border-0 text-xs">
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary" />
+                  </span>
+                  Live
+                </Badge>
+              )}
             </div>
             
             <div className="rounded-2xl bg-secondary/30 border border-border overflow-hidden">
