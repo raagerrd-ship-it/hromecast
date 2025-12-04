@@ -26,6 +26,14 @@ export const ChromecastSelector = ({
   const [chromecasts, setChromecasts] = useState<DiscoveredChromecast[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // Shorten device names by removing the hash suffix
+  const shortenName = (name: string) => {
+    // Remove hash suffix (e.g., "-a1eee59f647dc50c109bf7b8561690ee")
+    const withoutHash = name.replace(/-[a-f0-9]{20,}$/i, '');
+    // Replace remaining dashes with spaces
+    return withoutHash.replace(/-/g, ' ');
+  };
+
   const fetchChromecasts = async () => {
     try {
       const { data, error } = await supabase
@@ -112,7 +120,7 @@ export const ChromecastSelector = ({
                     <Tv className="h-4 w-4 text-primary" />
                   </div>
                   <div className="text-left">
-                    <p className="text-sm font-medium">{selectedDevice.chromecast_name}</p>
+                    <p className="text-sm font-medium">{shortenName(selectedDevice.chromecast_name)}</p>
                     <p className="text-xs text-muted-foreground">Connected</p>
                   </div>
                 </div>
@@ -133,7 +141,7 @@ export const ChromecastSelector = ({
             {chromecasts.map((chromecast) => (
               <SelectItem key={chromecast.id} value={chromecast.id} className="rounded-lg">
                 <div className="flex items-center gap-2">
-                  <span>{chromecast.chromecast_name}</span>
+                  <span>{shortenName(chromecast.chromecast_name)}</span>
                   {chromecast.id === selectedChromecastId && (
                     <Badge variant="secondary" className="text-[10px] px-1.5">Active</Badge>
                   )}
