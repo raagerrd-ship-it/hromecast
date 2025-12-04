@@ -456,9 +456,11 @@ async function castMedia(url, retryCount = 0) {
                     url: url,
                     status: 'completed',
                     processed_at: new Date().toISOString()
+                  }).then(({ error }) => {
+                    if (error) console.error('❌ Failed to log screensaver_stop:', error.message);
+                    else console.log('✅ screensaver_stop logged to database');
                   });
                   supabase.from('screensaver_settings').update({ screensaver_active: false }).eq('device_id', DEVICE_ID);
-                  console.log('📝 Logged screensaver_stop (another app took over)');
                 }
                 
                 cleanup();
@@ -492,9 +494,11 @@ async function castMedia(url, retryCount = 0) {
                   url: url,
                   status: 'completed',
                   processed_at: new Date().toISOString()
+                }).then(({ error }) => {
+                  if (error) console.error('❌ Failed to log screensaver_stop:', error.message);
+                  else console.log('✅ screensaver_stop logged to database');
                 });
                 supabase.from('screensaver_settings').update({ screensaver_active: false }).eq('device_id', DEVICE_ID);
-                console.log('📝 Logged screensaver_stop (wrong app during cast)');
               }
               return;
             }
