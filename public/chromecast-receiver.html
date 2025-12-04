@@ -2,7 +2,6 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=1920, height=1080, initial-scale=1">
   <title>Chromecast Website Receiver</title>
   <style>
     * {
@@ -27,6 +26,7 @@
       width: 1920px;
       height: 1080px;
       border: none;
+      transform-origin: top left;
     }
     
     #status {
@@ -48,24 +48,12 @@
       font-size: 24px;
       z-index: 999;
     }
-    
-    #debug {
-      position: fixed;
-      bottom: 20px;
-      left: 20px;
-      background: rgba(255, 0, 0, 0.8);
-      padding: 10px 20px;
-      border-radius: 8px;
-      font-size: 18px;
-      z-index: 1000;
-    }
   </style>
   <script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
 </head>
 <body>
   <div id="status">Ready to cast...</div>
   <div id="loading" style="display:none;">Loading website...</div>
-  <div id="debug"></div>
   <iframe id="content" width="1920" height="1080" style="display:none;"></iframe>
   
   <script>
@@ -75,10 +63,29 @@
     const statusEl = document.getElementById('status');
     const loadingEl = document.getElementById('loading');
     const contentEl = document.getElementById('content');
-    const debugEl = document.getElementById('debug');
     
-    // Show debug info
-    debugEl.textContent = `Screen: ${window.innerWidth}x${window.innerHeight}, DPR: ${window.devicePixelRatio}`;
+    // Scale 1920x1080 iframe to fit screen
+    function scaleToFit() {
+      const screenWidth = window.innerWidth;
+      const screenHeight = window.innerHeight;
+      
+      // Calculate scale to fit 1920x1080 in screen
+      const scaleX = screenWidth / 1920;
+      const scaleY = screenHeight / 1080;
+      const scale = Math.min(scaleX, scaleY);
+      
+      // Center if needed
+      const scaledWidth = 1920 * scale;
+      const scaledHeight = 1080 * scale;
+      const offsetX = (screenWidth - scaledWidth) / 2;
+      const offsetY = (screenHeight - scaledHeight) / 2;
+      
+      contentEl.style.left = offsetX + 'px';
+      contentEl.style.top = offsetY + 'px';
+      contentEl.style.transform = `scale(${scale})`;
+      
+      console.log(`Screen: ${screenWidth}x${screenHeight}, Scale: ${scale.toFixed(3)}`);
+    }
     
     // Custom message handler for loading websites
     context.addCustomMessageListener('urn:x-cast:com.website.cast', (customEvent) => {
@@ -126,11 +133,12 @@
         statusEl.textContent = 'Connected';
         loadingEl.style.display = 'none';
         contentEl.style.display = 'block';
+        scaleToFit();
         
-        // Hide status after 5 seconds, keep debug visible
+        // Hide status after 3 seconds
         setTimeout(() => {
           statusEl.style.display = 'none';
-        }, 5000);
+        }, 3000);
       };
       
       contentEl.onerror = () => {
