@@ -218,13 +218,27 @@ async function checkAndActivateScreensaver() {
   if (!isIdle) {
     console.log('⏭️  [AUTO-SCREENSAVER] Device busy, skipping');
     
-    // Mark screensaver as inactive if device is busy
+    // Mark screensaver as inactive if device is busy (someone else took over)
     if (isScreensaverActive) {
       isScreensaverActive = false;
+      
+      // Log the stop event
+      await supabase
+        .from('cast_commands')
+        .insert({
+          device_id: DEVICE_ID,
+          command_type: 'screensaver_stop',
+          url: settings.url || '',
+          status: 'completed',
+          processed_at: new Date().toISOString()
+        });
+      
       await supabase
         .from('screensaver_settings')
         .update({ screensaver_active: false })
         .eq('device_id', DEVICE_ID);
+      
+      console.log('📝 [AUTO-SCREENSAVER] Logged screensaver stop (device taken over)');
     }
     return;
   }
@@ -236,6 +250,17 @@ async function checkAndActivateScreensaver() {
     await castMedia(settings.url);
     isScreensaverActive = true; // Mark screensaver as active locally
     
+    // Log the activation
+    await supabase
+      .from('cast_commands')
+      .insert({
+        device_id: DEVICE_ID,
+        command_type: 'screensaver_start',
+        url: settings.url,
+        status: 'completed',
+        processed_at: new Date().toISOString()
+      });
+    
     // Update database status
     await supabase
       .from('screensaver_settings')
@@ -245,9 +270,21 @@ async function checkAndActivateScreensaver() {
       })
       .eq('device_id', DEVICE_ID);
     
-    console.log('✅ [AUTO-SCREENSAVER] Screensaver activated successfully - will stay active until manually stopped');
+    console.log('✅ [AUTO-SCREENSAVER] Screensaver activated and logged');
   } catch (error) {
     console.error('❌ [AUTO-SCREENSAVER] Failed to activate:', error.message);
+    
+    // Log the failed attempt
+    await supabase
+      .from('cast_commands')
+      .insert({
+        device_id: DEVICE_ID,
+        command_type: 'screensaver_start',
+        url: settings.url || '',
+        status: 'failed',
+        error_message: error.message,
+        processed_at: new Date().toISOString()
+      });
     
     // Mark as inactive in database on failure
     await supabase

@@ -1,6 +1,6 @@
 import { ScreensaverSettings, ScreensaverConfig } from "@/components/ScreensaverSettings";
 import { ChromecastSelector } from "@/components/ChromecastSelector";
-import { Play, Activity, CheckCircle, XCircle, Clock, Tv } from "lucide-react";
+import { Play, Activity, CheckCircle, XCircle, Clock, Tv, StopCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useRef } from "react";
@@ -338,37 +338,80 @@ const Index = () => {
               ) : (
                 <ScrollArea className="h-48">
                   <div className="divide-y divide-border">
-                    {activityLog.map((log) => (
-                      <div key={log.id} className="flex items-center gap-3 p-3">
-                        <div className="flex-shrink-0">
-                          {log.status === 'processed' ? (
-                            <CheckCircle className="h-4 w-4 text-primary" />
-                          ) : log.status === 'failed' ? (
-                            <XCircle className="h-4 w-4 text-destructive" />
-                          ) : (
-                            <Clock className="h-4 w-4 text-yellow-500" />
-                          )}
+                    {activityLog.map((log, index) => {
+                      const getIcon = () => {
+                        if (log.command_type === 'screensaver_start') {
+                          return log.status === 'failed' 
+                            ? <XCircle className="h-4 w-4 text-destructive" />
+                            : <Play className="h-4 w-4 text-primary" />;
+                        }
+                        if (log.command_type === 'screensaver_stop') {
+                          return <StopCircle className="h-4 w-4 text-orange-500" />;
+                        }
+                        if (log.status === 'completed' || log.status === 'processed') {
+                          return <CheckCircle className="h-4 w-4 text-primary" />;
+                        }
+                        if (log.status === 'failed') {
+                          return <XCircle className="h-4 w-4 text-destructive" />;
+                        }
+                        return <Clock className="h-4 w-4 text-yellow-500" />;
+                      };
+
+                      const getLabel = () => {
+                        if (log.command_type === 'screensaver_start') return 'Screensaver started';
+                        if (log.command_type === 'screensaver_stop') return 'Screensaver stopped';
+                        if (log.command_type === 'cast') return 'Manual cast';
+                        return log.command_type;
+                      };
+
+                      // Calculate duration for stop events
+                      const getDuration = () => {
+                        if (log.command_type !== 'screensaver_stop') return null;
+                        // Find the most recent start before this stop
+                        const startLog = activityLog.slice(index + 1).find(
+                          l => l.command_type === 'screensaver_start' && l.status === 'completed'
+                        );
+                        if (!startLog) return null;
+                        const startTime = new Date(startLog.created_at).getTime();
+                        const stopTime = new Date(log.created_at).getTime();
+                        const durationMs = stopTime - startTime;
+                        const minutes = Math.floor(durationMs / 60000);
+                        const hours = Math.floor(minutes / 60);
+                        if (hours > 0) return `${hours}h ${minutes % 60}m`;
+                        return `${minutes}m`;
+                      };
+
+                      const duration = getDuration();
+
+                      return (
+                        <div key={log.id} className="flex items-center gap-3 p-3">
+                          <div className="flex-shrink-0">
+                            {getIcon()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">
+                              {getLabel()}
+                              {duration && <span className="text-muted-foreground font-normal ml-1">({duration})</span>}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {(() => {
+                                const date = new Date(log.created_at);
+                                const today = new Date();
+                                const isToday = date.toDateString() === today.toDateString();
+                                return isToday 
+                                  ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                  : `${date.toLocaleDateString([], { day: 'numeric', month: 'short' })} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                              })()}
+                            </p>
+                          </div>
+                          <Badge variant="outline" className={`text-[10px] flex-shrink-0 ${
+                            log.status === 'failed' ? 'border-destructive/50 text-destructive' : ''
+                          }`}>
+                            {log.status}
+                          </Badge>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium capitalize truncate">
-                            {log.command_type}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {(() => {
-                              const date = new Date(log.created_at);
-                              const today = new Date();
-                              const isToday = date.toDateString() === today.toDateString();
-                              return isToday 
-                                ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                                : `${date.toLocaleDateString([], { day: 'numeric', month: 'short' })} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-                            })()}
-                          </p>
-                        </div>
-                        <Badge variant="outline" className="text-[10px] flex-shrink-0">
-                          {log.status}
-                        </Badge>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </ScrollArea>
               )}
