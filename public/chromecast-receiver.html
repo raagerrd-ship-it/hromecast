@@ -10,27 +10,18 @@
       box-sizing: border-box;
     }
     
-    body {
-      width: 100vw;
-      height: 100vh;
+    html, body {
+      width: 100%;
+      height: 100%;
       overflow: hidden;
       background: #000;
       color: #fff;
       font-family: Arial, sans-serif;
     }
     
-    #content-wrapper {
-      width: 1920px;
-      height: 1080px;
-      position: absolute;
-      top: 0;
-      left: 0;
-      transform-origin: top left;
-    }
-    
     #content {
-      width: 1920px;
-      height: 1080px;
+      width: 100%;
+      height: 100%;
       border: none;
     }
     
@@ -59,9 +50,7 @@
 <body>
   <div id="status">Ready to cast...</div>
   <div id="loading" style="display:none;">Loading website...</div>
-  <div id="content-wrapper" style="display:none;">
-    <iframe id="content" width="1920" height="1080"></iframe>
-  </div>
+  <iframe id="content" style="display:none;"></iframe>
   
   <script>
     const context = cast.framework.CastReceiverContext.getInstance();
@@ -70,27 +59,9 @@
     const statusEl = document.getElementById('status');
     const loadingEl = document.getElementById('loading');
     const contentEl = document.getElementById('content');
-    const wrapperEl = document.getElementById('content-wrapper');
     
-    // Scale content to fit screen
-    function scaleToFit() {
-      const screenWidth = window.innerWidth;
-      const screenHeight = window.innerHeight;
-      const scaleX = screenWidth / 1920;
-      const scaleY = screenHeight / 1080;
-      const scale = Math.min(scaleX, scaleY);
-      
-      // Center the content
-      const offsetX = (screenWidth - 1920 * scale) / 2;
-      const offsetY = (screenHeight - 1080 * scale) / 2;
-      
-      wrapperEl.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
-      console.log(`Scaled to ${scale.toFixed(3)} (${screenWidth}x${screenHeight})`);
-    }
-    
-    // Scale on load and resize
-    scaleToFit();
-    window.addEventListener('resize', scaleToFit);
+    // Log screen dimensions for debugging
+    console.log(`Screen: ${window.innerWidth}x${window.innerHeight}`);
     
     // Custom message handler for loading websites
     context.addCustomMessageListener('urn:x-cast:com.website.cast', (customEvent) => {
@@ -128,7 +99,7 @@
       console.log('Loading website:', url);
       statusEl.textContent = 'Loading: ' + url;
       loadingEl.style.display = 'block';
-      wrapperEl.style.display = 'none';
+      contentEl.style.display = 'none';
       
       // Load the URL in the iframe
       contentEl.src = url;
@@ -137,8 +108,7 @@
         console.log('Website loaded successfully');
         statusEl.textContent = 'Connected';
         loadingEl.style.display = 'none';
-        wrapperEl.style.display = 'block';
-        scaleToFit();
+        contentEl.style.display = 'block';
         
         // Hide status after 3 seconds
         setTimeout(() => {
