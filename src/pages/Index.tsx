@@ -431,8 +431,10 @@ const Index = () => {
           }`} />
           <p className="text-xs text-muted-foreground">
             {lastBridgeActivity 
-              ? `Bridge active ${lastBridgeActivity.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-              : 'Bridge service must be running'}
+              ? (Date.now() - lastBridgeActivity.getTime()) < 300000
+                ? 'Bridge online'
+                : `Last active ${lastBridgeActivity.toLocaleDateString([], { day: 'numeric', month: 'short' })} ${lastBridgeActivity.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+              : 'No bridge connection'}
           </p>
         </div>
       </footer>
