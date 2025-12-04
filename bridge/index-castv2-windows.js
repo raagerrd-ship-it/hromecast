@@ -206,11 +206,12 @@ async function checkAndActivateScreensaver() {
   // Check if Chromecast is idle
   const isIdle = await isChromecastIdle();
   
-  // Update last check timestamp
+  // Update last check timestamp and increment check count
   await supabase
     .from('screensaver_settings')
     .update({
-      last_idle_check: new Date().toISOString()
+      last_idle_check: new Date().toISOString(),
+      check_count: (settings.check_count || 0) + 1
     })
     .eq('device_id', DEVICE_ID);
   

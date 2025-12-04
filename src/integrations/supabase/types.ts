@@ -79,6 +79,7 @@ export type Database = {
       }
       screensaver_settings: {
         Row: {
+          check_count: number
           check_interval: number
           created_at: string
           device_id: string
@@ -92,6 +93,7 @@ export type Database = {
           url: string | null
         }
         Insert: {
+          check_count?: number
           check_interval?: number
           created_at?: string
           device_id: string
@@ -105,6 +107,7 @@ export type Database = {
           url?: string | null
         }
         Update: {
+          check_count?: number
           check_interval?: number
           created_at?: string
           device_id?: string
