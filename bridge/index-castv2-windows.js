@@ -183,7 +183,7 @@ async function checkAndActivateScreensaver() {
   
   lastScreensaverCheck = now;
   
-  console.log('\n🔍 [AUTO-SCREENSAVER] Checking Chromecast status...');
+  console.log(`\n🔍 [AUTO-SCREENSAVER] Checking Chromecast status... (${new Date().toLocaleTimeString()})`);
   
   // Get screensaver settings
   const settings = await getScreensaverSettings();
