@@ -1,6 +1,6 @@
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { Link, Clock } from "lucide-react";
+import { Link } from "lucide-react";
 import { useState, useEffect } from "react";
 
 interface ScreensaverSettingsProps {
@@ -79,41 +79,19 @@ export const ScreensaverSettings = ({ onSave, currentSettings, isActive = false 
       </div>
 
       {enabled && (
-        <>
-          {/* URL Input */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <Link className="h-4 w-4 text-primary" />
-              URL
-            </div>
-            <Input
-              type="url"
-              placeholder="https://example.com"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              className="h-12 rounded-xl bg-secondary/50 border-border placeholder:text-muted-foreground/50"
-            />
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Link className="h-4 w-4 text-primary" />
+            URL
           </div>
-
-          {/* Idle Timeout */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <Clock className="h-4 w-4 text-primary" />
-              Idle timeout
-            </div>
-            <div className="flex items-center gap-3">
-              <Input
-                type="number"
-                min="1"
-                max="60"
-                value={idleTimeout}
-                onChange={(e) => setIdleTimeout(parseInt(e.target.value) || 5)}
-                className="h-12 w-20 rounded-xl bg-secondary/50 border-border text-center"
-              />
-              <span className="text-sm text-muted-foreground">minutes</span>
-            </div>
-          </div>
-        </>
+          <Input
+            type="url"
+            placeholder="https://example.com"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            className="h-12 rounded-xl bg-secondary/50 border-border placeholder:text-muted-foreground/50"
+          />
+        </div>
       )}
     </div>
   );
