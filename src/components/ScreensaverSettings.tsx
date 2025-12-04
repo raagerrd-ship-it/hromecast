@@ -8,6 +8,8 @@ interface ScreensaverSettingsProps {
   onSave: (settings: ScreensaverConfig) => void;
   currentSettings: ScreensaverConfig;
   isActive?: boolean;
+  checkCount?: number;
+  lastCheck?: string | null;
 }
 
 export interface ScreensaverConfig {
@@ -17,7 +19,7 @@ export interface ScreensaverConfig {
   checkInterval: number;
 }
 
-export const ScreensaverSettings = ({ onSave, currentSettings, isActive = false }: ScreensaverSettingsProps) => {
+export const ScreensaverSettings = ({ onSave, currentSettings, isActive = false, checkCount = 0, lastCheck }: ScreensaverSettingsProps) => {
   const [enabled, setEnabled] = useState(currentSettings.enabled);
   const [url, setUrl] = useState(currentSettings.url);
   const [idleTimeout, setIdleTimeout] = useState(currentSettings.idleTimeout);
@@ -47,6 +49,18 @@ export const ScreensaverSettings = ({ onSave, currentSettings, isActive = false 
     return 'Waiting';
   };
 
+  const formatLastCheck = () => {
+    if (!lastCheck) return null;
+    const date = new Date(lastCheck);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffSec = Math.floor(diffMs / 1000);
+    if (diffSec < 60) return `${diffSec}s ago`;
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin}m ago`;
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
   return (
     <div className="space-y-4">
       {/* Enable Toggle */}
@@ -70,6 +84,11 @@ export const ScreensaverSettings = ({ onSave, currentSettings, isActive = false 
             <p className="text-sm font-medium">Screensaver</p>
             <p className={`text-xs ${enabled && isActive ? 'text-primary' : 'text-muted-foreground'}`}>
               {getStatusText()}
+              {enabled && checkCount > 0 && (
+                <span className="ml-1.5">
+                  · {checkCount} checks{lastCheck && ` · ${formatLastCheck()}`}
+                </span>
+              )}
             </p>
           </div>
         </div>
