@@ -4,7 +4,6 @@ import { Play, Activity, CheckCircle, XCircle, Clock, Tv, StopCircle } from "luc
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useRef } from "react";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -268,7 +267,16 @@ const Index = () => {
             <section className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Preview</span>
-                <span className="text-xs text-muted-foreground">1920×1080</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">1920×1080</span>
+                  <button
+                    onClick={() => handleStartScreensaver(screensaverConfig.url!)}
+                    className="p-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary transition-colors"
+                    title="Test cast"
+                  >
+                    <Play className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
               <div 
                 ref={previewContainerRef}
@@ -293,13 +301,6 @@ const Index = () => {
                   />
                 </div>
               </div>
-              <Button 
-                onClick={() => handleStartScreensaver(screensaverConfig.url!)}
-                className="w-full h-12 rounded-xl gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
-              >
-                <Play className="h-4 w-4" />
-                Cast Now
-              </Button>
             </section>
           )}
 
