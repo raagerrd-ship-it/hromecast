@@ -215,6 +215,22 @@ async function checkAndActivateScreensaver() {
   // Handle different states
   if (result.status === 'our_app') {
     console.log('✅ [AUTO-SCREENSAVER] Our app already running');
+    
+    // If we just discovered our app is running (e.g. after bridge restart), log it
+    if (!isScreensaverActive) {
+      isScreensaverActive = true;
+      await Promise.all([
+        supabase.from('cast_commands').insert({
+          device_id: DEVICE_ID,
+          command_type: 'screensaver_resumed',
+          url: settings.url || '',
+          status: 'completed',
+          processed_at: new Date().toISOString()
+        }),
+        supabase.from('screensaver_settings').update({ screensaver_active: true }).eq('device_id', DEVICE_ID)
+      ]);
+      console.log('📝 [AUTO-SCREENSAVER] Logged screensaver resumed (app was already running)');
+    }
     return;
   }
   
