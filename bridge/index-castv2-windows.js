@@ -30,8 +30,51 @@ let client = null;
 let lastScreensaverCheck = 0;
 let isScreensaverActive = false; // Track if screensaver is currently casting
 let lastTakeoverTime = 0; // Track when another app took over
+let recoveryCheckInterval = null; // Fast checking during cooldown
 const SCREENSAVER_CHECK_INTERVAL = 60000;
 const COOLDOWN_AFTER_TAKEOVER = 5 * 60 * 1000; // 5 minutes cooldown after another app takes over
+const RECOVERY_CHECK_INTERVAL = 10000; // Check every 10 seconds during/after cooldown
+
+// Start fast recovery checking
+function startRecoveryCheck() {
+  if (recoveryCheckInterval) return; // Already running
+  
+  console.log('🔄 Starting fast recovery check (every 10s)...');
+  recoveryCheckInterval = setInterval(async () => {
+    const timeSinceTakeover = Date.now() - lastTakeoverTime;
+    
+    // Still in cooldown?
+    if (timeSinceTakeover < COOLDOWN_AFTER_TAKEOVER) {
+      const remainingMinutes = Math.ceil((COOLDOWN_AFTER_TAKEOVER - timeSinceTakeover) / 60000);
+      console.log(`⏸️  [RECOVERY] Cooldown: ${remainingMinutes} min remaining`);
+      return;
+    }
+    
+    // Cooldown over - check if device is idle
+    console.log('🔍 [RECOVERY] Cooldown over, checking device status...');
+    const result = await isChromecastIdle();
+    
+    if (result.status === 'idle') {
+      console.log('✅ [RECOVERY] Device idle, triggering screensaver...');
+      stopRecoveryCheck();
+      checkAndActivateScreensaver();
+    } else if (result.status === 'our_app') {
+      console.log('✅ [RECOVERY] Our app already running, stopping recovery check');
+      stopRecoveryCheck();
+    } else {
+      console.log(`⏭️  [RECOVERY] Device still busy (${result.status}), will check again...`);
+    }
+  }, RECOVERY_CHECK_INTERVAL);
+}
+
+// Stop fast recovery checking
+function stopRecoveryCheck() {
+  if (recoveryCheckInterval) {
+    console.log('🛑 Stopping fast recovery check');
+    clearInterval(recoveryCheckInterval);
+    recoveryCheckInterval = null;
+  }
+}
 
 // Report discovered devices to database
 async function reportDiscoveredDevice(name, host, port) {
@@ -262,6 +305,7 @@ async function checkAndActivateScreensaver() {
       ]);
       
       console.log('📝 [AUTO-SCREENSAVER] Logged screensaver stop (device taken over) - cooldown started');
+      startRecoveryCheck(); // Start fast checking for recovery
     }
     return;
   }
@@ -299,6 +343,7 @@ async function checkAndActivateScreensaver() {
     ]);
     
     console.log('✅ [AUTO-SCREENSAVER] Screensaver activated and logged');
+    stopRecoveryCheck(); // Stop fast checking since screensaver is active
   } catch (error) {
     console.error('❌ [AUTO-SCREENSAVER] Failed to activate:', error.message);
     
@@ -473,6 +518,7 @@ async function castMedia(url, retryCount = 0) {
                     else console.log('✅ screensaver_stop logged to database - cooldown started');
                   });
                   supabase.from('screensaver_settings').update({ screensaver_active: false }).eq('device_id', DEVICE_ID);
+                  startRecoveryCheck(); // Start fast checking for recovery
                 }
                 
                 cleanup();
@@ -512,6 +558,7 @@ async function castMedia(url, retryCount = 0) {
                   else console.log('✅ screensaver_stop logged to database - cooldown started');
                 });
                 supabase.from('screensaver_settings').update({ screensaver_active: false }).eq('device_id', DEVICE_ID);
+                startRecoveryCheck(); // Start fast checking for recovery
               }
               return;
             }
