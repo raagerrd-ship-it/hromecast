@@ -29,7 +29,9 @@ let currentDevice = null;
 let client = null;
 let lastScreensaverCheck = 0;
 let isScreensaverActive = false; // Track if screensaver is currently casting
+let lastTakeoverTime = 0; // Track when another app took over
 const SCREENSAVER_CHECK_INTERVAL = 60000;
+const COOLDOWN_AFTER_TAKEOVER = 5 * 60 * 1000; // 5 minutes cooldown after another app takes over
 
 // Report discovered devices to database
 async function reportDiscoveredDevice(name, host, port) {
@@ -245,6 +247,7 @@ async function checkAndActivateScreensaver() {
     // Mark screensaver as inactive if device is busy (someone else took over)
     if (isScreensaverActive) {
       isScreensaverActive = false;
+      lastTakeoverTime = Date.now(); // Start cooldown
       
       // Batch: Log stop event + update status
       await Promise.all([
@@ -258,8 +261,16 @@ async function checkAndActivateScreensaver() {
         supabase.from('screensaver_settings').update({ screensaver_active: false }).eq('device_id', DEVICE_ID)
       ]);
       
-      console.log('📝 [AUTO-SCREENSAVER] Logged screensaver stop (device taken over)');
+      console.log('📝 [AUTO-SCREENSAVER] Logged screensaver stop (device taken over) - cooldown started');
     }
+    return;
+  }
+  
+  // Check cooldown period
+  const timeSinceTakeover = Date.now() - lastTakeoverTime;
+  if (lastTakeoverTime > 0 && timeSinceTakeover < COOLDOWN_AFTER_TAKEOVER) {
+    const remainingMinutes = Math.ceil((COOLDOWN_AFTER_TAKEOVER - timeSinceTakeover) / 60000);
+    console.log(`⏸️  [AUTO-SCREENSAVER] Cooldown active, ${remainingMinutes} min remaining`);
     return;
   }
   
@@ -450,6 +461,7 @@ async function castMedia(url, retryCount = 0) {
                 // Log stop event if screensaver was active
                 if (isScreensaverActive) {
                   isScreensaverActive = false;
+                  lastTakeoverTime = Date.now(); // Start cooldown
                   supabase.from('cast_commands').insert({
                     device_id: DEVICE_ID,
                     command_type: 'screensaver_stop',
@@ -458,7 +470,7 @@ async function castMedia(url, retryCount = 0) {
                     processed_at: new Date().toISOString()
                   }).then(({ error }) => {
                     if (error) console.error('❌ Failed to log screensaver_stop:', error.message);
-                    else console.log('✅ screensaver_stop logged to database');
+                    else console.log('✅ screensaver_stop logged to database - cooldown started');
                   });
                   supabase.from('screensaver_settings').update({ screensaver_active: false }).eq('device_id', DEVICE_ID);
                 }
@@ -488,6 +500,7 @@ async function castMedia(url, retryCount = 0) {
               // Log stop event if screensaver was active
               if (isScreensaverActive) {
                 isScreensaverActive = false;
+                lastTakeoverTime = Date.now(); // Start cooldown
                 supabase.from('cast_commands').insert({
                   device_id: DEVICE_ID,
                   command_type: 'screensaver_stop',
@@ -496,7 +509,7 @@ async function castMedia(url, retryCount = 0) {
                   processed_at: new Date().toISOString()
                 }).then(({ error }) => {
                   if (error) console.error('❌ Failed to log screensaver_stop:', error.message);
-                  else console.log('✅ screensaver_stop logged to database');
+                  else console.log('✅ screensaver_stop logged to database - cooldown started');
                 });
                 supabase.from('screensaver_settings').update({ screensaver_active: false }).eq('device_id', DEVICE_ID);
               }
