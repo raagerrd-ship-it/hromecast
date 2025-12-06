@@ -539,6 +539,11 @@ const Index = () => {
                         );
                       });
                     })()}
+                    {activityLog.length >= 50 && (
+                      <div className="flex items-center justify-center p-2 text-xs text-muted-foreground border-t border-border">
+                        Visar senaste 50 loggar
+                      </div>
+                    )}
                   </div>
                 </ScrollArea>
               )}
