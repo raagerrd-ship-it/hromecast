@@ -353,18 +353,23 @@ const Index = () => {
                       const groupedLogs: any[] = [];
                       let currentIdleGroup: any[] = [];
                       
-                      const isIdleCheckLog = (log: any) => {
+                      const isStatusCheckLog = (log: any) => {
                         if (log.command_type !== 'bridge_log') return false;
                         try {
                           const data = JSON.parse(log.url);
-                          return data.message?.includes('Checking idle') || data.message?.includes('idle');
+                          const msg = data.message || '';
+                          // Match idle checks and status messages
+                          return msg.includes('Checking idle') || 
+                                 msg.includes(': idle') || 
+                                 msg.includes(': busy') || 
+                                 msg.includes(': screensaver active');
                         } catch {
                           return false;
                         }
                       };
                       
                       activityLog.forEach((log) => {
-                        if (isIdleCheckLog(log)) {
+                        if (isStatusCheckLog(log)) {
                           currentIdleGroup.push(log);
                         } else {
                           if (currentIdleGroup.length > 0) {
@@ -393,17 +398,23 @@ const Index = () => {
                           const lastTime = formatTime(lastLog.processed_at || lastLog.created_at);
                           const timeDisplay = firstTime === lastTime ? firstTime : `${firstTime} → ${lastTime}`;
                           
-                          // Get device name from message
+                          // Get device name and status from message
                           let deviceName = 'device';
+                          let lastStatus = '';
                           try {
                             const data = JSON.parse(lastLog.url);
                             const message = data.message || '';
-                            const match = message.match(/Checking idle:\s*([^(]+)/);
-                            if (match) {
-                              deviceName = match[1].trim()
+                            // Match "Device X: status" or "Checking idle: X (ip)"
+                            const deviceMatch = message.match(/Device\s+([^:]+):\s*(.+)/) || 
+                                               message.match(/Checking idle:\s*([^(]+)/);
+                            if (deviceMatch) {
+                              deviceName = deviceMatch[1].trim()
                                 .replace(/([A-Za-z]+(?:-[A-Za-z]+)*)-[a-f0-9]{20,}/gi, (m: string, name: string) => name.replace(/-/g, ' '));
+                              lastStatus = deviceMatch[2]?.trim() || '';
                             }
                           } catch {}
+                          
+                          const label = lastStatus ? `${deviceName}: ${lastStatus}` : `Checking ${deviceName}`;
                           
                           return (
                             <div key={`idle-group-${index}`} className="flex items-center gap-3 p-3">
@@ -412,7 +423,7 @@ const Index = () => {
                               </div>
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium truncate">
-                                  Checking {deviceName}
+                                  {label}
                                 </p>
                                 <p className="text-xs text-muted-foreground">{timeDisplay}</p>
                               </div>
