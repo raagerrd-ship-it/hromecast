@@ -5,7 +5,7 @@ const Bonjour = require('bonjour-hap');
 require('dotenv').config();
 
 // Version
-const VERSION = '1.0.5';
+const VERSION = '1.0.6';
 
 // Track last idle check log ID for updates instead of inserts
 let lastIdleCheckLogId = null;
@@ -57,6 +57,27 @@ async function logToCloud(message, level = 'info') {
 async function updateIdleCheckLog(message) {
   try {
     const logData = { message, level: 'info', timestamp: new Date().toISOString() };
+    
+    // If we don't have a log ID, try to find an existing recent idle check log
+    if (!lastIdleCheckLogId) {
+      const { data: existingLog } = await supabase
+        .from('cast_commands')
+        .select('id, created_at')
+        .eq('device_id', DEVICE_ID)
+        .eq('command_type', 'bridge_log')
+        .eq('status', 'completed')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      // Use existing log if it's recent (less than 1 hour old) and is an idle check
+      if (existingLog) {
+        const logAge = Date.now() - new Date(existingLog.created_at).getTime();
+        if (logAge < 60 * 60 * 1000) { // 1 hour
+          lastIdleCheckLogId = existingLog.id;
+        }
+      }
+    }
     
     if (lastIdleCheckLogId) {
       // Update existing log entry
