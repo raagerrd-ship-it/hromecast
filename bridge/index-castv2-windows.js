@@ -35,11 +35,27 @@ const SCREENSAVER_CHECK_INTERVAL = 60000;
 const COOLDOWN_AFTER_TAKEOVER = 5 * 60 * 1000; // 5 minutes cooldown after another app takes over
 const RECOVERY_CHECK_INTERVAL = 10000; // Check every 10 seconds during/after cooldown
 
+// Log to database for Activity view
+async function logToCloud(message, level = 'info') {
+  try {
+    await supabase.from('cast_commands').insert({
+      device_id: DEVICE_ID,
+      command_type: 'bridge_log',
+      url: JSON.stringify({ message, level, timestamp: new Date().toISOString() }),
+      status: level === 'error' ? 'failed' : 'completed',
+      processed_at: new Date().toISOString()
+    });
+  } catch (e) {
+    // Silently fail - don't want logging to break the bridge
+  }
+}
+
 // Start fast recovery checking
 function startRecoveryCheck() {
   if (recoveryCheckInterval) return; // Already running
   
   console.log('🔄 Starting fast recovery check (every 10s)...');
+  logToCloud('Recovery check started - monitoring for idle device');
   recoveryCheckInterval = setInterval(async () => {
     const timeSinceTakeover = Date.now() - lastTakeoverTime;
     
@@ -56,6 +72,7 @@ function startRecoveryCheck() {
     
     if (result.status === 'idle') {
       console.log('✅ [RECOVERY] Device idle, triggering screensaver...');
+      logToCloud('Device idle after cooldown - reactivating screensaver');
       stopRecoveryCheck();
       checkAndActivateScreensaver();
     } else if (result.status === 'our_app') {
@@ -720,6 +737,8 @@ async function main() {
   console.log(`🎬 Custom App ID: ${CUSTOM_APP_ID}`);
   console.log(`⏱️  Poll interval: ${POLL_INTERVAL}ms`);
   console.log('');
+  
+  await logToCloud(`Bridge v${VERSION} starting...`);
 
   // Discover devices (one-time scan at startup)
   await discoverDevices();
@@ -730,8 +749,10 @@ async function main() {
     console.error('❌ No Chromecast devices found. Make sure your device is on the same network.');
     console.log('💡 Tip: Check Windows Firewall settings - it may be blocking mDNS/Bonjour');
     console.log('⚠️  Bridge will continue running and monitor for commands...');
+    await logToCloud('No Chromecast devices found on network', 'error');
   } else {
     console.log('✅ All devices reported to database');
+    await logToCloud(`Found ${discoveredDevices.size} Chromecast device(s)`);
   }
   
   // Check if user has previously selected a device
@@ -754,6 +775,7 @@ async function main() {
           port: selectedChromecast.chromecast_port
         };
         console.log(`🎯 Auto-selected previously chosen device: ${currentDevice.name}`);
+        await logToCloud(`Selected device: ${currentDevice.name}`);
       } else {
         console.log('⚠️  Previously selected device not found in current scan');
         console.log('⚠️  No device auto-selected - please choose a device via web interface');
