@@ -183,8 +183,12 @@ async function isChromecastIdle() {
   
   if (!targetDevice) {
     console.log('⚠️  No target device available for idle check');
+    await logToCloud('Idle check skipped - no device selected', 'error');
     return false;
   }
+  
+  console.log(`🔍 Checking idle status for: ${targetDevice.name} (${targetDevice.host})`);
+  await logToCloud(`Checking idle: ${targetDevice.name}`);
   
   return new Promise((resolve) => {
     const checkClient = new castv2.Client();
@@ -192,6 +196,7 @@ async function isChromecastIdle() {
     const timeout = setTimeout(() => {
       console.log('⏱️  Idle check timeout - assuming busy');
       checkClient.close();
+      logToCloud(`Idle check timeout: ${targetDevice.name}`, 'error');
       resolve({ status: 'error' });
     }, 5000);
     
@@ -215,12 +220,16 @@ async function isChromecastIdle() {
           
           if (ourAppRunning) {
             isScreensaverActive = true; // Sync local state
+            logToCloud(`Device ${targetDevice.name}: screensaver active`);
             resolve({ status: 'our_app' });
           } else if (otherApps.length === 0) {
             console.log('✅ Chromecast is idle (no active apps)');
+            logToCloud(`Device ${targetDevice.name}: idle`);
             resolve({ status: 'idle' });
           } else {
-            console.log(`⏸️  Chromecast is busy (${otherApps.length} other app(s): ${otherApps.map(a => a.displayName || a.appId).join(', ')})`);
+            const appNames = otherApps.map(a => a.displayName || a.appId).join(', ');
+            console.log(`⏸️  Chromecast is busy (${otherApps.length} other app(s): ${appNames})`);
+            logToCloud(`Device ${targetDevice.name}: busy (${appNames})`);
             resolve({ status: 'busy', apps: otherApps.map(a => a.displayName || a.appId) });
           }
         }
@@ -231,6 +240,7 @@ async function isChromecastIdle() {
       clearTimeout(timeout);
       console.error('❌ Error checking idle status:', err.message);
       checkClient.close();
+      logToCloud(`Connection error: ${targetDevice.name} - ${err.message}`, 'error');
       resolve({ status: 'error' });
     });
   });
