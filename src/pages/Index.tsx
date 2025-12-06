@@ -103,7 +103,7 @@ const Index = () => {
           .select('*')
           .eq('device_id', deviceId)
           .order('created_at', { ascending: false })
-          .limit(10);
+          .limit(50);
 
         if (error) throw error;
         setActivityLog(data || []);
