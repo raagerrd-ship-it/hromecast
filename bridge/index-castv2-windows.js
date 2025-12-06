@@ -70,10 +70,10 @@ async function updateIdleCheckLog(message) {
         .limit(1)
         .maybeSingle();
       
-      // Use existing log if it's recent (less than 1 hour old) and is an idle check
+      // Use existing log if it's recent (less than 7 days old) and is an idle check
       if (existingLog) {
         const logAge = Date.now() - new Date(existingLog.created_at).getTime();
-        if (logAge < 60 * 60 * 1000) { // 1 hour
+        if (logAge < 7 * 24 * 60 * 60 * 1000) { // 7 days
           lastIdleCheckLogId = existingLog.id;
         }
       }
