@@ -390,7 +390,10 @@ const Index = () => {
                         if (log.command_type === 'bridge_log') {
                           try {
                             const data = JSON.parse(log.url);
-                            return data.message || 'Bridge log';
+                            let message = data.message || 'Bridge log';
+                            // Shorten Chromecast names (e.g. "Chromecast-Ultra" -> "CC-Ultra")
+                            message = message.replace(/Chromecast-?/gi, 'CC-');
+                            return message;
                           } catch {
                             return 'Bridge log';
                           }
