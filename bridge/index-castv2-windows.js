@@ -5,7 +5,10 @@ const Bonjour = require('bonjour-hap');
 require('dotenv').config();
 
 // Version
-const VERSION = '1.0.3';
+const VERSION = '1.0.4';
+
+// Track last idle check log ID for updates instead of inserts
+let lastIdleCheckLogId = null;
 
 // Configuration
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -47,6 +50,43 @@ async function logToCloud(message, level = 'info') {
     });
   } catch (e) {
     // Silently fail - don't want logging to break the bridge
+  }
+}
+
+// Update or create idle check log (to avoid flooding activity log)
+async function updateIdleCheckLog(message) {
+  try {
+    const logData = { message, level: 'info', timestamp: new Date().toISOString() };
+    
+    if (lastIdleCheckLogId) {
+      // Update existing log entry
+      await supabase
+        .from('cast_commands')
+        .update({
+          url: JSON.stringify(logData),
+          processed_at: new Date().toISOString()
+        })
+        .eq('id', lastIdleCheckLogId);
+    } else {
+      // Create new log entry
+      const { data } = await supabase
+        .from('cast_commands')
+        .insert({
+          device_id: DEVICE_ID,
+          command_type: 'bridge_log',
+          url: JSON.stringify(logData),
+          status: 'completed',
+          processed_at: new Date().toISOString()
+        })
+        .select('id')
+        .single();
+      
+      if (data?.id) {
+        lastIdleCheckLogId = data.id;
+      }
+    }
+  } catch (e) {
+    // Silently fail
   }
 }
 
@@ -236,7 +276,7 @@ async function isChromecastIdle(retryWithNewIP = true) {
   }
   
   console.log(`🔍 Checking idle status for: ${targetDevice.name} (${targetDevice.host})`);
-  await logToCloud(`Checking idle: ${targetDevice.name} (${targetDevice.host})`);
+  await updateIdleCheckLog(`Checking idle: ${targetDevice.name} (${targetDevice.host})`);
   
   return new Promise((resolve) => {
     const checkClient = new castv2.Client();
