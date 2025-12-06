@@ -394,9 +394,15 @@ const Index = () => {
                             return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                           };
                           
-                          const firstTime = formatTime(firstLog.processed_at || firstLog.created_at);
                           const lastTime = formatTime(lastLog.processed_at || lastLog.created_at);
-                          const timeDisplay = firstTime === lastTime ? firstTime : `${firstTime} → ${lastTime}`;
+                          
+                          // If this group covers all 50 logs, the start time is truncated - only show latest time
+                          const isFullyTruncated = logs.length >= 50;
+                          let timeDisplay = lastTime;
+                          if (!isFullyTruncated) {
+                            const firstTime = formatTime(firstLog.processed_at || firstLog.created_at);
+                            timeDisplay = firstTime === lastTime ? firstTime : `${firstTime} → ${lastTime}`;
+                          }
                           
                           // Get device name and status from message
                           let deviceName = 'device';
