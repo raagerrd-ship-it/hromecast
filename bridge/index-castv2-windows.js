@@ -146,6 +146,7 @@ async function getSelectedChromecast() {
     }
 
     return {
+      id: chromecast.id,
       name: chromecast.chromecast_name,
       host: chromecast.chromecast_host,
       port: chromecast.chromecast_port
@@ -153,6 +154,53 @@ async function getSelectedChromecast() {
   } catch (error) {
     console.error('Error getting selected chromecast:', error);
     return null;
+  }
+}
+
+// Find newer IP for same device name (handles DHCP changes)
+async function findNewerDeviceIP(deviceName, currentId) {
+  try {
+    // Find same device name with more recent last_seen
+    const { data, error } = await supabase
+      .from('discovered_chromecasts')
+      .select('*')
+      .eq('device_id', DEVICE_ID)
+      .eq('chromecast_name', deviceName)
+      .neq('id', currentId)
+      .order('last_seen', { ascending: false })
+      .limit(1);
+
+    if (error || !data || data.length === 0) {
+      return null;
+    }
+
+    const newerDevice = data[0];
+    console.log(`🔄 Found newer IP for ${deviceName}: ${newerDevice.chromecast_host}`);
+    await logToCloud(`Found newer IP for ${deviceName}: ${newerDevice.chromecast_host}`);
+    
+    return {
+      id: newerDevice.id,
+      name: newerDevice.chromecast_name,
+      host: newerDevice.chromecast_host,
+      port: newerDevice.chromecast_port
+    };
+  } catch (error) {
+    console.error('Error finding newer device IP:', error);
+    return null;
+  }
+}
+
+// Update selected chromecast to new ID
+async function updateSelectedChromecast(newId) {
+  try {
+    await supabase
+      .from('screensaver_settings')
+      .update({ selected_chromecast_id: newId })
+      .eq('device_id', DEVICE_ID);
+    console.log(`✅ Updated selected chromecast to: ${newId}`);
+    await logToCloud(`Auto-switched to device with new IP`);
+  } catch (error) {
+    console.error('Error updating selected chromecast:', error);
   }
 }
 
@@ -176,27 +224,41 @@ async function getScreensaverSettings() {
   }
 }
 
-// Check if Chromecast is idle
-async function isChromecastIdle() {
+// Check if Chromecast is idle (with auto IP recovery)
+async function isChromecastIdle(retryWithNewIP = true) {
   const selectedDevice = await getSelectedChromecast();
   const targetDevice = selectedDevice || currentDevice;
   
   if (!targetDevice) {
     console.log('⚠️  No target device available for idle check');
     await logToCloud('Idle check skipped - no device selected', 'error');
-    return false;
+    return { status: 'error' };
   }
   
   console.log(`🔍 Checking idle status for: ${targetDevice.name} (${targetDevice.host})`);
-  await logToCloud(`Checking idle: ${targetDevice.name}`);
+  await logToCloud(`Checking idle: ${targetDevice.name} (${targetDevice.host})`);
   
   return new Promise((resolve) => {
     const checkClient = new castv2.Client();
     
-    const timeout = setTimeout(() => {
-      console.log('⏱️  Idle check timeout - assuming busy');
+    const timeout = setTimeout(async () => {
+      console.log('⏱️  Idle check timeout - connection failed');
       checkClient.close();
-      logToCloud(`Idle check timeout: ${targetDevice.name}`, 'error');
+      
+      // Try to find newer IP for same device
+      if (retryWithNewIP && targetDevice.id) {
+        const newerDevice = await findNewerDeviceIP(targetDevice.name, targetDevice.id);
+        if (newerDevice) {
+          console.log(`🔄 Retrying with new IP: ${newerDevice.host}`);
+          await updateSelectedChromecast(newerDevice.id);
+          // Retry with new IP (but don't retry again to avoid infinite loop)
+          const retryResult = await isChromecastIdle(false);
+          resolve(retryResult);
+          return;
+        }
+      }
+      
+      await logToCloud(`Idle check timeout: ${targetDevice.name} - no newer IP found`, 'error');
       resolve({ status: 'error' });
     }, 5000);
     
@@ -236,11 +298,24 @@ async function isChromecastIdle() {
       });
     });
     
-    checkClient.on('error', (err) => {
+    checkClient.on('error', async (err) => {
       clearTimeout(timeout);
       console.error('❌ Error checking idle status:', err.message);
       checkClient.close();
-      logToCloud(`Connection error: ${targetDevice.name} - ${err.message}`, 'error');
+      
+      // Try to find newer IP for same device on connection error
+      if (retryWithNewIP && targetDevice.id && (err.message.includes('ETIMEDOUT') || err.message.includes('ECONNREFUSED'))) {
+        const newerDevice = await findNewerDeviceIP(targetDevice.name, targetDevice.id);
+        if (newerDevice) {
+          console.log(`🔄 Connection failed, retrying with new IP: ${newerDevice.host}`);
+          await updateSelectedChromecast(newerDevice.id);
+          const retryResult = await isChromecastIdle(false);
+          resolve(retryResult);
+          return;
+        }
+      }
+      
+      await logToCloud(`Connection error: ${targetDevice.name} - ${err.message}`, 'error');
       resolve({ status: 'error' });
     });
   });
