@@ -5,7 +5,7 @@ const Bonjour = require('bonjour-hap');
 require('dotenv').config();
 
 // Version
-const VERSION = '1.0.2';
+const VERSION = '1.0.3';
 
 // Configuration
 const SUPABASE_URL = process.env.SUPABASE_URL;
