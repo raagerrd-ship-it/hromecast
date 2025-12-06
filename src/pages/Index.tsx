@@ -348,112 +348,186 @@ const Index = () => {
               ) : (
                 <ScrollArea className="h-48">
                   <div className="divide-y divide-border">
-                    {activityLog.map((log, index) => {
-                      const getIcon = () => {
-                        if (log.command_type === 'screensaver_start') {
-                          return log.status === 'failed' 
-                            ? <XCircle className="h-4 w-4 text-destructive" />
-                            : <Play className="h-4 w-4 text-primary" />;
+                    {(() => {
+                      // Group consecutive idle check logs
+                      const groupedLogs: any[] = [];
+                      let currentIdleGroup: any[] = [];
+                      
+                      const isIdleCheckLog = (log: any) => {
+                        if (log.command_type !== 'bridge_log') return false;
+                        try {
+                          const data = JSON.parse(log.url);
+                          return data.message?.includes('Checking idle') || data.message?.includes('idle');
+                        } catch {
+                          return false;
                         }
-                        if (log.command_type === 'screensaver_resumed') {
-                          return <RotateCcw className="h-4 w-4 text-primary" />;
-                        }
-                        if (log.command_type === 'screensaver_stop') {
-                          return <StopCircle className="h-4 w-4 text-orange-500" />;
-                        }
-                        if (log.command_type === 'bridge_start') {
-                          return <Activity className="h-4 w-4 text-primary" />;
-                        }
-                        if (log.command_type === 'bridge_stop') {
-                          return <Activity className="h-4 w-4 text-muted-foreground" />;
-                        }
-                        if (log.command_type === 'bridge_log') {
-                          return log.status === 'failed'
-                            ? <XCircle className="h-4 w-4 text-destructive" />
-                            : <Activity className="h-4 w-4 text-muted-foreground" />;
-                        }
-                        if (log.status === 'completed' || log.status === 'processed') {
-                          return <CheckCircle className="h-4 w-4 text-primary" />;
-                        }
-                        if (log.status === 'failed') {
-                          return <XCircle className="h-4 w-4 text-destructive" />;
-                        }
-                        return <Clock className="h-4 w-4 text-yellow-500" />;
                       };
-
-                      const getLabel = () => {
-                        if (log.command_type === 'screensaver_start') return 'Screensaver started';
-                        if (log.command_type === 'screensaver_resumed') return 'Screensaver resumed';
-                        if (log.command_type === 'screensaver_stop') return 'Screensaver stopped';
-                        if (log.command_type === 'bridge_start') return 'Bridge started';
-                        if (log.command_type === 'bridge_stop') return 'Bridge stopped';
-                        if (log.command_type === 'bridge_log') {
-                          try {
-                            const data = JSON.parse(log.url);
-                            let message = data.message || 'Bridge log';
-                            // Shorten Chromecast names same as dropdown (remove hash suffix, replace dashes with spaces)
-                            message = message.replace(/([A-Za-z]+(?:-[A-Za-z]+)*)-[a-f0-9]{20,}/gi, (match, name) => {
-                              return name.replace(/-/g, ' ');
-                            });
-                            return message;
-                          } catch {
-                            return 'Bridge log';
+                      
+                      activityLog.forEach((log) => {
+                        if (isIdleCheckLog(log)) {
+                          currentIdleGroup.push(log);
+                        } else {
+                          if (currentIdleGroup.length > 0) {
+                            groupedLogs.push({ type: 'idle_group', logs: [...currentIdleGroup] });
+                            currentIdleGroup = [];
                           }
+                          groupedLogs.push({ type: 'single', log });
                         }
-                        if (log.command_type === 'cast') return 'Manual cast';
-                        return log.command_type;
-                      };
+                      });
+                      if (currentIdleGroup.length > 0) {
+                        groupedLogs.push({ type: 'idle_group', logs: currentIdleGroup });
+                      }
+                      
+                      return groupedLogs.map((item, index) => {
+                        if (item.type === 'idle_group') {
+                          const logs = item.logs;
+                          const firstLog = logs[logs.length - 1]; // oldest (array is desc)
+                          const lastLog = logs[0]; // newest
+                          
+                          const formatTime = (dateStr: string) => {
+                            const date = new Date(dateStr);
+                            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                          };
+                          
+                          const firstTime = formatTime(firstLog.processed_at || firstLog.created_at);
+                          const lastTime = formatTime(lastLog.processed_at || lastLog.created_at);
+                          const timeDisplay = firstTime === lastTime ? firstTime : `${firstTime} → ${lastTime}`;
+                          
+                          // Get device name from message
+                          let deviceName = 'device';
+                          try {
+                            const data = JSON.parse(lastLog.url);
+                            const message = data.message || '';
+                            const match = message.match(/Checking idle:\s*([^(]+)/);
+                            if (match) {
+                              deviceName = match[1].trim()
+                                .replace(/([A-Za-z]+(?:-[A-Za-z]+)*)-[a-f0-9]{20,}/gi, (m: string, name: string) => name.replace(/-/g, ' '));
+                            }
+                          } catch {}
+                          
+                          return (
+                            <div key={`idle-group-${index}`} className="flex items-center gap-3 p-3">
+                              <div className="flex-shrink-0">
+                                <Activity className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">
+                                  Checking {deviceName}
+                                </p>
+                                <p className="text-xs text-muted-foreground">{timeDisplay}</p>
+                              </div>
+                              <Badge variant="outline" className="text-[10px] flex-shrink-0">
+                                {logs.length}x
+                              </Badge>
+                            </div>
+                          );
+                        }
+                        
+                        const log = item.log;
+                        
+                        const getIcon = () => {
+                          if (log.command_type === 'screensaver_start') {
+                            return log.status === 'failed' 
+                              ? <XCircle className="h-4 w-4 text-destructive" />
+                              : <Play className="h-4 w-4 text-primary" />;
+                          }
+                          if (log.command_type === 'screensaver_resumed') {
+                            return <RotateCcw className="h-4 w-4 text-primary" />;
+                          }
+                          if (log.command_type === 'screensaver_stop') {
+                            return <StopCircle className="h-4 w-4 text-orange-500" />;
+                          }
+                          if (log.command_type === 'bridge_start') {
+                            return <Activity className="h-4 w-4 text-primary" />;
+                          }
+                          if (log.command_type === 'bridge_stop') {
+                            return <Activity className="h-4 w-4 text-muted-foreground" />;
+                          }
+                          if (log.command_type === 'bridge_log') {
+                            return log.status === 'failed'
+                              ? <XCircle className="h-4 w-4 text-destructive" />
+                              : <Activity className="h-4 w-4 text-muted-foreground" />;
+                          }
+                          if (log.status === 'completed' || log.status === 'processed') {
+                            return <CheckCircle className="h-4 w-4 text-primary" />;
+                          }
+                          if (log.status === 'failed') {
+                            return <XCircle className="h-4 w-4 text-destructive" />;
+                          }
+                          return <Clock className="h-4 w-4 text-yellow-500" />;
+                        };
 
-                      // Calculate duration for start events (find the next stop)
-                      const getDuration = () => {
-                        if (log.command_type !== 'screensaver_start' && log.command_type !== 'screensaver_resumed') return null;
-                        // Find the next stop after this start (earlier in the array since it's sorted desc)
-                        const stopLog = activityLog.slice(0, index).reverse().find(
-                          l => l.command_type === 'screensaver_stop' && l.status === 'completed'
+                        const getLabel = () => {
+                          if (log.command_type === 'screensaver_start') return 'Screensaver started';
+                          if (log.command_type === 'screensaver_resumed') return 'Screensaver resumed';
+                          if (log.command_type === 'screensaver_stop') return 'Screensaver stopped';
+                          if (log.command_type === 'bridge_start') return 'Bridge started';
+                          if (log.command_type === 'bridge_stop') return 'Bridge stopped';
+                          if (log.command_type === 'bridge_log') {
+                            try {
+                              const data = JSON.parse(log.url);
+                              let message = data.message || 'Bridge log';
+                              message = message.replace(/([A-Za-z]+(?:-[A-Za-z]+)*)-[a-f0-9]{20,}/gi, (match: string, name: string) => {
+                                return name.replace(/-/g, ' ');
+                              });
+                              return message;
+                            } catch {
+                              return 'Bridge log';
+                            }
+                          }
+                          if (log.command_type === 'cast') return 'Manual cast';
+                          return log.command_type;
+                        };
+
+                        const getDuration = () => {
+                          if (log.command_type !== 'screensaver_start' && log.command_type !== 'screensaver_resumed') return null;
+                          const stopLog = activityLog.slice(0, activityLog.indexOf(log)).reverse().find(
+                            (l: any) => l.command_type === 'screensaver_stop' && l.status === 'completed'
+                          );
+                          if (!stopLog) return null;
+                          const startTime = new Date(log.created_at).getTime();
+                          const stopTime = new Date(stopLog.created_at).getTime();
+                          const durationMs = stopTime - startTime;
+                          const minutes = Math.floor(durationMs / 60000);
+                          const seconds = Math.floor((durationMs % 60000) / 1000);
+                          const hours = Math.floor(minutes / 60);
+                          if (hours > 0) return `${hours}h ${minutes % 60}m`;
+                          if (minutes > 0) return `${minutes}m`;
+                          return `${seconds}s`;
+                        };
+
+                        const duration = getDuration();
+
+                        return (
+                          <div key={log.id} className="flex items-center gap-3 p-3">
+                            <div className="flex-shrink-0">
+                              {getIcon()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">
+                                {getLabel()}
+                                {duration && <span className="text-muted-foreground font-normal ml-1">({duration})</span>}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {(() => {
+                                  const date = new Date(log.created_at);
+                                  const today = new Date();
+                                  const isToday = date.toDateString() === today.toDateString();
+                                  return isToday 
+                                    ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                    : `${date.toLocaleDateString([], { day: 'numeric', month: 'short' })} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                                })()}
+                              </p>
+                            </div>
+                            <Badge variant="outline" className={`text-[10px] flex-shrink-0 ${
+                              log.status === 'failed' ? 'border-destructive/50 text-destructive' : ''
+                            }`}>
+                              {log.status}
+                            </Badge>
+                          </div>
                         );
-                        if (!stopLog) return null;
-                        const startTime = new Date(log.created_at).getTime();
-                        const stopTime = new Date(stopLog.created_at).getTime();
-                        const durationMs = stopTime - startTime;
-                        const minutes = Math.floor(durationMs / 60000);
-                        const seconds = Math.floor((durationMs % 60000) / 1000);
-                        const hours = Math.floor(minutes / 60);
-                        if (hours > 0) return `${hours}h ${minutes % 60}m`;
-                        if (minutes > 0) return `${minutes}m`;
-                        return `${seconds}s`;
-                      };
-
-                      const duration = getDuration();
-
-                      return (
-                        <div key={log.id} className="flex items-center gap-3 p-3">
-                          <div className="flex-shrink-0">
-                            {getIcon()}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">
-                              {getLabel()}
-                              {duration && <span className="text-muted-foreground font-normal ml-1">({duration})</span>}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {(() => {
-                                const date = new Date(log.created_at);
-                                const today = new Date();
-                                const isToday = date.toDateString() === today.toDateString();
-                                return isToday 
-                                  ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                                  : `${date.toLocaleDateString([], { day: 'numeric', month: 'short' })} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-                              })()}
-                            </p>
-                          </div>
-                          <Badge variant="outline" className={`text-[10px] flex-shrink-0 ${
-                            log.status === 'failed' ? 'border-destructive/50 text-destructive' : ''
-                          }`}>
-                            {log.status}
-                          </Badge>
-                        </div>
-                      );
-                    })}
+                      });
+                    })()}
                   </div>
                 </ScrollArea>
               )}
