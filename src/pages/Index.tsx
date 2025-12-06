@@ -98,7 +98,19 @@ const Index = () => {
     const fetchActivityLog = async () => {
       try {
         const deviceId = getOrCreateDeviceId();
-        const { data, error } = await supabase
+        
+        // Helper to check if a log is an idle check (bridge_log with status message)
+        const isIdleCheckLog = (log: any) => {
+          if (log.command_type !== 'bridge_log') return false;
+          try {
+            const data = JSON.parse(log.url);
+            const msg = data.message || '';
+            return msg.includes('idle') || msg.includes('busy') || msg.includes('screensaver active');
+          } catch { return false; }
+        };
+        
+        // First fetch 50 logs
+        let { data, error } = await supabase
           .from('cast_commands')
           .select('*')
           .eq('device_id', deviceId)
@@ -106,6 +118,21 @@ const Index = () => {
           .limit(50);
 
         if (error) throw error;
+        
+        // If all 50 are idle checks, fetch more to find the real start
+        if (data && data.length === 50 && data.every(isIdleCheckLog)) {
+          const { data: moreLogs, error: moreError } = await supabase
+            .from('cast_commands')
+            .select('*')
+            .eq('device_id', deviceId)
+            .order('created_at', { ascending: false })
+            .limit(200);
+          
+          if (!moreError && moreLogs) {
+            data = moreLogs;
+          }
+        }
+        
         setActivityLog(data || []);
       } catch (error) {
         console.error('Error fetching activity log:', error);
