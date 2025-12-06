@@ -391,8 +391,10 @@ const Index = () => {
                           try {
                             const data = JSON.parse(log.url);
                             let message = data.message || 'Bridge log';
-                            // Shorten Chromecast names (e.g. "Chromecast-Ultra" -> "CC-Ultra")
-                            message = message.replace(/Chromecast-?/gi, 'CC-');
+                            // Shorten Chromecast names same as dropdown (remove hash suffix, replace dashes with spaces)
+                            message = message.replace(/([A-Za-z]+(?:-[A-Za-z]+)*)-[a-f0-9]{20,}/gi, (match, name) => {
+                              return name.replace(/-/g, ' ');
+                            });
                             return message;
                           } catch {
                             return 'Bridge log';
