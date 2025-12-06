@@ -367,6 +367,11 @@ const Index = () => {
                         if (log.command_type === 'bridge_stop') {
                           return <Activity className="h-4 w-4 text-muted-foreground" />;
                         }
+                        if (log.command_type === 'bridge_log') {
+                          return log.status === 'failed'
+                            ? <XCircle className="h-4 w-4 text-destructive" />
+                            : <Activity className="h-4 w-4 text-muted-foreground" />;
+                        }
                         if (log.status === 'completed' || log.status === 'processed') {
                           return <CheckCircle className="h-4 w-4 text-primary" />;
                         }
@@ -382,6 +387,14 @@ const Index = () => {
                         if (log.command_type === 'screensaver_stop') return 'Screensaver stopped';
                         if (log.command_type === 'bridge_start') return 'Bridge started';
                         if (log.command_type === 'bridge_stop') return 'Bridge stopped';
+                        if (log.command_type === 'bridge_log') {
+                          try {
+                            const data = JSON.parse(log.url);
+                            return data.message || 'Bridge log';
+                          } catch {
+                            return 'Bridge log';
+                          }
+                        }
                         if (log.command_type === 'cast') return 'Manual cast';
                         return log.command_type;
                       };
