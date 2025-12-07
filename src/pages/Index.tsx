@@ -402,7 +402,7 @@ const Index = () => {
                           let timeDisplay = lastTime;
                           if (!isFullyTruncated) {
                             const firstTime = formatTime(firstLog.processed_at || firstLog.created_at);
-                            timeDisplay = firstTime === lastTime ? firstTime : `${firstTime} → ${lastTime}`;
+                            timeDisplay = firstTime === lastTime ? firstTime : `${lastTime} → ${firstTime}`;
                           }
                           
                           // Get device name and status from message
