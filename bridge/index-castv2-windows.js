@@ -5,11 +5,12 @@ const Bonjour = require('bonjour-hap');
 require('dotenv').config();
 
 // Version
-const VERSION = '1.0.7';
+const VERSION = '1.0.8';
 
 // Track last idle check log ID for updates instead of inserts
 let lastIdleCheckLogId = null;
 let idleCheckCount = 0;
+let firstCheckTime = null;
 
 // Configuration
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -57,10 +58,15 @@ async function logToCloud(message, level = 'info') {
 // Update or create idle check log (to avoid flooding activity log)
 async function updateIdleCheckLog(message, checkCount = null) {
   try {
+    const now = new Date().toISOString();
+    if (!firstCheckTime) {
+      firstCheckTime = now;
+    }
     const logData = { 
       message, 
       level: 'info', 
-      timestamp: new Date().toISOString(),
+      timestamp: now,
+      firstCheckTime: firstCheckTime,
       checkCount: checkCount || idleCheckCount
     };
     
@@ -81,10 +87,11 @@ async function updateIdleCheckLog(message, checkCount = null) {
         const logAge = Date.now() - new Date(existingLog.created_at).getTime();
         if (logAge < 7 * 24 * 60 * 60 * 1000) { // 7 days
           lastIdleCheckLogId = existingLog.id;
-          // Restore check count from existing log
+          // Restore check count and firstCheckTime from existing log
           try {
             const existingData = JSON.parse(existingLog.url);
             idleCheckCount = (existingData.checkCount || 0);
+            firstCheckTime = existingData.firstCheckTime || null;
           } catch {}
         }
       }
