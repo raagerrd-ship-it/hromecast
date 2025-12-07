@@ -5,7 +5,7 @@ const Bonjour = require('bonjour-hap');
 require('dotenv').config();
 
 // Version
-const VERSION = '1.0.8';
+const VERSION = '1.0.9';
 
 // Track last idle check log ID for updates instead of inserts
 let lastIdleCheckLogId = null;
@@ -91,8 +91,12 @@ async function updateIdleCheckLog(message, checkCount = null) {
           try {
             const existingData = JSON.parse(existingLog.url);
             idleCheckCount = (existingData.checkCount || 0);
-            firstCheckTime = existingData.firstCheckTime || null;
-          } catch {}
+            // Use firstCheckTime from data, or fall back to created_at
+            firstCheckTime = existingData.firstCheckTime || existingLog.created_at;
+          } catch {
+            // If parsing fails, use created_at as firstCheckTime
+            firstCheckTime = existingLog.created_at;
+          }
         }
       }
     }
