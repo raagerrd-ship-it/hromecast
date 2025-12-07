@@ -102,6 +102,7 @@ const Index = () => {
           .from('cast_commands')
           .select('*')
           .eq('device_id', deviceId)
+          .order('processed_at', { ascending: false, nullsFirst: false })
           .order('created_at', { ascending: false })
           .limit(50);
 
