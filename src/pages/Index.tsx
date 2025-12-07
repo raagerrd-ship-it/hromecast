@@ -413,7 +413,7 @@ const Index = () => {
                             }
                           } catch {}
                           
-                          const timeDisplay = firstTime === lastTime ? firstTime : `${lastTime} → ${firstTime}`;
+                          const timeDisplay = firstTime === lastTime ? firstTime : `${firstTime} → ${lastTime}`;
                           
                           // Get device name, status, and check count from message
                           let deviceName = 'device';
