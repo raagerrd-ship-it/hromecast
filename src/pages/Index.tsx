@@ -399,7 +399,16 @@ const Index = () => {
                           };
                           
                           const lastTime = formatTime(lastLog.processed_at || lastLog.created_at);
-                          const firstTime = formatTime(firstLog.created_at);
+                          
+                          // Get firstCheckTime from log data if available
+                          let firstTime = formatTime(firstLog.created_at);
+                          try {
+                            const data = JSON.parse(lastLog.url);
+                            if (data.firstCheckTime) {
+                              firstTime = formatTime(data.firstCheckTime);
+                            }
+                          } catch {}
+                          
                           const timeDisplay = firstTime === lastTime ? firstTime : `${lastTime} → ${firstTime}`;
                           
                           // Get device name, status, and check count from message
