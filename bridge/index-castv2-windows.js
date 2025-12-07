@@ -5,12 +5,13 @@ const Bonjour = require('bonjour-hap');
 require('dotenv').config();
 
 // Version
-const VERSION = '1.0.9';
+const VERSION = '1.0.10';
 
 // Track last idle check log ID for updates instead of inserts
 let lastIdleCheckLogId = null;
 let idleCheckCount = 0;
 let firstCheckTime = null;
+let lastLoggedStatus = null; // Track last status to detect changes
 
 // Configuration
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -59,6 +60,26 @@ async function logToCloud(message, level = 'info') {
 async function updateIdleCheckLog(message, checkCount = null) {
   try {
     const now = new Date().toISOString();
+    
+    // Extract status from message (e.g., "busy", "idle", "screensaver active")
+    let currentStatus = 'unknown';
+    if (message.includes('screensaver active')) {
+      currentStatus = 'screensaver_active';
+    } else if (message.includes('busy')) {
+      currentStatus = 'busy';
+    } else if (message.includes('idle')) {
+      currentStatus = 'idle';
+    }
+    
+    // If status changed, create a new log entry
+    if (lastLoggedStatus !== null && lastLoggedStatus !== currentStatus) {
+      console.log(`📊 Status changed: ${lastLoggedStatus} → ${currentStatus}, creating new log entry`);
+      lastIdleCheckLogId = null; // Force new entry
+      idleCheckCount = 0;
+      firstCheckTime = now;
+    }
+    lastLoggedStatus = currentStatus;
+    
     if (!firstCheckTime) {
       firstCheckTime = now;
     }
@@ -67,7 +88,8 @@ async function updateIdleCheckLog(message, checkCount = null) {
       level: 'info', 
       timestamp: now,
       firstCheckTime: firstCheckTime,
-      checkCount: checkCount || idleCheckCount
+      checkCount: checkCount || idleCheckCount,
+      status: currentStatus
     };
     
     // If we don't have a log ID, try to find an existing recent idle check log
