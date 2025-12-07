@@ -5,10 +5,11 @@ const Bonjour = require('bonjour-hap');
 require('dotenv').config();
 
 // Version
-const VERSION = '1.0.6';
+const VERSION = '1.0.7';
 
 // Track last idle check log ID for updates instead of inserts
 let lastIdleCheckLogId = null;
+let idleCheckCount = 0;
 
 // Configuration
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -54,30 +55,44 @@ async function logToCloud(message, level = 'info') {
 }
 
 // Update or create idle check log (to avoid flooding activity log)
-async function updateIdleCheckLog(message) {
+async function updateIdleCheckLog(message, checkCount = null) {
   try {
-    const logData = { message, level: 'info', timestamp: new Date().toISOString() };
+    const logData = { 
+      message, 
+      level: 'info', 
+      timestamp: new Date().toISOString(),
+      checkCount: checkCount || idleCheckCount
+    };
     
     // If we don't have a log ID, try to find an existing recent idle check log
     if (!lastIdleCheckLogId) {
       const { data: existingLog } = await supabase
         .from('cast_commands')
-        .select('id, created_at')
+        .select('id, created_at, url')
         .eq('device_id', DEVICE_ID)
-        .eq('command_type', 'bridge_log')
+        .eq('command_type', 'idle_check')
         .eq('status', 'completed')
-        .order('created_at', { ascending: false })
+        .order('processed_at', { ascending: false, nullsFirst: false })
         .limit(1)
         .maybeSingle();
       
-      // Use existing log if it's recent (less than 7 days old) and is an idle check
+      // Use existing log if it's recent (less than 7 days old)
       if (existingLog) {
         const logAge = Date.now() - new Date(existingLog.created_at).getTime();
         if (logAge < 7 * 24 * 60 * 60 * 1000) { // 7 days
           lastIdleCheckLogId = existingLog.id;
+          // Restore check count from existing log
+          try {
+            const existingData = JSON.parse(existingLog.url);
+            idleCheckCount = (existingData.checkCount || 0);
+          } catch {}
         }
       }
     }
+    
+    // Increment check count
+    idleCheckCount++;
+    logData.checkCount = idleCheckCount;
     
     if (lastIdleCheckLogId) {
       // Update existing log entry
@@ -89,12 +104,12 @@ async function updateIdleCheckLog(message) {
         })
         .eq('id', lastIdleCheckLogId);
     } else {
-      // Create new log entry
+      // Create new log entry with dedicated command_type
       const { data } = await supabase
         .from('cast_commands')
         .insert({
           device_id: DEVICE_ID,
-          command_type: 'bridge_log',
+          command_type: 'idle_check',
           url: JSON.stringify(logData),
           status: 'completed',
           processed_at: new Date().toISOString()

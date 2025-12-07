@@ -355,6 +355,9 @@ const Index = () => {
                       let currentIdleGroup: any[] = [];
                       
                       const isStatusCheckLog = (log: any) => {
+                        // New dedicated idle_check type
+                        if (log.command_type === 'idle_check') return true;
+                        // Legacy bridge_log format
                         if (log.command_type !== 'bridge_log') return false;
                         try {
                           const data = JSON.parse(log.url);
@@ -396,21 +399,20 @@ const Index = () => {
                           };
                           
                           const lastTime = formatTime(lastLog.processed_at || lastLog.created_at);
+                          const firstTime = formatTime(firstLog.created_at);
+                          const timeDisplay = firstTime === lastTime ? firstTime : `${lastTime} → ${firstTime}`;
                           
-                          // If this group covers all 50 logs, the start time is truncated - only show latest time
-                          const isFullyTruncated = logs.length >= 50;
-                          let timeDisplay = lastTime;
-                          if (!isFullyTruncated) {
-                            const firstTime = formatTime(firstLog.processed_at || firstLog.created_at);
-                            timeDisplay = firstTime === lastTime ? firstTime : `${lastTime} → ${firstTime}`;
-                          }
-                          
-                          // Get device name and status from message
+                          // Get device name, status, and check count from message
                           let deviceName = 'device';
                           let lastStatus = '';
+                          let checkCount = logs.length;
                           try {
                             const data = JSON.parse(lastLog.url);
                             const message = data.message || '';
+                            // Use checkCount from data if available (new format)
+                            if (data.checkCount && typeof data.checkCount === 'number') {
+                              checkCount = data.checkCount;
+                            }
                             // Match "Device X: status" or "Checking idle: X (ip)"
                             const deviceMatch = message.match(/Device\s+([^:]+):\s*(.+)/) || 
                                                message.match(/Checking idle:\s*([^(]+)/);
@@ -435,7 +437,7 @@ const Index = () => {
                                 <p className="text-xs text-muted-foreground">{timeDisplay}</p>
                               </div>
                               <Badge variant="outline" className="text-[10px] flex-shrink-0">
-                                {logs.length}x
+                                {checkCount}x
                               </Badge>
                             </div>
                           );
