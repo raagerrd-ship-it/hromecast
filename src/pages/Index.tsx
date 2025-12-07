@@ -116,18 +116,22 @@ const Index = () => {
     loadSettings();
     fetchActivityLog();
 
+    const deviceId = getOrCreateDeviceId();
     const activityChannel = supabase
-      .channel('cast_commands_changes')
+      .channel('cast_commands_realtime')
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
-          table: 'cast_commands',
-          filter: `device_id=eq.${getOrCreateDeviceId()}`
+          table: 'cast_commands'
         },
-        () => {
-          fetchActivityLog();
+        (payload) => {
+          // Only refresh if this is for our device
+          const record = (payload.new || payload.old) as { device_id?: string } | null;
+          if (record && record.device_id === deviceId) {
+            fetchActivityLog();
+          }
         }
       )
       .subscribe();
