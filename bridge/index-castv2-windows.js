@@ -5,7 +5,7 @@ const Bonjour = require('bonjour-hap');
 require('dotenv').config();
 
 // Version
-const VERSION = '1.0.13';
+const VERSION = '1.0.14';
 
 // Track last idle check log ID for updates instead of inserts
 let lastIdleCheckLogId = null;
@@ -41,10 +41,23 @@ let recoveryCheckInterval = null; // Fast checking during cooldown
 const SCREENSAVER_CHECK_INTERVAL = 60000;
 const COOLDOWN_AFTER_TAKEOVER = 5 * 60 * 1000; // 5 minutes cooldown after another app takes over
 const RECOVERY_CHECK_INTERVAL = 10000; // Check every 10 seconds during/after cooldown
+const REDISCOVERY_INTERVAL = 30 * 60 * 1000; // 30 minutes periodic re-discovery
 
 // Retry configuration
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 1000; // 1 second base delay
+
+// Circuit breaker configuration
+const CIRCUIT_BREAKER_THRESHOLD = 5; // Number of failures before opening circuit
+let circuitBreakerState = {
+  failures: 0,
+  lastFailureTime: 0,
+  isOpen: false,
+  cooldownMs: 5 * 60 * 1000 // 5 minutes in "open" state
+};
+
+// Track active heartbeats for cleanup
+const activeHeartbeats = new Set();
 
 // Calculate exponential backoff delay: base * 2^attempt (1s, 2s, 4s, 8s...)
 function getBackoffDelay(attempt) {
@@ -57,6 +70,66 @@ function getBackoffDelay(attempt) {
 // Sleep helper
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Circuit breaker functions
+function checkCircuitBreaker() {
+  if (circuitBreakerState.isOpen) {
+    const elapsed = Date.now() - circuitBreakerState.lastFailureTime;
+    if (elapsed > circuitBreakerState.cooldownMs) {
+      // Half-open: allow one attempt
+      console.log('⚡ [CIRCUIT] Half-open - allowing one attempt');
+      circuitBreakerState.isOpen = false;
+      circuitBreakerState.failures = 0;
+    } else {
+      const remainingSec = Math.ceil((circuitBreakerState.cooldownMs - elapsed) / 1000);
+      console.log(`⚡ [CIRCUIT] Open - skipping attempt (${remainingSec}s remaining)`);
+      return false; // Circuit is open, skip
+    }
+  }
+  return true; // OK to try
+}
+
+function recordCircuitFailure() {
+  circuitBreakerState.failures++;
+  circuitBreakerState.lastFailureTime = Date.now();
+  if (circuitBreakerState.failures >= CIRCUIT_BREAKER_THRESHOLD) {
+    circuitBreakerState.isOpen = true;
+    console.log(`⚡ [CIRCUIT] Opened after ${CIRCUIT_BREAKER_THRESHOLD} failures - pausing attempts for 5 min`);
+    logToCloud(`Circuit breaker opened after ${CIRCUIT_BREAKER_THRESHOLD} failures`, 'warn');
+  }
+}
+
+function recordCircuitSuccess() {
+  if (circuitBreakerState.failures > 0 || circuitBreakerState.isOpen) {
+    console.log('⚡ [CIRCUIT] Success - resetting circuit breaker');
+  }
+  circuitBreakerState.failures = 0;
+  circuitBreakerState.isOpen = false;
+}
+
+// Helper function to log screensaver stop (refactored from duplicated code)
+async function logScreensaverStop(url) {
+  if (!isScreensaverActive) return; // Already stopped
+  
+  isScreensaverActive = false;
+  lastTakeoverTime = Date.now();
+  
+  await Promise.all([
+    supabase.from('cast_commands').insert({
+      device_id: DEVICE_ID,
+      command_type: 'screensaver_stop',
+      url: url,
+      status: 'completed',
+      processed_at: new Date().toISOString()
+    }),
+    supabase.from('screensaver_settings')
+      .update({ screensaver_active: false })
+      .eq('device_id', DEVICE_ID)
+  ]);
+  
+  console.log('✅ screensaver_stop logged - cooldown started');
+  startRecoveryCheck();
 }
 
 // Log to database for Activity view
@@ -352,6 +425,11 @@ async function getScreensaverSettings() {
 
 // Check if Chromecast is idle (with auto IP recovery and exponential backoff)
 async function isChromecastIdle(retryWithNewIP = true, retryCount = 0) {
+  // Check circuit breaker first
+  if (!checkCircuitBreaker()) {
+    return { status: 'circuit_open' };
+  }
+  
   const selectedDevice = await getSelectedChromecast();
   const targetDevice = selectedDevice || currentDevice;
   
@@ -377,6 +455,7 @@ async function isChromecastIdle(retryWithNewIP = true, retryCount = 0) {
     const timeout = setTimeout(async () => {
       console.log('⏱️  Idle check timeout - connection failed');
       checkClient.close();
+      recordCircuitFailure();
       
       // Try to find newer IP for same device
       if (retryWithNewIP && targetDevice.id) {
@@ -407,6 +486,7 @@ async function isChromecastIdle(retryWithNewIP = true, retryCount = 0) {
           clearTimeout(timeout);
           connection.send({ type: 'CLOSE' });
           checkClient.close();
+          recordCircuitSuccess(); // Success!
           
           const apps = data.status?.applications || [];
           // Filter out backdrop (E8C28D3C) and our own screensaver app (FE376873)
@@ -435,6 +515,7 @@ async function isChromecastIdle(retryWithNewIP = true, retryCount = 0) {
       clearTimeout(timeout);
       console.error(`❌ Error checking idle status: ${err.message}`);
       checkClient.close();
+      recordCircuitFailure();
       
       // Try to find newer IP for same device on connection error
       if (retryWithNewIP && targetDevice.id && (err.message.includes('ETIMEDOUT') || err.message.includes('ECONNREFUSED'))) {
@@ -507,6 +588,12 @@ async function checkAndActivateScreensaver() {
   // Check Chromecast status
   const result = await isChromecastIdle();
   
+  // Handle circuit breaker open state
+  if (result.status === 'circuit_open') {
+    console.log('⚡ [AUTO-SCREENSAVER] Circuit breaker open, skipping check');
+    return;
+  }
+  
   // Update last check timestamp
   await supabase
     .from('screensaver_settings')
@@ -540,23 +627,8 @@ async function checkAndActivateScreensaver() {
     
     // Mark screensaver as inactive if device is busy (someone else took over)
     if (isScreensaverActive) {
-      isScreensaverActive = false;
-      lastTakeoverTime = Date.now(); // Start cooldown
-      
-      // Batch: Log stop event + update status
-      await Promise.all([
-        supabase.from('cast_commands').insert({
-          device_id: DEVICE_ID,
-          command_type: 'screensaver_stop',
-          url: settings.url || '',
-          status: 'completed',
-          processed_at: new Date().toISOString()
-        }),
-        supabase.from('screensaver_settings').update({ screensaver_active: false }).eq('device_id', DEVICE_ID)
-      ]);
-      
-      console.log('📝 [AUTO-SCREENSAVER] Logged screensaver stop (device taken over) - cooldown started');
-      startRecoveryCheck(); // Start fast checking for recovery
+      await logScreensaverStop(settings.url || '');
+      console.log('📝 [AUTO-SCREENSAVER] Logged screensaver stop (device taken over)');
     }
     return;
   }
@@ -689,6 +761,11 @@ function discoverDevices() {
 
 // Cast URL using castv2-client with exponential backoff retry
 async function castMedia(url, retryCount = 0) {
+  // Check circuit breaker first
+  if (!checkCircuitBreaker()) {
+    throw new Error('Circuit breaker open - connection attempts paused');
+  }
+  
   const selectedDevice = await getSelectedChromecast();
   const targetDevice = selectedDevice || currentDevice;
   
@@ -717,6 +794,7 @@ async function castMedia(url, retryCount = 0) {
     
     const cleanup = () => {
       if (heartbeatInterval) {
+        activeHeartbeats.delete(heartbeatInterval);
         clearInterval(heartbeatInterval);
         heartbeatInterval = null;
       }
@@ -733,10 +811,11 @@ async function castMedia(url, retryCount = 0) {
       }
     };
     
-    // Handle connection errors with retry
+    // Handle connection errors with retry (single handler)
     client.on('error', async (err) => {
       console.error(`❌ Connection error: ${err.message}`);
       cleanup();
+      recordCircuitFailure();
       
       if (retryCount < MAX_RETRIES) {
         console.log(`🔄 Will retry (${retryCount + 1}/${MAX_RETRIES})...`);
@@ -752,8 +831,14 @@ async function castMedia(url, retryCount = 0) {
       }
     });
     
+    client.on('close', () => {
+      console.log('🔌 Connection closed');
+      cleanup();
+    });
+    
     client.connect(targetDevice.host, () => {
       console.log('✅ Connected to Chromecast');
+      recordCircuitSuccess(); // Connection successful
       
       const connection = client.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.tp.connection', 'JSON');
       const heartbeat = client.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.tp.heartbeat', 'JSON');
@@ -769,6 +854,7 @@ async function castMedia(url, retryCount = 0) {
           cleanup();
         }
       }, 5000);
+      activeHeartbeats.add(heartbeatInterval); // Track for cleanup
       
       // Silent heartbeat - only log errors
       heartbeat.on('message', () => {});
@@ -781,6 +867,7 @@ async function castMedia(url, retryCount = 0) {
         console.log('Last appLaunched state:', appLaunched);
         console.log('Retry count:', retryCount);
         cleanup();
+        recordCircuitFailure();
         
         // Retry on timeout with exponential backoff
         if (retryCount < MAX_RETRIES) {
@@ -799,7 +886,7 @@ async function castMedia(url, retryCount = 0) {
       
       let appLaunched = false;
       
-      receiver.on('message', (data) => {
+      receiver.on('message', async (data) => {
         console.log('📨 Receiver message:', JSON.stringify(data, null, 2));
         
         if (data.type === 'LAUNCH_ERROR') {
@@ -820,23 +907,8 @@ async function castMedia(url, retryCount = 0) {
               if (runningApp.appId !== CUSTOM_APP_ID && runningApp.appId !== 'E8C28D3C') {
                 console.log(`⚠️  Wrong app running (${runningApp.displayName}), someone else took over`);
                 
-                // Log stop event if screensaver was active
-                if (isScreensaverActive) {
-                  isScreensaverActive = false;
-                  lastTakeoverTime = Date.now(); // Start cooldown
-                  supabase.from('cast_commands').insert({
-                    device_id: DEVICE_ID,
-                    command_type: 'screensaver_stop',
-                    url: url,
-                    status: 'completed',
-                    processed_at: new Date().toISOString()
-                  }).then(({ error }) => {
-                    if (error) console.error('❌ Failed to log screensaver_stop:', error.message);
-                    else console.log('✅ screensaver_stop logged to database - cooldown started');
-                  });
-                  supabase.from('screensaver_settings').update({ screensaver_active: false }).eq('device_id', DEVICE_ID);
-                  startRecoveryCheck(); // Start fast checking for recovery
-                }
+                // Log stop event using helper
+                await logScreensaverStop(url);
                 
                 cleanup();
                 reject(new Error(`Another app running: ${runningApp.displayName}`));
@@ -860,23 +932,8 @@ async function castMedia(url, retryCount = 0) {
             if (app.appId !== CUSTOM_APP_ID) {
               console.log('⚠️  Wrong app detected during cast');
               
-              // Log stop event if screensaver was active
-              if (isScreensaverActive) {
-                isScreensaverActive = false;
-                lastTakeoverTime = Date.now(); // Start cooldown
-                supabase.from('cast_commands').insert({
-                  device_id: DEVICE_ID,
-                  command_type: 'screensaver_stop',
-                  url: url,
-                  status: 'completed',
-                  processed_at: new Date().toISOString()
-                }).then(({ error }) => {
-                  if (error) console.error('❌ Failed to log screensaver_stop:', error.message);
-                  else console.log('✅ screensaver_stop logged to database - cooldown started');
-                });
-                supabase.from('screensaver_settings').update({ screensaver_active: false }).eq('device_id', DEVICE_ID);
-                startRecoveryCheck(); // Start fast checking for recovery
-              }
+              // Log stop event using helper
+              await logScreensaverStop(url);
               return;
             }
             
@@ -925,17 +982,6 @@ async function castMedia(url, retryCount = 0) {
           }
         }
       });
-    });
-    
-    client.on('error', (err) => {
-      console.error('❌ Client error:', err.message);
-      cleanup();
-      reject(err);
-    });
-    
-    client.on('close', () => {
-      console.log('🔌 Connection closed');
-      cleanup();
     });
   });
 }
@@ -1036,6 +1082,7 @@ async function main() {
   console.log(`📱 Device ID: ${DEVICE_ID}`);
   console.log(`🎬 Custom App ID: ${CUSTOM_APP_ID}`);
   console.log(`⏱️  Poll interval: ${POLL_INTERVAL}ms`);
+  console.log(`🔄 Re-discovery interval: ${REDISCOVERY_INTERVAL / 60000} min`);
   console.log('');
   
   await logToCloud(`Bridge v${VERSION} starting...`);
@@ -1097,6 +1144,14 @@ async function main() {
   console.log('🎬 Starting auto-screensaver monitoring (checks every 60s)...');
   const screensaverInterval = setInterval(checkAndActivateScreensaver, SCREENSAVER_CHECK_INTERVAL);
 
+  // Periodic re-discovery of devices (handles IP changes)
+  console.log('🔄 Starting periodic re-discovery (every 30 min)...');
+  const rediscoveryInterval = setInterval(async () => {
+    console.log('\n🔄 [RE-DISCOVERY] Periodic device scan...');
+    await discoverDevices();
+    console.log(`🔄 [RE-DISCOVERY] Complete: ${discoveredDevices.size} device(s) found\n`);
+  }, REDISCOVERY_INTERVAL);
+
   // Log bridge start and set session start time
   bridgeStartTime = new Date().toISOString();
   await supabase.from('cast_commands').insert({
@@ -1128,8 +1183,18 @@ async function main() {
     });
     console.log('📝 Logged bridge stop');
     
+    // Clear all intervals
     clearInterval(pollInterval);
     clearInterval(screensaverInterval);
+    clearInterval(rediscoveryInterval);
+    
+    // Clear all active heartbeats
+    activeHeartbeats.forEach(interval => clearInterval(interval));
+    activeHeartbeats.clear();
+    
+    // Stop recovery check if running
+    stopRecoveryCheck();
+    
     await channel.unsubscribe();
     if (client) {
       client.close();
