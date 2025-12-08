@@ -372,12 +372,18 @@ const Index = () => {
       </main>
 
       {/* Bridge status */}
-      <footer className="flex-shrink-0 px-4 py-3 sm:px-6 border-t border-border bg-card/50">
+      <footer className={`flex-shrink-0 px-4 py-3 sm:px-6 border-t transition-colors ${
+        bridgeStatus.hasActivity 
+          ? bridgeStatus.isOnline 
+            ? 'bg-green-600/90 border-green-500' 
+            : 'bg-red-600/90 border-red-500'
+          : 'bg-card/50 border-border'
+      }`}>
         <div className="max-w-lg mx-auto flex items-center justify-center gap-2">
           <span className={`h-1.5 w-1.5 rounded-full ${
-            bridgeStatus.isOnline ? 'bg-primary' : 'bg-muted-foreground/50'
+            bridgeStatus.isOnline ? 'bg-white' : 'bg-white/70'
           }`} />
-          <p className="text-xs text-muted-foreground">
+          <p className={`text-xs ${bridgeStatus.hasActivity ? 'text-white' : 'text-muted-foreground'}`}>
             {bridgeStatus.hasActivity 
               ? `Bridge ${bridgeStatus.isOnline ? 'online' : 'offline'}${bridgeStatus.version ? ` - v${bridgeStatus.version}` : ''}, Last seen: ${bridgeStatus.timeStr}`
               : 'No bridge activity'}
