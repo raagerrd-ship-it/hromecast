@@ -5,7 +5,7 @@ const Bonjour = require('bonjour-hap');
 require('dotenv').config();
 
 // Version
-const VERSION = '1.0.12';
+const VERSION = '1.0.13';
 
 // Track last idle check log ID for updates instead of inserts
 let lastIdleCheckLogId = null;
@@ -41,6 +41,23 @@ let recoveryCheckInterval = null; // Fast checking during cooldown
 const SCREENSAVER_CHECK_INTERVAL = 60000;
 const COOLDOWN_AFTER_TAKEOVER = 5 * 60 * 1000; // 5 minutes cooldown after another app takes over
 const RECOVERY_CHECK_INTERVAL = 10000; // Check every 10 seconds during/after cooldown
+
+// Retry configuration
+const MAX_RETRIES = 3;
+const BASE_DELAY_MS = 1000; // 1 second base delay
+
+// Calculate exponential backoff delay: base * 2^attempt (1s, 2s, 4s, 8s...)
+function getBackoffDelay(attempt) {
+  const delay = BASE_DELAY_MS * Math.pow(2, attempt);
+  // Add jitter (±25%) to prevent thundering herd
+  const jitter = delay * 0.25 * (Math.random() - 0.5);
+  return Math.min(delay + jitter, 30000); // Cap at 30 seconds
+}
+
+// Sleep helper
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 // Log to database for Activity view
 async function logToCloud(message, level = 'info') {
@@ -333,8 +350,8 @@ async function getScreensaverSettings() {
   }
 }
 
-// Check if Chromecast is idle (with auto IP recovery)
-async function isChromecastIdle(retryWithNewIP = true) {
+// Check if Chromecast is idle (with auto IP recovery and exponential backoff)
+async function isChromecastIdle(retryWithNewIP = true, retryCount = 0) {
   const selectedDevice = await getSelectedChromecast();
   const targetDevice = selectedDevice || currentDevice;
   
@@ -344,7 +361,14 @@ async function isChromecastIdle(retryWithNewIP = true) {
     return { status: 'error' };
   }
   
-  console.log(`🔍 Checking idle status for: ${targetDevice.name} (${targetDevice.host})`);
+  // Apply exponential backoff delay for retries
+  if (retryCount > 0) {
+    const delay = getBackoffDelay(retryCount - 1);
+    console.log(`🔄 Idle check retry ${retryCount}/${MAX_RETRIES} - waiting ${Math.round(delay/1000)}s...`);
+    await sleep(delay);
+  }
+  
+  console.log(`🔍 Checking idle status for: ${targetDevice.name} (${targetDevice.host})${retryCount > 0 ? ` (attempt ${retryCount + 1})` : ''}`);
   await updateIdleCheckLog(`Checking idle: ${targetDevice.name} (${targetDevice.host})`);
   
   return new Promise((resolve) => {
@@ -409,7 +433,7 @@ async function isChromecastIdle(retryWithNewIP = true) {
     
     checkClient.on('error', async (err) => {
       clearTimeout(timeout);
-      console.error('❌ Error checking idle status:', err.message);
+      console.error(`❌ Error checking idle status: ${err.message}`);
       checkClient.close();
       
       // Try to find newer IP for same device on connection error
@@ -418,13 +442,29 @@ async function isChromecastIdle(retryWithNewIP = true) {
         if (newerDevice) {
           console.log(`🔄 Connection failed, retrying with new IP: ${newerDevice.host}`);
           await updateSelectedChromecast(newerDevice.id);
-          const retryResult = await isChromecastIdle(false);
+          const retryResult = await isChromecastIdle(false, 0);
+          resolve(retryResult);
+          return;
+        }
+        
+        // No new IP found - try exponential backoff retry
+        if (retryCount < MAX_RETRIES) {
+          console.log(`🔄 No new IP found, retrying with backoff (${retryCount + 1}/${MAX_RETRIES})...`);
+          const retryResult = await isChromecastIdle(false, retryCount + 1);
           resolve(retryResult);
           return;
         }
       }
       
-      await logToCloud(`Connection error: ${targetDevice.name} - ${err.message}`, 'error');
+      // Generic retry for other errors
+      if (retryCount < MAX_RETRIES) {
+        console.log(`🔄 Retrying idle check with backoff (${retryCount + 1}/${MAX_RETRIES})...`);
+        const retryResult = await isChromecastIdle(retryWithNewIP, retryCount + 1);
+        resolve(retryResult);
+        return;
+      }
+      
+      await logToCloud(`Connection error after ${MAX_RETRIES} retries: ${targetDevice.name} - ${err.message}`, 'error');
       resolve({ status: 'error' });
     });
   });
@@ -647,13 +687,19 @@ function discoverDevices() {
   });
 }
 
-// Cast URL using castv2-client with reconnection handling
+// Cast URL using castv2-client with exponential backoff retry
 async function castMedia(url, retryCount = 0) {
   const selectedDevice = await getSelectedChromecast();
   const targetDevice = selectedDevice || currentDevice;
   
   if (!targetDevice) {
     throw new Error('No Chromecast devices found on network');
+  }
+  
+  if (retryCount > 0) {
+    const delay = getBackoffDelay(retryCount - 1);
+    console.log(`🔄 Retry ${retryCount}/${MAX_RETRIES} - waiting ${Math.round(delay/1000)}s before reconnecting...`);
+    await sleep(delay);
   }
   
   if (selectedDevice) {
@@ -663,7 +709,7 @@ async function castMedia(url, retryCount = 0) {
   }
   
   return new Promise((resolve, reject) => {
-    console.log(`📺 Connecting to ${targetDevice.name} at ${targetDevice.host}...`);
+    console.log(`📺 Connecting to ${targetDevice.name} at ${targetDevice.host}...${retryCount > 0 ? ` (attempt ${retryCount + 1})` : ''}`);
     
     client = new castv2.Client();
     let heartbeatInterval = null;
@@ -686,6 +732,25 @@ async function castMedia(url, retryCount = 0) {
         }
       }
     };
+    
+    // Handle connection errors with retry
+    client.on('error', async (err) => {
+      console.error(`❌ Connection error: ${err.message}`);
+      cleanup();
+      
+      if (retryCount < MAX_RETRIES) {
+        console.log(`🔄 Will retry (${retryCount + 1}/${MAX_RETRIES})...`);
+        try {
+          const result = await castMedia(url, retryCount + 1);
+          resolve(result);
+        } catch (retryErr) {
+          reject(retryErr);
+        }
+      } else {
+        await logToCloud(`Cast failed after ${MAX_RETRIES} retries: ${err.message}`, 'error');
+        reject(new Error(`Connection failed after ${MAX_RETRIES} retries: ${err.message}`));
+      }
+    });
     
     client.connect(targetDevice.host, () => {
       console.log('✅ Connected to Chromecast');
@@ -711,19 +776,23 @@ async function castMedia(url, retryCount = 0) {
       console.log('📡 Getting receiver status...');
       receiver.send({ type: 'GET_STATUS', requestId: 1 });
       
-      launchTimeout = setTimeout(() => {
+      launchTimeout = setTimeout(async () => {
         console.error('⏱️  Timeout waiting for receiver response (120s)');
         console.log('Last appLaunched state:', appLaunched);
         console.log('Retry count:', retryCount);
         cleanup();
         
-        // Retry on timeout if haven't exceeded retry limit
-        if (retryCount < 2) {
-          console.log('🔄 Retrying cast due to timeout...');
-          setTimeout(() => {
-            castMedia(url, retryCount + 1).then(resolve).catch(reject);
-          }, 3000);
+        // Retry on timeout with exponential backoff
+        if (retryCount < MAX_RETRIES) {
+          console.log(`🔄 Retrying cast due to timeout (${retryCount + 1}/${MAX_RETRIES})...`);
+          try {
+            const result = await castMedia(url, retryCount + 1);
+            resolve(result);
+          } catch (retryErr) {
+            reject(retryErr);
+          }
         } else {
+          await logToCloud(`Cast timeout after ${MAX_RETRIES} retries`, 'error');
           reject(new Error('Receiver timeout - Custom receiver may not be accessible'));
         }
       }, 120000);
