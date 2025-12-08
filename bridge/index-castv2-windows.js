@@ -5,13 +5,14 @@ const Bonjour = require('bonjour-hap');
 require('dotenv').config();
 
 // Version
-const VERSION = '1.0.10';
+const VERSION = '1.0.11';
 
 // Track last idle check log ID for updates instead of inserts
 let lastIdleCheckLogId = null;
 let idleCheckCount = 0;
 let firstCheckTime = null;
 let lastLoggedStatus = null; // Track last status to detect changes
+let bridgeStartTime = null; // Track when this bridge session started
 
 // Configuration
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -93,32 +94,31 @@ async function updateIdleCheckLog(message, checkCount = null) {
     };
     
     // If we don't have a log ID, try to find an existing recent idle check log
-    if (!lastIdleCheckLogId) {
+    // Only look for logs created AFTER this bridge session started
+    if (!lastIdleCheckLogId && bridgeStartTime) {
       const { data: existingLog } = await supabase
         .from('cast_commands')
         .select('id, created_at, url')
         .eq('device_id', DEVICE_ID)
         .eq('command_type', 'idle_check')
         .eq('status', 'completed')
+        .gte('created_at', bridgeStartTime) // Only logs from this bridge session
         .order('processed_at', { ascending: false, nullsFirst: false })
         .limit(1)
         .maybeSingle();
       
-      // Use existing log if it's recent (less than 7 days old)
+      // Use existing log if found (already filtered to this session)
       if (existingLog) {
-        const logAge = Date.now() - new Date(existingLog.created_at).getTime();
-        if (logAge < 7 * 24 * 60 * 60 * 1000) { // 7 days
-          lastIdleCheckLogId = existingLog.id;
-          // Restore check count and firstCheckTime from existing log
-          try {
-            const existingData = JSON.parse(existingLog.url);
-            idleCheckCount = (existingData.checkCount || 0);
-            // Use firstCheckTime from data, or fall back to created_at
-            firstCheckTime = existingData.firstCheckTime || existingLog.created_at;
-          } catch {
-            // If parsing fails, use created_at as firstCheckTime
-            firstCheckTime = existingLog.created_at;
-          }
+        lastIdleCheckLogId = existingLog.id;
+        // Restore check count and firstCheckTime from existing log
+        try {
+          const existingData = JSON.parse(existingLog.url);
+          idleCheckCount = (existingData.checkCount || 0);
+          // Use firstCheckTime from data, or fall back to created_at
+          firstCheckTime = existingData.firstCheckTime || existingLog.created_at;
+        } catch {
+          // If parsing fails, use created_at as firstCheckTime
+          firstCheckTime = existingLog.created_at;
         }
       }
     }
@@ -991,15 +991,16 @@ async function main() {
   console.log('🎬 Starting auto-screensaver monitoring (checks every 60s)...');
   const screensaverInterval = setInterval(checkAndActivateScreensaver, SCREENSAVER_CHECK_INTERVAL);
 
-  // Log bridge start
+  // Log bridge start and set session start time
+  bridgeStartTime = new Date().toISOString();
   await supabase.from('cast_commands').insert({
     device_id: DEVICE_ID,
     command_type: 'bridge_start',
     url: '',
     status: 'completed',
-    processed_at: new Date().toISOString()
+    processed_at: bridgeStartTime
   });
-  console.log('📝 Logged bridge start');
+  console.log('📝 Logged bridge start, session time:', bridgeStartTime);
 
   // Initial poll
   processPendingCommands();
