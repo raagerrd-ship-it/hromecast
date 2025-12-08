@@ -5,7 +5,7 @@ const Bonjour = require('bonjour-hap');
 require('dotenv').config();
 
 // Version
-const VERSION = '1.0.11';
+const VERSION = '1.0.12';
 
 // Track last idle check log ID for updates instead of inserts
 let lastIdleCheckLogId = null;
@@ -576,14 +576,51 @@ async function checkAndActivateScreensaver() {
   }
 }
 
+// Clean up old discovered devices (older than 24 hours)
+async function cleanupOldDevices() {
+  try {
+    const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    
+    const { data: oldDevices, error: selectError } = await supabase
+      .from('discovered_chromecasts')
+      .select('id, chromecast_name')
+      .eq('device_id', DEVICE_ID)
+      .lt('last_seen', cutoffTime);
+    
+    if (selectError) {
+      console.error('Error finding old devices:', selectError);
+      return;
+    }
+    
+    if (oldDevices && oldDevices.length > 0) {
+      const { error: deleteError } = await supabase
+        .from('discovered_chromecasts')
+        .delete()
+        .eq('device_id', DEVICE_ID)
+        .lt('last_seen', cutoffTime);
+      
+      if (deleteError) {
+        console.error('Error deleting old devices:', deleteError);
+      } else {
+        console.log(`🧹 Cleaned up ${oldDevices.length} old device(s): ${oldDevices.map(d => d.chromecast_name).join(', ')}`);
+        await logToCloud(`Cleaned up ${oldDevices.length} old device(s)`, 'info');
+      }
+    }
+  } catch (error) {
+    console.error('Error in cleanup:', error);
+  }
+}
+
 // Discover Chromecast devices using Bonjour
 function discoverDevices() {
   return new Promise((resolve) => {
     console.log('🔍 Scanning for Chromecast devices on local network (Bonjour)...');
     
     const browser = bonjour.find({ type: 'googlecast' });
-    const discoveryTimeout = setTimeout(() => {
+    const discoveryTimeout = setTimeout(async () => {
       browser.stop();
+      // Clean up old devices after discovery completes
+      await cleanupOldDevices();
       resolve(browser);
     }, 8000);
     
