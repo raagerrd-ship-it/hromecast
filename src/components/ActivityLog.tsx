@@ -1,5 +1,5 @@
 import React, { useMemo, memo } from "react";
-import { Activity, CheckCircle, XCircle, Clock, Play, StopCircle, RotateCcw } from "lucide-react";
+import { Activity, CheckCircle, XCircle, Clock, Play, StopCircle, RotateCcw, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -54,6 +54,11 @@ const cleanDeviceName = (name: string): string => {
 // Memoized log item component
 const ActivityLogItem = memo(({ log, allLogs }: { log: ActivityLogEntry; allLogs: ActivityLogEntry[] }) => {
   const getIcon = () => {
+    if (log.command_type === 'circuit_breaker') {
+      return log.status === 'failed'
+        ? <Zap className="h-4 w-4 text-destructive" />
+        : <Zap className="h-4 w-4 text-primary" />;
+    }
     if (log.command_type === 'screensaver_start') {
       return log.status === 'failed' 
         ? <XCircle className="h-4 w-4 text-destructive" />
@@ -86,6 +91,17 @@ const ActivityLogItem = memo(({ log, allLogs }: { log: ActivityLogEntry; allLogs
   };
 
   const getLabel = () => {
+    if (log.command_type === 'circuit_breaker') {
+      try {
+        const data = JSON.parse(log.url);
+        if (data.status === 'open') {
+          return `Circuit breaker opened (${data.failures} failures)`;
+        }
+        return 'Circuit breaker closed';
+      } catch {
+        return 'Circuit breaker';
+      }
+    }
     if (log.command_type === 'screensaver_start') return 'Screensaver started';
     if (log.command_type === 'screensaver_resumed') return 'Screensaver resumed';
     if (log.command_type === 'screensaver_stop') return 'Screensaver stopped';

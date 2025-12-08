@@ -96,16 +96,37 @@ function recordCircuitFailure() {
   if (circuitBreakerState.failures >= CIRCUIT_BREAKER_THRESHOLD) {
     circuitBreakerState.isOpen = true;
     console.log(`⚡ [CIRCUIT] Opened after ${CIRCUIT_BREAKER_THRESHOLD} failures - pausing attempts for 5 min`);
-    logToCloud(`Circuit breaker opened after ${CIRCUIT_BREAKER_THRESHOLD} failures`, 'warn');
+    // Log to Activity Log
+    supabase.from('cast_commands').insert({
+      device_id: DEVICE_ID,
+      command_type: 'circuit_breaker',
+      url: JSON.stringify({ status: 'open', failures: CIRCUIT_BREAKER_THRESHOLD, cooldownMinutes: 5 }),
+      status: 'failed',
+      processed_at: new Date().toISOString()
+    });
   }
 }
 
 function recordCircuitSuccess() {
-  if (circuitBreakerState.failures > 0 || circuitBreakerState.isOpen) {
-    console.log('⚡ [CIRCUIT] Success - resetting circuit breaker');
-  }
+  const wasOpen = circuitBreakerState.isOpen;
+  const hadFailures = circuitBreakerState.failures > 0;
+  
   circuitBreakerState.failures = 0;
   circuitBreakerState.isOpen = false;
+  
+  if (wasOpen) {
+    console.log('⚡ [CIRCUIT] Closed - connection restored');
+    // Log to Activity Log
+    supabase.from('cast_commands').insert({
+      device_id: DEVICE_ID,
+      command_type: 'circuit_breaker',
+      url: JSON.stringify({ status: 'closed', message: 'Connection restored' }),
+      status: 'completed',
+      processed_at: new Date().toISOString()
+    });
+  } else if (hadFailures) {
+    console.log('⚡ [CIRCUIT] Reset - failures cleared');
+  }
 }
 
 // Helper function to log screensaver stop (refactored from duplicated code)
