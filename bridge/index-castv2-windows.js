@@ -744,6 +744,42 @@ async function cleanupOldDevices() {
   }
 }
 
+// Clean up old cast_commands logs (older than 7 days)
+async function cleanupOldLogs() {
+  try {
+    const cutoffTime = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    
+    // Count old logs first
+    const { count, error: countError } = await supabase
+      .from('cast_commands')
+      .select('*', { count: 'exact', head: true })
+      .eq('device_id', DEVICE_ID)
+      .lt('created_at', cutoffTime);
+    
+    if (countError) {
+      console.error('Error counting old logs:', countError);
+      return;
+    }
+    
+    if (count && count > 0) {
+      const { error: deleteError } = await supabase
+        .from('cast_commands')
+        .delete()
+        .eq('device_id', DEVICE_ID)
+        .lt('created_at', cutoffTime);
+      
+      if (deleteError) {
+        console.error('Error deleting old logs:', deleteError);
+      } else {
+        console.log(`🧹 Cleaned up ${count} old log(s) (>7 days)`);
+        await logToCloud(`Cleaned up ${count} old log entries`, 'info');
+      }
+    }
+  } catch (error) {
+    console.error('Error in log cleanup:', error);
+  }
+}
+
 // Discover Chromecast devices using Bonjour
 function discoverDevices() {
   return new Promise((resolve) => {
@@ -1173,6 +1209,14 @@ async function main() {
     console.log(`🔄 [RE-DISCOVERY] Complete: ${discoveredDevices.size} device(s) found\n`);
   }, REDISCOVERY_INTERVAL);
 
+  // Periodic log cleanup (every 6 hours, cleans logs older than 7 days)
+  const LOG_CLEANUP_INTERVAL = 6 * 60 * 60 * 1000; // 6 hours
+  console.log('🧹 Starting periodic log cleanup (every 6h, removes logs >7 days)...');
+  const logCleanupInterval = setInterval(cleanupOldLogs, LOG_CLEANUP_INTERVAL);
+  
+  // Initial log cleanup on startup
+  await cleanupOldLogs();
+
   // Log bridge start and set session start time
   bridgeStartTime = new Date().toISOString();
   await supabase.from('cast_commands').insert({
@@ -1208,6 +1252,7 @@ async function main() {
     clearInterval(pollInterval);
     clearInterval(screensaverInterval);
     clearInterval(rediscoveryInterval);
+    clearInterval(logCleanupInterval);
     
     // Clear all active heartbeats
     activeHeartbeats.forEach(interval => clearInterval(interval));

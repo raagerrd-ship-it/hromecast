@@ -51,8 +51,8 @@ const cleanDeviceName = (name: string): string => {
   return name.replace(/([A-Za-z]+(?:-[A-Za-z]+)*)-[a-f0-9]{20,}/gi, (m: string, n: string) => n.replace(/-/g, ' '));
 };
 
-// Memoized log item component
-const ActivityLogItem = memo(({ log, allLogs }: { log: ActivityLogEntry; allLogs: ActivityLogEntry[] }) => {
+// Memoized log item component - receives logIndex as prop to avoid O(n) indexOf
+const ActivityLogItem = memo(({ log, allLogs, logIndex }: { log: ActivityLogEntry; allLogs: ActivityLogEntry[]; logIndex: number }) => {
   const getIcon = () => {
     if (log.command_type === 'circuit_breaker') {
       return log.status === 'failed'
@@ -122,7 +122,7 @@ const ActivityLogItem = memo(({ log, allLogs }: { log: ActivityLogEntry; allLogs
 
   const getDuration = () => {
     if (log.command_type !== 'screensaver_start' && log.command_type !== 'screensaver_resumed') return null;
-    const logIndex = allLogs.indexOf(log);
+    // Use passed logIndex instead of indexOf (O(1) vs O(n))
     const stopLog = allLogs.slice(0, logIndex).reverse().find(
       (l) => l.command_type === 'screensaver_stop' && l.status === 'completed'
     );
@@ -220,6 +220,7 @@ interface GroupedLogItem {
   type: 'single' | 'idle_group';
   log?: ActivityLogEntry;
   logs?: ActivityLogEntry[];
+  logIndex?: number; // Track original index for duration calculation
 }
 
 export const ActivityLog = memo(({ activityLog, screensaverActive }: ActivityLogProps) => {
@@ -228,7 +229,7 @@ export const ActivityLog = memo(({ activityLog, screensaverActive }: ActivityLog
     const result: GroupedLogItem[] = [];
     let currentIdleGroup: ActivityLogEntry[] = [];
     
-    activityLog.forEach((log) => {
+    activityLog.forEach((log, index) => {
       if (isStatusCheckLog(log)) {
         currentIdleGroup.push(log);
       } else {
@@ -236,7 +237,7 @@ export const ActivityLog = memo(({ activityLog, screensaverActive }: ActivityLog
           result.push({ type: 'idle_group', logs: [...currentIdleGroup] });
           currentIdleGroup = [];
         }
-        result.push({ type: 'single', log });
+        result.push({ type: 'single', log, logIndex: index });
       }
     });
     
@@ -279,7 +280,7 @@ export const ActivityLog = memo(({ activityLog, screensaverActive }: ActivityLog
                   return <IdleGroupItem key={`idle-group-${index}`} logs={item.logs} />;
                 }
                 if (item.log) {
-                  return <ActivityLogItem key={item.log.id} log={item.log} allLogs={activityLog} />;
+                  return <ActivityLogItem key={item.log.id} log={item.log} allLogs={activityLog} logIndex={item.logIndex ?? 0} />;
                 }
                 return null;
               })}
