@@ -170,19 +170,17 @@ const IdleGroupItem = memo(({ logs }: { logs: ActivityLogEntry[] }) => {
   const firstLog = logs[logs.length - 1]; // oldest (array is desc)
   const lastLog = logs[0]; // newest
   
+  // Use created_at as start time and processed_at as end time
+  const firstTime = formatTime(firstLog.created_at);
   const lastTime = formatTime(lastLog.processed_at || lastLog.created_at);
   
-  // Get firstCheckTime from log data if available
-  let firstTime = formatTime(firstLog.created_at);
   let checkCount = logs.length;
   let deviceName = 'device';
   let lastStatus = '';
   
   try {
     const data = JSON.parse(lastLog.url);
-    if (data.firstCheckTime) {
-      firstTime = formatTime(data.firstCheckTime);
-    }
+    // Use checkCount from JSON if available (consolidated logs)
     if (data.checkCount && typeof data.checkCount === 'number') {
       checkCount = data.checkCount;
     }
