@@ -135,7 +135,8 @@ const Index = () => {
           table: 'cast_commands',
           filter: `device_id=eq.${DEVICE_ID}`
         },
-        () => {
+        (payload) => {
+          console.log('🔔 Realtime event:', payload.eventType, payload);
           fetchActivityLog();
         }
       )
@@ -153,10 +154,18 @@ const Index = () => {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('📡 Realtime subscription status:', status);
+      });
+
+    // Backup polling every 30 seconds in case realtime misses updates
+    const pollInterval = setInterval(() => {
+      fetchActivityLog();
+    }, 30000);
 
     return () => {
       supabase.removeChannel(activityChannel);
+      clearInterval(pollInterval);
     };
   }, [fetchActivityLog]);
 
