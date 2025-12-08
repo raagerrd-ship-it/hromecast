@@ -270,7 +270,17 @@ const Index = () => {
       : null;
     const isOnline = latestActivity && (currentTime - latestActivity.getTime()) < 300000; // 5 min
     const timeStr = latestActivity?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    return { isOnline, timeStr, hasActivity: !!latestActivity };
+    
+    // Extract version from bridge_start log
+    const bridgeStartLog = activityLog.find(log => log.command_type === 'bridge_start' || 
+      (log.command_type === 'bridge_log' && log.url?.includes('Bridge v')));
+    let version = '';
+    if (bridgeStartLog?.url) {
+      const match = bridgeStartLog.url.match(/Bridge v([\d.]+)/);
+      if (match) version = match[1];
+    }
+    
+    return { isOnline, timeStr, hasActivity: !!latestActivity, version };
   }, [activityLog, currentTime]);
 
   return (
@@ -369,7 +379,7 @@ const Index = () => {
           }`} />
           <p className="text-xs text-muted-foreground">
             {bridgeStatus.hasActivity 
-              ? `Bridge ${bridgeStatus.isOnline ? 'online' : 'offline'} · ${bridgeStatus.timeStr}`
+              ? `Bridge ${bridgeStatus.isOnline ? 'online' : 'offline'}${bridgeStatus.version ? ` - v${bridgeStatus.version}` : ''}, Last seen: ${bridgeStatus.timeStr}`
               : 'No bridge activity'}
           </p>
         </div>
