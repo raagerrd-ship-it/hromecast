@@ -205,7 +205,7 @@ async function updateIdleCheckLog(message, checkCount = null) {
     };
     
     // If we don't have a log ID, try to find an existing recent idle check log
-    // Only look for logs created AFTER this bridge session started
+    // Only look for logs created AFTER this bridge session started AND with same status
     if (!lastIdleCheckLogId && bridgeStartTime) {
       const { data: existingLog } = await supabase
         .from('cast_commands')
@@ -218,18 +218,23 @@ async function updateIdleCheckLog(message, checkCount = null) {
         .limit(1)
         .maybeSingle();
       
-      // Use existing log if found (already filtered to this session)
+      // Use existing log ONLY if status matches (don't reuse log with different status)
       if (existingLog) {
-        lastIdleCheckLogId = existingLog.id;
-        // Restore check count and firstCheckTime from existing log
         try {
           const existingData = JSON.parse(existingLog.url);
-          idleCheckCount = (existingData.checkCount || 0);
-          // Use firstCheckTime from data, or fall back to created_at
-          firstCheckTime = existingData.firstCheckTime || existingLog.created_at;
+          // Only reuse if status matches current status
+          if (existingData.status === currentStatus) {
+            lastIdleCheckLogId = existingLog.id;
+            idleCheckCount = (existingData.checkCount || 0);
+            firstCheckTime = existingData.firstCheckTime || existingLog.created_at;
+            console.log(`📝 Reusing existing log (status: ${currentStatus}, count: ${idleCheckCount})`);
+          } else {
+            console.log(`📝 Status mismatch (${existingData.status} → ${currentStatus}), creating new log`);
+            firstCheckTime = now;
+          }
         } catch {
-          // If parsing fails, use created_at as firstCheckTime
-          firstCheckTime = existingLog.created_at;
+          // If parsing fails, create new log
+          firstCheckTime = now;
         }
       }
     }
