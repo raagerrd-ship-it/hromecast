@@ -38,7 +38,6 @@ const Index = () => {
   const [activityLog, setActivityLog] = useState<any[]>([]);
   const [screensaverActive, setScreensaverActive] = useState(false);
   const [previewScale, setPreviewScale] = useState(0.35);
-  const [lastBridgeActivity, setLastBridgeActivity] = useState<Date | null>(null);
   const [currentTime, setCurrentTime] = useState(Date.now());
   const previewContainerRef = useRef<HTMLDivElement>(null);
 
@@ -46,7 +45,7 @@ const Index = () => {
   const debouncedConfig = useDebouncedValue(screensaverConfig, 500);
   const debouncedChromecastId = useDebouncedValue(selectedChromecastId, 500);
 
-  // Memoized fetch function
+  // Memoized fetch function - also returns latest activity time for bridge status
   const fetchActivityLog = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -114,9 +113,6 @@ const Index = () => {
           });
           setSelectedChromecastId(data.selected_chromecast_id || null);
           setScreensaverActive(data.screensaver_active || false);
-          if (data.last_idle_check) {
-            setLastBridgeActivity(new Date(data.last_idle_check));
-          }
         }
       } catch (error) {
         console.error('Error loading settings:', error);
@@ -154,9 +150,6 @@ const Index = () => {
         (payload) => {
           if (payload.new) {
             setScreensaverActive(payload.new.screensaver_active || false);
-            if (payload.new.last_idle_check) {
-              setLastBridgeActivity(new Date(payload.new.last_idle_check));
-            }
           }
         }
       )
@@ -257,12 +250,16 @@ const Index = () => {
     setSelectedChromecastId(id);
   }, []);
 
-  // Memoized bridge status
+  // Bridge status based on latest cast_commands activity (more reliable than last_idle_check)
   const bridgeStatus = useMemo(() => {
-    const isOnline = lastBridgeActivity && (currentTime - lastBridgeActivity.getTime()) < 300000;
-    const timeStr = lastBridgeActivity?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    return { isOnline, timeStr };
-  }, [lastBridgeActivity, currentTime]);
+    // Find the most recent processed_at from activity log
+    const latestActivity = activityLog.length > 0 && activityLog[0].processed_at 
+      ? new Date(activityLog[0].processed_at) 
+      : null;
+    const isOnline = latestActivity && (currentTime - latestActivity.getTime()) < 300000; // 5 min
+    const timeStr = latestActivity?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return { isOnline, timeStr, hasActivity: !!latestActivity };
+  }, [activityLog, currentTime]);
 
   return (
     <div className="min-h-screen min-h-[100dvh] flex flex-col safe-top safe-bottom">
@@ -359,9 +356,9 @@ const Index = () => {
             bridgeStatus.isOnline ? 'bg-primary' : 'bg-muted-foreground/50'
           }`} />
           <p className="text-xs text-muted-foreground">
-            {lastBridgeActivity 
+            {bridgeStatus.hasActivity 
               ? `Bridge ${bridgeStatus.isOnline ? 'online' : 'offline'} · ${bridgeStatus.timeStr}`
-              : 'No bridge connection'}
+              : 'No bridge activity'}
           </p>
         </div>
       </footer>
