@@ -1,7 +1,8 @@
 import { ScreensaverSettings, ScreensaverConfig } from "@/components/ScreensaverSettings";
+import { Link } from "react-router-dom";
 import { ChromecastSelector } from "@/components/ChromecastSelector";
 import { ActivityLog } from "@/components/ActivityLog";
-import { Play, Tv } from "lucide-react";
+import { Play, Tv, HelpCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
@@ -295,14 +296,23 @@ const Index = () => {
       {/* Header */}
       <header className="flex-shrink-0 px-4 pt-6 pb-4 sm:px-6 sm:pt-8">
         <div className="max-w-lg mx-auto">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-2xl bg-primary/20 flex items-center justify-center">
-              <Tv className="h-5 w-5 text-primary" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-primary/20 flex items-center justify-center">
+                <Tv className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h1 className="text-xl font-semibold tracking-tight">Screensaver</h1>
+                <p className="text-xs text-muted-foreground">Auto-cast when idle</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-xl font-semibold tracking-tight">Screensaver</h1>
-              <p className="text-xs text-muted-foreground">Auto-cast when idle</p>
-            </div>
+            <Link 
+              to="/setup" 
+              className="p-2 rounded-lg hover:bg-muted transition-colors"
+              title="Installationsguide"
+            >
+              <HelpCircle className="h-5 w-5 text-muted-foreground" />
+            </Link>
           </div>
         </div>
       </header>
