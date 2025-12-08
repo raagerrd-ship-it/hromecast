@@ -26,6 +26,7 @@ function useDebouncedValue<T>(value: T, delay: number): T {
 const Index = () => {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
+  const hasInitializedRef = useRef(false); // Prevents saving before first load completes
   
   const [screensaverConfig, setScreensaverConfig] = useState<ScreensaverConfig>({
     enabled: false,
@@ -118,6 +119,10 @@ const Index = () => {
         console.error('Error loading settings:', error);
       } finally {
         setIsLoading(false);
+        // Mark as initialized after a short delay to let state propagate
+        setTimeout(() => {
+          hasInitializedRef.current = true;
+        }, 600); // Slightly longer than debounce delay (500ms)
       }
     };
 
@@ -172,12 +177,14 @@ const Index = () => {
     };
   }, [fetchActivityLog]);
 
-  // Save settings with debounce
+  // Save settings with debounce - only after initial load is complete
   useEffect(() => {
-    if (isLoading) return;
+    // Don't save until fully initialized (prevents overwriting with empty values on HMR)
+    if (isLoading || !hasInitializedRef.current) return;
 
     const saveSettings = async () => {
       try {
+        console.log('💾 Saving settings:', { enabled: debouncedConfig.enabled, url: debouncedConfig.url });
         const { error } = await supabase
           .from('screensaver_settings')
           .upsert({
