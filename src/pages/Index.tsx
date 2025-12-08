@@ -132,12 +132,15 @@ const Index = () => {
         {
           event: '*',
           schema: 'public',
-          table: 'cast_commands',
-          filter: `device_id=eq.${DEVICE_ID}`
+          table: 'cast_commands'
+          // Removed filter - Supabase Realtime has issues with text filters on UPDATE
         },
         (payload) => {
-          console.log('🔔 Realtime event:', payload.eventType, payload);
-          fetchActivityLog();
+          // Only process events for our device
+          if (payload.new && (payload.new as any).device_id === DEVICE_ID) {
+            console.log('🔔 Realtime event:', payload.eventType, payload);
+            fetchActivityLog();
+          }
         }
       )
       .on(
@@ -145,12 +148,11 @@ const Index = () => {
         {
           event: 'UPDATE',
           schema: 'public',
-          table: 'screensaver_settings',
-          filter: `device_id=eq.${DEVICE_ID}`
+          table: 'screensaver_settings'
         },
         (payload) => {
-          if (payload.new) {
-            setScreensaverActive(payload.new.screensaver_active || false);
+          if (payload.new && (payload.new as any).device_id === DEVICE_ID) {
+            setScreensaverActive((payload.new as any).screensaver_active || false);
           }
         }
       )
@@ -158,10 +160,11 @@ const Index = () => {
         console.log('📡 Realtime subscription status:', status);
       });
 
-    // Backup polling every 30 seconds in case realtime misses updates
+    // Backup polling every 15 seconds in case realtime misses updates
     const pollInterval = setInterval(() => {
+      console.log('⏰ Polling activity log...');
       fetchActivityLog();
-    }, 30000);
+    }, 15000);
 
     return () => {
       supabase.removeChannel(activityChannel);
