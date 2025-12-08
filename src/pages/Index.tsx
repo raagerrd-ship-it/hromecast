@@ -4,16 +4,24 @@ import { ActivityLog } from "@/components/ActivityLog";
 import { Play, Tv } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 const SCREENSAVER_CONFIG_KEY = "chromecast-screensaver-config";
-const DEVICE_ID_KEY = "chromecast-device-id";
 
-const getOrCreateDeviceId = () => {
-  const deviceId = "device-1764517968693-qxx7xr08y";
-  localStorage.setItem(DEVICE_ID_KEY, deviceId);
-  return deviceId;
-};
+// Memoized device ID - only created once
+const DEVICE_ID = "device-1764517968693-qxx7xr08y";
+
+// Debounce helper
+function useDebouncedValue<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+
+  return debouncedValue;
+}
 
 const Index = () => {
   const { toast } = useToast();
@@ -34,6 +42,28 @@ const Index = () => {
   const [currentTime, setCurrentTime] = useState(Date.now());
   const previewContainerRef = useRef<HTMLDivElement>(null);
 
+  // Debounce settings to reduce DB writes (500ms delay)
+  const debouncedConfig = useDebouncedValue(screensaverConfig, 500);
+  const debouncedChromecastId = useDebouncedValue(selectedChromecastId, 500);
+
+  // Memoized fetch function
+  const fetchActivityLog = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('cast_commands')
+        .select('*')
+        .eq('device_id', DEVICE_ID)
+        .order('processed_at', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+      setActivityLog(data || []);
+    } catch (error) {
+      console.error('Error fetching activity log:', error);
+    }
+  }, []);
+
   // Update current time every 10 seconds for footer status
   useEffect(() => {
     const interval = setInterval(() => {
@@ -42,6 +72,7 @@ const Index = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Preview scale calculation
   useEffect(() => {
     const updateScale = () => {
       if (previewContainerRef.current) {
@@ -54,14 +85,14 @@ const Index = () => {
     return () => window.removeEventListener('resize', updateScale);
   }, [screensaverConfig.enabled, screensaverConfig.url]);
 
+  // Initial load and realtime subscriptions
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const deviceId = getOrCreateDeviceId();
         const { data, error } = await supabase
           .from('screensaver_settings')
           .select('*')
-          .eq('device_id', deviceId)
+          .eq('device_id', DEVICE_ID)
           .single();
 
         if (error && error.code !== 'PGRST116') {
@@ -94,56 +125,31 @@ const Index = () => {
       }
     };
 
-    const fetchActivityLog = async () => {
-      try {
-        const deviceId = getOrCreateDeviceId();
-        const { data, error } = await supabase
-          .from('cast_commands')
-          .select('*')
-          .eq('device_id', deviceId)
-          .order('processed_at', { ascending: false, nullsFirst: false })
-          .order('created_at', { ascending: false })
-          .limit(50);
-
-        if (error) throw error;
-        setActivityLog(data || []);
-      } catch (error) {
-        console.error('Error fetching activity log:', error);
-      }
-    };
-
     loadSettings();
     fetchActivityLog();
 
-    const deviceId = getOrCreateDeviceId();
+    // Combined realtime subscription for both tables
     const activityChannel = supabase
-      .channel('cast_commands_realtime')
+      .channel('index_realtime')
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
-          table: 'cast_commands'
+          table: 'cast_commands',
+          filter: `device_id=eq.${DEVICE_ID}`
         },
-        (payload) => {
-          // Only refresh if this is for our device
-          const record = (payload.new || payload.old) as { device_id?: string } | null;
-          if (record && record.device_id === deviceId) {
-            fetchActivityLog();
-          }
+        () => {
+          fetchActivityLog();
         }
       )
-      .subscribe();
-
-    const statusChannel = supabase
-      .channel('screensaver_status_changes')
       .on(
         'postgres_changes',
         {
           event: 'UPDATE',
           schema: 'public',
           table: 'screensaver_settings',
-          filter: `device_id=eq.${getOrCreateDeviceId()}`
+          filter: `device_id=eq.${DEVICE_ID}`
         },
         (payload) => {
           if (payload.new) {
@@ -158,25 +164,24 @@ const Index = () => {
 
     return () => {
       supabase.removeChannel(activityChannel);
-      supabase.removeChannel(statusChannel);
     };
-  }, []);
+  }, [fetchActivityLog]);
 
+  // Save settings with debounce
   useEffect(() => {
     if (isLoading) return;
 
     const saveSettings = async () => {
       try {
-        const deviceId = getOrCreateDeviceId();
         const { error } = await supabase
           .from('screensaver_settings')
           .upsert({
-            device_id: deviceId,
-            enabled: screensaverConfig.enabled,
-            url: screensaverConfig.url,
-            idle_timeout: screensaverConfig.idleTimeout,
-            check_interval: screensaverConfig.checkInterval,
-            selected_chromecast_id: selectedChromecastId,
+            device_id: DEVICE_ID,
+            enabled: debouncedConfig.enabled,
+            url: debouncedConfig.url,
+            idle_timeout: debouncedConfig.idleTimeout,
+            check_interval: debouncedConfig.checkInterval,
+            selected_chromecast_id: debouncedChromecastId,
           }, {
             onConflict: 'device_id'
           });
@@ -184,7 +189,7 @@ const Index = () => {
         if (error) {
           console.error('Error saving settings:', error);
         } else {
-          localStorage.setItem(SCREENSAVER_CONFIG_KEY, JSON.stringify(screensaverConfig));
+          localStorage.setItem(SCREENSAVER_CONFIG_KEY, JSON.stringify(debouncedConfig));
         }
       } catch (error) {
         console.error('Error saving settings:', error);
@@ -192,10 +197,10 @@ const Index = () => {
     };
 
     saveSettings();
-  }, [screensaverConfig, selectedChromecastId, isLoading]);
+  }, [debouncedConfig, debouncedChromecastId, isLoading]);
 
-
-  const handleStartScreensaver = async (url: string) => {
+  // Memoized handler
+  const handleStartScreensaver = useCallback(async (url: string) => {
     try {
       const { data: renderData, error: renderError } = await supabase.functions.invoke('render-website', {
         body: { url, action: 'cast' }
@@ -211,11 +216,10 @@ const Index = () => {
       }
 
       const viewerUrl = renderData.viewerUrl;
-      const deviceId = getOrCreateDeviceId();
       
       const { error: queueError } = await supabase.functions.invoke('queue-cast', {
         body: { 
-          deviceId,
+          deviceId: DEVICE_ID,
           url: viewerUrl,
           commandType: 'cast'
         }
@@ -241,7 +245,24 @@ const Index = () => {
         variant: "destructive",
       });
     }
-  };
+  }, [toast]);
+
+  // Memoized config change handler
+  const handleConfigChange = useCallback((config: ScreensaverConfig) => {
+    setScreensaverConfig(config);
+  }, []);
+
+  // Memoized chromecast selection handler
+  const handleChromecastSelected = useCallback((id: string | null) => {
+    setSelectedChromecastId(id);
+  }, []);
+
+  // Memoized bridge status
+  const bridgeStatus = useMemo(() => {
+    const isOnline = lastBridgeActivity && (currentTime - lastBridgeActivity.getTime()) < 300000;
+    const timeStr = lastBridgeActivity?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return { isOnline, timeStr };
+  }, [lastBridgeActivity, currentTime]);
 
   return (
     <div className="min-h-screen min-h-[100dvh] flex flex-col safe-top safe-bottom">
@@ -267,9 +288,9 @@ const Index = () => {
           {/* Device Selection */}
           <section>
             <ChromecastSelector
-              deviceId={getOrCreateDeviceId()}
+              deviceId={DEVICE_ID}
               selectedChromecastId={selectedChromecastId}
-              onChromecastSelected={setSelectedChromecastId}
+              onChromecastSelected={handleChromecastSelected}
             />
           </section>
 
@@ -277,7 +298,7 @@ const Index = () => {
           <section>
             <ScreensaverSettings
               currentSettings={screensaverConfig}
-              onSave={setScreensaverConfig}
+              onSave={handleConfigChange}
               isActive={screensaverActive}
             />
           </section>
@@ -335,13 +356,11 @@ const Index = () => {
       <footer className="flex-shrink-0 px-4 py-3 sm:px-6 border-t border-border bg-card/50">
         <div className="max-w-lg mx-auto flex items-center justify-center gap-2">
           <span className={`h-1.5 w-1.5 rounded-full ${
-            lastBridgeActivity && (currentTime - lastBridgeActivity.getTime()) < 300000
-              ? 'bg-primary'
-              : 'bg-muted-foreground/50'
+            bridgeStatus.isOnline ? 'bg-primary' : 'bg-muted-foreground/50'
           }`} />
           <p className="text-xs text-muted-foreground">
             {lastBridgeActivity 
-              ? `Bridge ${(currentTime - lastBridgeActivity.getTime()) < 300000 ? 'online' : 'offline'} · ${lastBridgeActivity.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+              ? `Bridge ${bridgeStatus.isOnline ? 'online' : 'offline'} · ${bridgeStatus.timeStr}`
               : 'No bridge connection'}
           </p>
         </div>

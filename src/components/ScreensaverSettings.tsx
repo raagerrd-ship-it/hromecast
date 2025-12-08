@@ -1,7 +1,7 @@
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Link } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, memo } from "react";
 
 interface ScreensaverSettingsProps {
   onSave: (settings: ScreensaverConfig) => void;
@@ -16,13 +16,14 @@ export interface ScreensaverConfig {
   checkInterval: number;
 }
 
-export const ScreensaverSettings = ({ onSave, currentSettings, isActive = false }: ScreensaverSettingsProps) => {
+export const ScreensaverSettings = memo(({ onSave, currentSettings, isActive = false }: ScreensaverSettingsProps) => {
   const [enabled, setEnabled] = useState(currentSettings.enabled);
   const [url, setUrl] = useState(currentSettings.url);
   const [idleTimeout, setIdleTimeout] = useState(currentSettings.idleTimeout);
   const [checkInterval, setCheckInterval] = useState(currentSettings.checkInterval);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
+  // Sync with external settings
   useEffect(() => {
     setEnabled(currentSettings.enabled);
     setUrl(currentSettings.url);
@@ -31,19 +32,28 @@ export const ScreensaverSettings = ({ onSave, currentSettings, isActive = false 
     setIsInitialLoad(false);
   }, [currentSettings]);
 
+  // Save changes
   useEffect(() => {
     if (isInitialLoad) return;
     
     if (!enabled || (enabled && url)) {
       onSave({ enabled, url, idleTimeout, checkInterval });
     }
-  }, [enabled, url, idleTimeout, checkInterval]);
+  }, [enabled, url, idleTimeout, checkInterval, isInitialLoad, onSave]);
 
-  const getStatusText = () => {
+  const handleEnabledChange = useCallback((checked: boolean) => {
+    setEnabled(checked);
+  }, []);
+
+  const handleUrlChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setUrl(e.target.value);
+  }, []);
+
+  const getStatusText = useCallback(() => {
     if (!enabled) return 'Disabled';
     if (isActive) return 'On TV';
     return 'Waiting';
-  };
+  }, [enabled, isActive]);
 
   return (
     <div className="space-y-4">
@@ -73,7 +83,7 @@ export const ScreensaverSettings = ({ onSave, currentSettings, isActive = false 
         </div>
         <Switch
           checked={enabled}
-          onCheckedChange={setEnabled}
+          onCheckedChange={handleEnabledChange}
           className="data-[state=checked]:bg-primary"
         />
       </div>
@@ -88,11 +98,13 @@ export const ScreensaverSettings = ({ onSave, currentSettings, isActive = false 
             type="url"
             placeholder="https://example.com"
             value={url}
-            onChange={(e) => setUrl(e.target.value)}
+            onChange={handleUrlChange}
             className="h-12 rounded-xl bg-secondary/50 border-border placeholder:text-muted-foreground/50"
           />
         </div>
       )}
     </div>
   );
-};
+});
+
+ScreensaverSettings.displayName = 'ScreensaverSettings';

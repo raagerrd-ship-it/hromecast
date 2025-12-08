@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, memo } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tv, RefreshCw, Wifi } from "lucide-react";
@@ -18,7 +18,13 @@ interface ChromecastSelectorProps {
   onChromecastSelected: (chromecastId: string | null) => void;
 }
 
-export const ChromecastSelector = ({ 
+// Shorten device names by removing the hash suffix
+const shortenName = (name: string) => {
+  const withoutHash = name.replace(/-[a-f0-9]{20,}$/i, '');
+  return withoutHash.replace(/-/g, ' ');
+};
+
+export const ChromecastSelector = memo(({ 
   deviceId, 
   selectedChromecastId,
   onChromecastSelected 
@@ -26,15 +32,7 @@ export const ChromecastSelector = ({
   const [chromecasts, setChromecasts] = useState<DiscoveredChromecast[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Shorten device names by removing the hash suffix
-  const shortenName = (name: string) => {
-    // Remove hash suffix (e.g., "-a1eee59f647dc50c109bf7b8561690ee")
-    const withoutHash = name.replace(/-[a-f0-9]{20,}$/i, '');
-    // Replace remaining dashes with spaces
-    return withoutHash.replace(/-/g, ' ');
-  };
-
-  const fetchChromecasts = async () => {
+  const fetchChromecasts = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('discovered_chromecasts')
@@ -47,13 +45,13 @@ export const ChromecastSelector = ({
     } catch (error) {
       console.error('Error fetching chromecasts:', error);
     }
-  };
+  }, [deviceId]);
 
   useEffect(() => {
     fetchChromecasts();
 
     const channel = supabase
-      .channel('discovered_chromecasts_changes')
+      .channel('chromecasts_changes')
       .on(
         'postgres_changes',
         {
@@ -71,13 +69,17 @@ export const ChromecastSelector = ({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [deviceId]);
+  }, [deviceId, fetchChromecasts]);
 
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     await fetchChromecasts();
     setTimeout(() => setIsRefreshing(false), 1000);
-  };
+  }, [fetchChromecasts]);
+
+  const handleValueChange = useCallback((value: string) => {
+    onChromecastSelected(value === "auto" ? null : value);
+  }, [onChromecastSelected]);
 
   const selectedDevice = chromecasts.find(c => c.id === selectedChromecastId);
 
@@ -110,7 +112,7 @@ export const ChromecastSelector = ({
       ) : (
         <Select
           value={selectedChromecastId || "auto"}
-          onValueChange={(value) => onChromecastSelected(value === "auto" ? null : value)}
+          onValueChange={handleValueChange}
         >
           <SelectTrigger className="h-14 rounded-xl bg-secondary/50 border-border">
             <SelectValue>
@@ -153,4 +155,6 @@ export const ChromecastSelector = ({
       )}
     </div>
   );
-};
+});
+
+ChromecastSelector.displayName = 'ChromecastSelector';
