@@ -321,25 +321,55 @@ function stopRecoveryCheck() {
 // Report discovered devices to database
 async function reportDiscoveredDevice(name, host, port) {
   try {
-    const { data, error } = await supabase
+    // First, check if this device already exists with a different IP
+    const { data: existing } = await supabase
       .from('discovered_chromecasts')
-      .upsert({
-        device_id: DEVICE_ID,
-        chromecast_name: name,
-        chromecast_host: host,
-        chromecast_port: port,
-        last_seen: new Date().toISOString()
-      }, {
-        onConflict: 'device_id,chromecast_host',
-        ignoreDuplicates: false
-      })
-      .select()
-      .single();
+      .select('id, chromecast_host')
+      .eq('device_id', DEVICE_ID)
+      .eq('chromecast_name', name)
+      .maybeSingle();
 
-    if (error) {
-      console.error('Error reporting device to database:', error);
+    if (existing && existing.chromecast_host !== host) {
+      // Device exists with different IP - update it
+      console.log(`🔄 Device ${name} changed IP: ${existing.chromecast_host} → ${host}`);
+      const { error: updateError } = await supabase
+        .from('discovered_chromecasts')
+        .update({
+          chromecast_host: host,
+          chromecast_port: port,
+          last_seen: new Date().toISOString()
+        })
+        .eq('id', existing.id);
+
+      if (updateError) {
+        console.error('Error updating device IP:', updateError);
+      } else {
+        console.log(`✅ Updated device IP in database: ${name} → ${host}`);
+      }
+    } else if (existing) {
+      // Same IP, just update last_seen
+      await supabase
+        .from('discovered_chromecasts')
+        .update({ last_seen: new Date().toISOString() })
+        .eq('id', existing.id);
+      console.log(`📊 Updated last_seen for: ${name}`);
     } else {
-      console.log(`📊 Reported device to database: ${name}`);
+      // New device - insert it
+      const { error: insertError } = await supabase
+        .from('discovered_chromecasts')
+        .insert({
+          device_id: DEVICE_ID,
+          chromecast_name: name,
+          chromecast_host: host,
+          chromecast_port: port,
+          last_seen: new Date().toISOString()
+        });
+
+      if (insertError) {
+        console.error('Error inserting device:', insertError);
+      } else {
+        console.log(`✨ New device added to database: ${name} (${host})`);
+      }
     }
   } catch (error) {
     console.error('Error reporting device:', error);
