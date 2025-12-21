@@ -4,8 +4,11 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-hap');
 require('dotenv').config();
 
-// Version
-const VERSION = '1.0.14';
+// Version - uppdateras vid varje ändring
+const VERSION = '1.0.15';
+// Changelog:
+// 1.0.15 - Force discovery command, IP-uppdatering vid device discovery
+// 1.0.14 - Previous version
 
 // Track last idle check log ID for updates instead of inserts
 let lastIdleCheckLogId = null;
