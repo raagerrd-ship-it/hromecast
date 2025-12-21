@@ -279,13 +279,28 @@ const Index = () => {
     const isOnline = latestActivity && (currentTime - latestActivity.getTime()) < 300000; // 5 min
     const timeStr = latestActivity?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
-    // Extract version from bridge_start log
-    const bridgeStartLog = activityLog.find(log => log.command_type === 'bridge_start' || 
-      (log.command_type === 'bridge_log' && log.url?.includes('Bridge v')));
+    // Extract version from bridge_start log (stored as JSON in url field)
     let version = '';
+    const bridgeStartLog = activityLog.find(log => {
+      if (log.command_type === 'bridge_log' && log.url) {
+        try {
+          const parsed = JSON.parse(log.url);
+          return parsed.message?.includes('Bridge v');
+        } catch {
+          return log.url.includes('Bridge v');
+        }
+      }
+      return false;
+    });
     if (bridgeStartLog?.url) {
-      const match = bridgeStartLog.url.match(/Bridge v([\d.]+)/);
-      if (match) version = match[1];
+      try {
+        const parsed = JSON.parse(bridgeStartLog.url);
+        const match = parsed.message?.match(/Bridge v([\d.]+)/);
+        if (match) version = match[1];
+      } catch {
+        const match = bridgeStartLog.url.match(/Bridge v([\d.]+)/);
+        if (match) version = match[1];
+      }
     }
     
     return { isOnline, timeStr, hasActivity: !!latestActivity, version };
