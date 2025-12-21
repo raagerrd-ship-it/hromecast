@@ -123,7 +123,7 @@ export const ChromecastSelector = memo(({
                   </div>
                   <div className="text-left">
                     <p className="text-sm font-medium">{shortenName(selectedDevice.chromecast_name)}</p>
-                    <p className="text-xs text-muted-foreground">Connected</p>
+                    <p className="text-xs text-muted-foreground">{selectedDevice.chromecast_host}</p>
                   </div>
                 </div>
               ) : (
@@ -142,11 +142,14 @@ export const ChromecastSelector = memo(({
             </SelectItem>
             {chromecasts.map((chromecast) => (
               <SelectItem key={chromecast.id} value={chromecast.id} className="rounded-lg">
-                <div className="flex items-center gap-2">
-                  <span>{shortenName(chromecast.chromecast_name)}</span>
-                  {chromecast.id === selectedChromecastId && (
-                    <Badge variant="secondary" className="text-[10px] px-1.5">Active</Badge>
-                  )}
+                <div className="flex flex-col items-start">
+                  <div className="flex items-center gap-2">
+                    <span>{shortenName(chromecast.chromecast_name)}</span>
+                    {chromecast.id === selectedChromecastId && (
+                      <Badge variant="secondary" className="text-[10px] px-1.5">Active</Badge>
+                    )}
+                  </div>
+                  <span className="text-xs text-muted-foreground">{chromecast.chromecast_host}</span>
                 </div>
               </SelectItem>
             ))}
