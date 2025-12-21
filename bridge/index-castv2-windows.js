@@ -5,8 +5,9 @@ const Bonjour = require('bonjour-hap');
 require('dotenv').config();
 
 // Version - uppdateras vid varje ändring
-const VERSION = '1.0.15';
+const VERSION = '1.0.16';
 // Changelog:
+// 1.0.16 - Minskat log-lagringstid till 24 timmar
 // 1.0.15 - Force discovery command, IP-uppdatering vid device discovery
 // 1.0.14 - Previous version
 
@@ -782,10 +783,10 @@ async function cleanupOldDevices() {
   }
 }
 
-// Clean up old cast_commands logs (older than 7 days)
+// Clean up old cast_commands logs (older than 24 hours)
 async function cleanupOldLogs() {
   try {
-    const cutoffTime = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     
     // Count old logs first
     const { count, error: countError } = await supabase
@@ -809,7 +810,7 @@ async function cleanupOldLogs() {
       if (deleteError) {
         console.error('Error deleting old logs:', deleteError);
       } else {
-        console.log(`🧹 Cleaned up ${count} old log(s) (>7 days)`);
+        console.log(`🧹 Cleaned up ${count} old log(s) (>24h)`);
         await logToCloud(`Cleaned up ${count} old log entries`, 'info');
       }
     }
@@ -1252,8 +1253,8 @@ async function main() {
   }, REDISCOVERY_INTERVAL);
 
   // Periodic log cleanup (every 6 hours, cleans logs older than 7 days)
-  const LOG_CLEANUP_INTERVAL = 6 * 60 * 60 * 1000; // 6 hours
-  console.log('🧹 Starting periodic log cleanup (every 6h, removes logs >7 days)...');
+  const LOG_CLEANUP_INTERVAL = 1 * 60 * 60 * 1000; // 1 hour
+  console.log('🧹 Starting periodic log cleanup (every 1h, removes logs >24h)...');
   const logCleanupInterval = setInterval(cleanupOldLogs, LOG_CLEANUP_INTERVAL);
   
   // Initial log cleanup on startup
