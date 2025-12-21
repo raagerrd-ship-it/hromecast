@@ -73,9 +73,26 @@ export const ChromecastSelector = memo(({
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    await fetchChromecasts();
-    setTimeout(() => setIsRefreshing(false), 1000);
-  }, [fetchChromecasts]);
+    
+    // Send force_discovery command to bridge
+    try {
+      await supabase.from('cast_commands').insert({
+        device_id: deviceId,
+        command_type: 'force_discovery',
+        url: 'discovery',
+        status: 'pending'
+      });
+      console.log('🔍 Force discovery command sent');
+    } catch (error) {
+      console.error('Error sending discovery command:', error);
+    }
+    
+    // Wait a bit for discovery to complete, then refresh
+    setTimeout(async () => {
+      await fetchChromecasts();
+      setIsRefreshing(false);
+    }, 3000);
+  }, [fetchChromecasts, deviceId]);
 
   const handleValueChange = useCallback((value: string) => {
     onChromecastSelected(value === "auto" ? null : value);

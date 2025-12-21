@@ -1082,6 +1082,10 @@ async function processPendingCommands() {
       if (command.command_type === 'cast') {
         isScreensaverActive = false; // Reset when user manually casts something
         await castMedia(command.url);
+      } else if (command.command_type === 'force_discovery') {
+        console.log('🔍 Force discovery requested, scanning network...');
+        await discoverDevices();
+        console.log(`✅ Discovery complete, found ${discoveredDevices.length} devices`);
       }
 
       // Mark as completed
