@@ -5,8 +5,9 @@ const Bonjour = require('bonjour-hap');
 require('dotenv').config();
 
 // Version - uppdateras vid varje ändring
-const VERSION = '1.0.16';
+const VERSION = '1.0.17';
 // Changelog:
+// 1.0.17 - Minskat cooldown till 2 minuter
 // 1.0.16 - Minskat log-lagringstid till 24 timmar
 // 1.0.15 - Force discovery command, IP-uppdatering vid device discovery
 // 1.0.14 - Previous version
@@ -43,7 +44,7 @@ let isScreensaverActive = false; // Track if screensaver is currently casting
 let lastTakeoverTime = 0; // Track when another app took over
 let recoveryCheckInterval = null; // Fast checking during cooldown
 const SCREENSAVER_CHECK_INTERVAL = 60000;
-const COOLDOWN_AFTER_TAKEOVER = 5 * 60 * 1000; // 5 minutes cooldown after another app takes over
+const COOLDOWN_AFTER_TAKEOVER = 2 * 60 * 1000; // 2 minutes cooldown after another app takes over
 const RECOVERY_CHECK_INTERVAL = 10000; // Check every 10 seconds during/after cooldown
 const REDISCOVERY_INTERVAL = 30 * 60 * 1000; // 30 minutes periodic re-discovery
 
