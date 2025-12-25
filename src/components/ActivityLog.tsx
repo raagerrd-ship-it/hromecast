@@ -1,5 +1,5 @@
-import React, { useMemo, memo } from "react";
-import { Activity, CheckCircle, XCircle, Clock, Play, StopCircle, RotateCcw, Zap } from "lucide-react";
+import React, { useMemo, memo, useState, useEffect } from "react";
+import { Activity, CheckCircle, XCircle, Clock, Play, StopCircle, RotateCcw, Zap, Timer } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -16,6 +16,9 @@ interface ActivityLogProps {
   activityLog: ActivityLogEntry[];
   screensaverActive: boolean;
 }
+
+// Cooldown duration in milliseconds (must match bridge COOLDOWN_AFTER_TAKEOVER)
+const COOLDOWN_DURATION_MS = 2 * 60 * 1000; // 2 minutes
 
 // Helper functions outside component to avoid recreation
 const isStatusCheckLog = (log: ActivityLogEntry): boolean => {
@@ -222,6 +225,48 @@ interface GroupedLogItem {
 }
 
 export const ActivityLog = memo(({ activityLog, screensaverActive }: ActivityLogProps) => {
+  const [currentTime, setCurrentTime] = useState(Date.now());
+
+  // Update current time every second for cooldown countdown
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Calculate cooldown status
+  const cooldownInfo = useMemo(() => {
+    // Find most recent screensaver_stop (indicates cooldown started)
+    const lastStop = activityLog.find(log => log.command_type === 'screensaver_stop');
+    if (!lastStop) return null;
+
+    // Find most recent screensaver_start after the stop (indicates cooldown ended and screensaver resumed)
+    const lastStart = activityLog.find(log => 
+      log.command_type === 'screensaver_start' || log.command_type === 'screensaver_resumed'
+    );
+    
+    // If there's a start after the stop, cooldown is over
+    if (lastStart && new Date(lastStart.created_at) > new Date(lastStop.created_at)) {
+      return null;
+    }
+
+    const stopTime = new Date(lastStop.created_at).getTime();
+    const cooldownEndTime = stopTime + COOLDOWN_DURATION_MS;
+    const remainingMs = cooldownEndTime - currentTime;
+
+    if (remainingMs <= 0) return null;
+
+    const remainingSecs = Math.ceil(remainingMs / 1000);
+    const mins = Math.floor(remainingSecs / 60);
+    const secs = remainingSecs % 60;
+    
+    return {
+      remaining: mins > 0 ? `${mins}:${secs.toString().padStart(2, '0')}` : `${secs}s`,
+      progress: Math.max(0, Math.min(100, (1 - remainingMs / COOLDOWN_DURATION_MS) * 100))
+    };
+  }, [activityLog, currentTime]);
+
   // Memoize the grouping logic - only recalculate when activityLog changes
   const groupedLogs = useMemo((): GroupedLogItem[] => {
     const result: GroupedLogItem[] = [];
@@ -263,6 +308,32 @@ export const ActivityLog = memo(({ activityLog, screensaverActive }: ActivityLog
           </Badge>
         )}
       </div>
+
+      {/* Cooldown indicator */}
+      {cooldownInfo && (
+        <div className="rounded-xl bg-orange-500/10 border border-orange-500/20 p-3">
+          <div className="flex items-center gap-3">
+            <Timer className="h-4 w-4 text-orange-500 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-orange-600 dark:text-orange-400">
+                Cooldown active
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Screensaver resumes in {cooldownInfo.remaining}
+              </p>
+            </div>
+            <Badge variant="outline" className="text-[10px] border-orange-500/30 text-orange-600 dark:text-orange-400">
+              {Math.round(cooldownInfo.progress)}%
+            </Badge>
+          </div>
+          <div className="mt-2 h-1 bg-orange-500/20 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-orange-500 transition-all duration-1000 ease-linear"
+              style={{ width: `${cooldownInfo.progress}%` }}
+            />
+          </div>
+        </div>
+      )}
       
       <div className="rounded-2xl bg-secondary/30 border border-border overflow-hidden">
         {activityLog.length === 0 ? (
