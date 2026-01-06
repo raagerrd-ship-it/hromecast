@@ -5,8 +5,9 @@ const Bonjour = require('bonjour-hap');
 require('dotenv').config();
 
 // Version - uppdateras vid varje ändring
-const VERSION = '1.0.17';
+const VERSION = '1.0.18';
 // Changelog:
+// 1.0.18 - Intelligent IP-recovery med aktiv mDNS re-discovery vid anslutningsfel
 // 1.0.17 - Minskat cooldown till 2 minuter
 // 1.0.16 - Minskat log-lagringstid till 24 timmar
 // 1.0.15 - Force discovery command, IP-uppdatering vid device discovery
@@ -308,6 +309,17 @@ function startRecoveryCheck() {
     } else if (result.status === 'our_app') {
       console.log('✅ [RECOVERY] Our app already running, stopping recovery check');
       stopRecoveryCheck();
+    } else if (result.status === 'error') {
+      // Device unreachable - trigger rediscovery
+      console.log('🔄 [RECOVERY] Device unreachable, triggering rediscovery...');
+      const selectedDevice = await getSelectedChromecast();
+      if (selectedDevice) {
+        const rediscovered = await rediscoverDevice(selectedDevice.name, selectedDevice.host);
+        if (rediscovered && rediscovered.id && rediscovered.id !== selectedDevice.id) {
+          await updateSelectedChromecast(rediscovered.id);
+          console.log('✅ [RECOVERY] Device rediscovered with new IP, will retry next check');
+        }
+      }
     } else {
       console.log(`⏭️  [RECOVERY] Device still busy (${result.status}), will check again...`);
     }
@@ -417,6 +429,13 @@ async function getSelectedChromecast() {
   }
 }
 
+// Extract unique device hash from Chromecast name
+// Example: "Chromecast-Ultra-a1eee59f647dc50c109bf7b8561690ee" → "a1eee59f647dc50c109bf7b8561690ee"
+function extractDeviceHash(name) {
+  const match = name.match(/-([a-f0-9]{32})$/i);
+  return match ? match[1].toLowerCase() : null;
+}
+
 // Find newer IP for same device name (handles DHCP changes)
 async function findNewerDeviceIP(deviceName, currentId) {
   try {
@@ -448,6 +467,86 @@ async function findNewerDeviceIP(deviceName, currentId) {
     console.error('Error finding newer device IP:', error);
     return null;
   }
+}
+
+// Log IP recovery event to Activity Log
+async function logIPRecovery(deviceName, oldIP, newIP) {
+  try {
+    await supabase.from('cast_commands').insert({
+      device_id: DEVICE_ID,
+      command_type: 'ip_recovery',
+      url: JSON.stringify({ 
+        device: deviceName, 
+        oldIP, 
+        newIP,
+        timestamp: new Date().toISOString()
+      }),
+      status: 'completed',
+      processed_at: new Date().toISOString()
+    });
+    console.log(`📝 [IP-RECOVERY] Logged: ${oldIP} → ${newIP}`);
+  } catch (e) {
+    console.error('Error logging IP recovery:', e);
+  }
+}
+
+// Active re-discovery of a specific device by its hash
+async function rediscoverDevice(targetDeviceName, oldIP = null) {
+  const targetHash = extractDeviceHash(targetDeviceName);
+  if (!targetHash) {
+    console.log(`⚠️  [IP-RECOVERY] Cannot extract hash from: ${targetDeviceName}`);
+    return null;
+  }
+  
+  console.log(`🔍 [IP-RECOVERY] Searching for device with hash: ${targetHash}...`);
+  await logToCloud(`IP recovery: searching for ${targetDeviceName}`);
+  
+  // Run full mDNS discovery (8 seconds)
+  await discoverDevices();
+  
+  // Search for matching device with new IP
+  for (const [key, device] of discoveredDevices) {
+    const deviceHash = extractDeviceHash(device.name);
+    if (deviceHash === targetHash) {
+      console.log(`✅ [IP-RECOVERY] Found device at IP: ${device.host}`);
+      
+      // Log IP change if IP is different
+      if (oldIP && device.host !== oldIP) {
+        await logIPRecovery(device.name, oldIP, device.host);
+      }
+      
+      // Find the database record for this device
+      const { data: dbDevice } = await supabase
+        .from('discovered_chromecasts')
+        .select('*')
+        .eq('device_id', DEVICE_ID)
+        .eq('chromecast_name', device.name)
+        .order('last_seen', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (dbDevice) {
+        return {
+          id: dbDevice.id,
+          name: dbDevice.chromecast_name,
+          host: dbDevice.chromecast_host,
+          port: dbDevice.chromecast_port
+        };
+      }
+      
+      // Return discovered device even without DB record
+      return {
+        id: null,
+        name: device.name,
+        host: device.host,
+        port: device.port
+      };
+    }
+  }
+  
+  console.log(`❌ [IP-RECOVERY] Device not found on network`);
+  await logToCloud(`IP recovery failed: ${targetDeviceName} not found`, 'error');
+  return null;
 }
 
 // Update selected chromecast to new ID
@@ -520,8 +619,16 @@ async function isChromecastIdle(retryWithNewIP = true, retryCount = 0) {
       
       // Try to find newer IP for same device
       if (retryWithNewIP && targetDevice.id) {
-        const newerDevice = await findNewerDeviceIP(targetDevice.name, targetDevice.id);
-        if (newerDevice) {
+        // Step 1: Check database first (fast)
+        let newerDevice = await findNewerDeviceIP(targetDevice.name, targetDevice.id);
+        
+        // Step 2: If no new IP in DB → active re-discovery
+        if (!newerDevice) {
+          console.log(`🔄 [IP-RECOVERY] No newer IP in database, running active discovery...`);
+          newerDevice = await rediscoverDevice(targetDevice.name, targetDevice.host);
+        }
+        
+        if (newerDevice && newerDevice.id) {
           console.log(`🔄 Retrying with new IP: ${newerDevice.host}`);
           await updateSelectedChromecast(newerDevice.id);
           // Retry with new IP (but don't retry again to avoid infinite loop)
@@ -531,7 +638,7 @@ async function isChromecastIdle(retryWithNewIP = true, retryCount = 0) {
         }
       }
       
-      await logToCloud(`Idle check timeout: ${targetDevice.name} - no newer IP found`, 'error');
+      await logToCloud(`Idle check timeout: ${targetDevice.name} - device not found`, 'error');
       resolve({ status: 'error' });
     }, 5000);
     
@@ -580,8 +687,16 @@ async function isChromecastIdle(retryWithNewIP = true, retryCount = 0) {
       
       // Try to find newer IP for same device on connection error
       if (retryWithNewIP && targetDevice.id && (err.message.includes('ETIMEDOUT') || err.message.includes('ECONNREFUSED'))) {
-        const newerDevice = await findNewerDeviceIP(targetDevice.name, targetDevice.id);
-        if (newerDevice) {
+        // Step 1: Check database first (fast)
+        let newerDevice = await findNewerDeviceIP(targetDevice.name, targetDevice.id);
+        
+        // Step 2: If no new IP in DB → active re-discovery
+        if (!newerDevice) {
+          console.log(`🔄 [IP-RECOVERY] No newer IP in database, running active discovery...`);
+          newerDevice = await rediscoverDevice(targetDevice.name, targetDevice.host);
+        }
+        
+        if (newerDevice && newerDevice.id) {
           console.log(`🔄 Connection failed, retrying with new IP: ${newerDevice.host}`);
           await updateSelectedChromecast(newerDevice.id);
           const retryResult = await isChromecastIdle(false, 0);

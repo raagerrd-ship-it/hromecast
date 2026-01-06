@@ -1,5 +1,5 @@
 import React, { useMemo, memo, useState, useEffect } from "react";
-import { Activity, CheckCircle, XCircle, Clock, Play, StopCircle, RotateCcw, Zap, Timer } from "lucide-react";
+import { Activity, CheckCircle, XCircle, Clock, Play, StopCircle, RotateCcw, Zap, Timer, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -62,6 +62,9 @@ const ActivityLogItem = memo(({ log, allLogs, logIndex }: { log: ActivityLogEntr
         ? <Zap className="h-4 w-4 text-destructive" />
         : <Zap className="h-4 w-4 text-primary" />;
     }
+    if (log.command_type === 'ip_recovery') {
+      return <RefreshCw className="h-4 w-4 text-blue-500" />;
+    }
     if (log.command_type === 'screensaver_start') {
       return log.status === 'failed' 
         ? <XCircle className="h-4 w-4 text-destructive" />
@@ -103,6 +106,15 @@ const ActivityLogItem = memo(({ log, allLogs, logIndex }: { log: ActivityLogEntr
         return 'Circuit breaker closed';
       } catch {
         return 'Circuit breaker';
+      }
+    }
+    if (log.command_type === 'ip_recovery') {
+      try {
+        const data = JSON.parse(log.url);
+        const deviceName = cleanDeviceName(data.device || 'Device');
+        return `${deviceName}: ${data.oldIP} → ${data.newIP}`;
+      } catch {
+        return 'IP recovery';
       }
     }
     if (log.command_type === 'screensaver_start') return 'Screensaver started';
