@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, memo } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Tv, RefreshCw, Wifi } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Tv, RefreshCw, Wifi, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface DiscoveredChromecast {
@@ -87,11 +88,11 @@ export const ChromecastSelector = memo(({
       console.error('Error sending discovery command:', error);
     }
     
-    // Wait a bit for discovery to complete, then refresh
+    // Wait for discovery to complete (mDNS takes ~8 seconds), then refresh
     setTimeout(async () => {
       await fetchChromecasts();
       setIsRefreshing(false);
-    }, 3000);
+    }, 10000);
   }, [fetchChromecasts, deviceId]);
 
   const handleValueChange = useCallback((value: string) => {
@@ -107,14 +108,45 @@ export const ChromecastSelector = memo(({
           <Tv className="h-4 w-4 text-primary" />
           <span className="text-sm font-medium">Device</span>
         </div>
-        <button
+        <Button
+          variant="outline"
+          size="sm"
           onClick={handleRefresh}
           disabled={isRefreshing}
-          className="p-2 -m-2 text-muted-foreground hover:text-foreground transition-colors"
+          className="h-8 gap-2 text-xs"
         >
-          <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-        </button>
+          {isRefreshing ? (
+            <>
+              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+              <span>Scanning...</span>
+            </>
+          ) : (
+            <>
+              <Search className="h-3.5 w-3.5" />
+              <span>Scan network</span>
+            </>
+          )}
+        </Button>
       </div>
+
+      {/* Scanning indicator */}
+      {isRefreshing && (
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-primary/5 border border-primary/20">
+          <div className="relative">
+            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+              <Wifi className="h-4 w-4 text-primary" />
+            </div>
+            <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-primary" />
+            </span>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-primary">Scanning network...</p>
+            <p className="text-xs text-muted-foreground">Looking for Chromecast devices</p>
+          </div>
+        </div>
+      )}
 
       {chromecasts.length === 0 ? (
         <div className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50 border border-border">
