@@ -47,7 +47,7 @@ let recoveryCheckInterval = null; // Fast checking during cooldown
 const SCREENSAVER_CHECK_INTERVAL = 60000;
 const COOLDOWN_AFTER_TAKEOVER = 2 * 60 * 1000; // 2 minutes cooldown after another app takes over
 const RECOVERY_CHECK_INTERVAL = 10000; // Check every 10 seconds during/after cooldown
-const REDISCOVERY_INTERVAL = 30 * 60 * 1000; // 30 minutes periodic re-discovery
+// REDISCOVERY_INTERVAL removed - manual discovery only via force_discovery command
 
 // Retry configuration
 const MAX_RETRIES = 3;
@@ -1298,7 +1298,7 @@ async function main() {
   console.log(`📱 Device ID: ${DEVICE_ID}`);
   console.log(`🎬 Custom App ID: ${CUSTOM_APP_ID}`);
   console.log(`⏱️  Poll interval: ${POLL_INTERVAL}ms`);
-  console.log(`🔄 Re-discovery interval: ${REDISCOVERY_INTERVAL / 60000} min`);
+  console.log('🔄 Device discovery: manual only (via UI or IP-recovery)');
   console.log('');
   
   await logToCloud(`Bridge v${VERSION} starting...`);
@@ -1360,13 +1360,8 @@ async function main() {
   console.log('🎬 Starting auto-screensaver monitoring (checks every 60s)...');
   const screensaverInterval = setInterval(checkAndActivateScreensaver, SCREENSAVER_CHECK_INTERVAL);
 
-  // Periodic re-discovery of devices (handles IP changes)
-  console.log('🔄 Starting periodic re-discovery (every 30 min)...');
-  const rediscoveryInterval = setInterval(async () => {
-    console.log('\n🔄 [RE-DISCOVERY] Periodic device scan...');
-    await discoverDevices();
-    console.log(`🔄 [RE-DISCOVERY] Complete: ${discoveredDevices.size} device(s) found\n`);
-  }, REDISCOVERY_INTERVAL);
+  // Periodic re-discovery removed - manual discovery only via force_discovery command
+  // IP-recovery still works automatically when connection fails
 
   // Periodic log cleanup (every 6 hours, cleans logs older than 7 days)
   const LOG_CLEANUP_INTERVAL = 1 * 60 * 60 * 1000; // 1 hour
@@ -1410,7 +1405,6 @@ async function main() {
     // Clear all intervals
     clearInterval(pollInterval);
     clearInterval(screensaverInterval);
-    clearInterval(rediscoveryInterval);
     clearInterval(logCleanupInterval);
     
     // Clear all active heartbeats
