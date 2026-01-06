@@ -54,7 +54,9 @@ const IP_RECOVERY_BACKOFF = {
   baseInterval: 10000,      // 10 seconds base
   initialAttempts: 3,       // First 3 attempts at base interval
   maxInterval: 10 * 60 * 1000, // Max 10 minutes
-  multiplier: 2             // Double each time after initial attempts
+  multiplier: 2,            // Double each time after initial attempts
+  maintenanceInterval: 60 * 60 * 1000, // 1 hour in maintenance mode
+  maintenanceThreshold: 12  // Go to maintenance mode after 12 attempts
 };
 let ipRecoveryState = {
   failedAttempts: 0,
@@ -134,26 +136,11 @@ function recordCircuitSuccess() {
   circuitBreakerState.isOpen = false;
   
   // Reset IP recovery backoff on successful connection
-  if (ipRecoveryState.failedAttempts > 0) {
-    console.log(`✅ [IP-RECOVERY] Reset backoff (was at ${Math.round(ipRecoveryState.currentInterval/1000)}s after ${ipRecoveryState.failedAttempts} failures)`);
-    ipRecoveryState.failedAttempts = 0;
-    ipRecoveryState.currentInterval = IP_RECOVERY_BACKOFF.baseInterval;
-  }
+  resetIPRecoveryBackoff();
   
   if (wasOpen) {
     console.log('⚡ [CIRCUIT] Closed - connection restored');
     // Log to Activity Log
-    supabase.from('cast_commands').insert({
-      device_id: DEVICE_ID,
-      command_type: 'circuit_breaker',
-      url: JSON.stringify({ status: 'closed', message: 'Connection restored' }),
-      status: 'completed',
-      processed_at: new Date().toISOString()
-    });
-  } else if (hadFailures) {
-    console.log('⚡ [CIRCUIT] Reset - failures cleared');
-  }
-}
     supabase.from('cast_commands').insert({
       device_id: DEVICE_ID,
       command_type: 'circuit_breaker',
@@ -314,7 +301,12 @@ async function updateIdleCheckLog(message, checkCount = null) {
 
 // Calculate next IP recovery interval with exponential backoff
 function getNextRecoveryInterval() {
-  const { baseInterval, initialAttempts, maxInterval, multiplier } = IP_RECOVERY_BACKOFF;
+  const { baseInterval, initialAttempts, maxInterval, multiplier, maintenanceInterval, maintenanceThreshold } = IP_RECOVERY_BACKOFF;
+  
+  // Check if we've exceeded maintenance threshold
+  if (ipRecoveryState.failedAttempts >= maintenanceThreshold) {
+    return maintenanceInterval; // 1 hour in maintenance mode
+  }
   
   // First N attempts use base interval
   if (ipRecoveryState.failedAttempts < initialAttempts) {
@@ -330,30 +322,54 @@ function getNextRecoveryInterval() {
 
 // Record IP recovery failure and update backoff
 function recordIPRecoveryFailure() {
+  const wasInMaintenance = ipRecoveryState.failedAttempts >= IP_RECOVERY_BACKOFF.maintenanceThreshold;
+  
   ipRecoveryState.failedAttempts++;
   ipRecoveryState.lastAttemptTime = Date.now();
   ipRecoveryState.currentInterval = getNextRecoveryInterval();
   
   const intervalSecs = Math.round(ipRecoveryState.currentInterval / 1000);
-  const intervalDisplay = intervalSecs >= 60 
-    ? `${Math.round(intervalSecs / 60)} min` 
-    : `${intervalSecs}s`;
+  const intervalDisplay = intervalSecs >= 3600 
+    ? `${Math.round(intervalSecs / 3600)} h` 
+    : intervalSecs >= 60 
+      ? `${Math.round(intervalSecs / 60)} min` 
+      : `${intervalSecs}s`;
   
-  console.log(`⏳ [IP-RECOVERY] Attempt ${ipRecoveryState.failedAttempts} failed, next check in ${intervalDisplay}`);
+  // Check if we just entered maintenance mode
+  const isInMaintenance = ipRecoveryState.failedAttempts >= IP_RECOVERY_BACKOFF.maintenanceThreshold;
   
-  // Log to Activity Log when backoff increases
-  if (ipRecoveryState.failedAttempts >= IP_RECOVERY_BACKOFF.initialAttempts) {
+  if (isInMaintenance && !wasInMaintenance) {
+    console.log(`🛠️ [IP-RECOVERY] Entering maintenance mode - checking every hour`);
     supabase.from('cast_commands').insert({
       device_id: DEVICE_ID,
-      command_type: 'ip_recovery_backoff',
+      command_type: 'ip_recovery_maintenance',
       url: JSON.stringify({ 
         attempts: ipRecoveryState.failedAttempts,
-        nextInterval: intervalDisplay,
+        mode: 'maintenance',
+        interval: '1 hour',
+        message: 'Device not found - switching to hourly checks',
         timestamp: new Date().toISOString()
       }),
       status: 'completed',
       processed_at: new Date().toISOString()
     });
+  } else {
+    console.log(`⏳ [IP-RECOVERY] Attempt ${ipRecoveryState.failedAttempts} failed, next check in ${intervalDisplay}`);
+    
+    // Log to Activity Log when backoff increases (but not in maintenance mode)
+    if (ipRecoveryState.failedAttempts >= IP_RECOVERY_BACKOFF.initialAttempts && !isInMaintenance) {
+      supabase.from('cast_commands').insert({
+        device_id: DEVICE_ID,
+        command_type: 'ip_recovery_backoff',
+        url: JSON.stringify({ 
+          attempts: ipRecoveryState.failedAttempts,
+          nextInterval: intervalDisplay,
+          timestamp: new Date().toISOString()
+        }),
+        status: 'completed',
+        processed_at: new Date().toISOString()
+      });
+    }
   }
 }
 
