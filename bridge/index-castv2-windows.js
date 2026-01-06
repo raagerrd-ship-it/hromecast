@@ -46,8 +46,21 @@ let lastTakeoverTime = 0; // Track when another app took over
 let recoveryCheckInterval = null; // Fast checking during cooldown
 const SCREENSAVER_CHECK_INTERVAL = 60000;
 const COOLDOWN_AFTER_TAKEOVER = 2 * 60 * 1000; // 2 minutes cooldown after another app takes over
-const RECOVERY_CHECK_INTERVAL = 10000; // Check every 10 seconds during/after cooldown
+const BASE_RECOVERY_CHECK_INTERVAL = 10000; // Base interval: 10 seconds
 // REDISCOVERY_INTERVAL removed - manual discovery only via force_discovery command
+
+// IP-recovery backoff configuration
+const IP_RECOVERY_BACKOFF = {
+  baseInterval: 10000,      // 10 seconds base
+  initialAttempts: 3,       // First 3 attempts at base interval
+  maxInterval: 10 * 60 * 1000, // Max 10 minutes
+  multiplier: 2             // Double each time after initial attempts
+};
+let ipRecoveryState = {
+  failedAttempts: 0,
+  lastAttemptTime: 0,
+  currentInterval: IP_RECOVERY_BACKOFF.baseInterval
+};
 
 // Retry configuration
 const MAX_RETRIES = 3;
@@ -120,9 +133,27 @@ function recordCircuitSuccess() {
   circuitBreakerState.failures = 0;
   circuitBreakerState.isOpen = false;
   
+  // Reset IP recovery backoff on successful connection
+  if (ipRecoveryState.failedAttempts > 0) {
+    console.log(`✅ [IP-RECOVERY] Reset backoff (was at ${Math.round(ipRecoveryState.currentInterval/1000)}s after ${ipRecoveryState.failedAttempts} failures)`);
+    ipRecoveryState.failedAttempts = 0;
+    ipRecoveryState.currentInterval = IP_RECOVERY_BACKOFF.baseInterval;
+  }
+  
   if (wasOpen) {
     console.log('⚡ [CIRCUIT] Closed - connection restored');
     // Log to Activity Log
+    supabase.from('cast_commands').insert({
+      device_id: DEVICE_ID,
+      command_type: 'circuit_breaker',
+      url: JSON.stringify({ status: 'closed', message: 'Connection restored' }),
+      status: 'completed',
+      processed_at: new Date().toISOString()
+    });
+  } else if (hadFailures) {
+    console.log('⚡ [CIRCUIT] Reset - failures cleared');
+  }
+}
     supabase.from('cast_commands').insert({
       device_id: DEVICE_ID,
       command_type: 'circuit_breaker',
@@ -281,12 +312,77 @@ async function updateIdleCheckLog(message, checkCount = null) {
   }
 }
 
-// Start fast recovery checking
+// Calculate next IP recovery interval with exponential backoff
+function getNextRecoveryInterval() {
+  const { baseInterval, initialAttempts, maxInterval, multiplier } = IP_RECOVERY_BACKOFF;
+  
+  // First N attempts use base interval
+  if (ipRecoveryState.failedAttempts < initialAttempts) {
+    return baseInterval;
+  }
+  
+  // After initial attempts, exponential backoff
+  const attemptsAfterInitial = ipRecoveryState.failedAttempts - initialAttempts;
+  const interval = baseInterval * Math.pow(multiplier, attemptsAfterInitial + 1);
+  
+  return Math.min(interval, maxInterval);
+}
+
+// Record IP recovery failure and update backoff
+function recordIPRecoveryFailure() {
+  ipRecoveryState.failedAttempts++;
+  ipRecoveryState.lastAttemptTime = Date.now();
+  ipRecoveryState.currentInterval = getNextRecoveryInterval();
+  
+  const intervalSecs = Math.round(ipRecoveryState.currentInterval / 1000);
+  const intervalDisplay = intervalSecs >= 60 
+    ? `${Math.round(intervalSecs / 60)} min` 
+    : `${intervalSecs}s`;
+  
+  console.log(`⏳ [IP-RECOVERY] Attempt ${ipRecoveryState.failedAttempts} failed, next check in ${intervalDisplay}`);
+  
+  // Log to Activity Log when backoff increases
+  if (ipRecoveryState.failedAttempts >= IP_RECOVERY_BACKOFF.initialAttempts) {
+    supabase.from('cast_commands').insert({
+      device_id: DEVICE_ID,
+      command_type: 'ip_recovery_backoff',
+      url: JSON.stringify({ 
+        attempts: ipRecoveryState.failedAttempts,
+        nextInterval: intervalDisplay,
+        timestamp: new Date().toISOString()
+      }),
+      status: 'completed',
+      processed_at: new Date().toISOString()
+    });
+  }
+}
+
+// Reset IP recovery backoff (called on success)
+function resetIPRecoveryBackoff() {
+  if (ipRecoveryState.failedAttempts > 0) {
+    console.log(`✅ [IP-RECOVERY] Reset backoff (was at ${Math.round(ipRecoveryState.currentInterval/1000)}s after ${ipRecoveryState.failedAttempts} failures)`);
+    ipRecoveryState.failedAttempts = 0;
+    ipRecoveryState.currentInterval = IP_RECOVERY_BACKOFF.baseInterval;
+    ipRecoveryState.lastAttemptTime = 0;
+  }
+}
+
+// Check if enough time has passed for next IP recovery attempt
+function canAttemptIPRecovery() {
+  if (ipRecoveryState.lastAttemptTime === 0) return true;
+  
+  const timeSinceLastAttempt = Date.now() - ipRecoveryState.lastAttemptTime;
+  return timeSinceLastAttempt >= ipRecoveryState.currentInterval;
+}
+
+// Start fast recovery checking with exponential backoff
 function startRecoveryCheck() {
   if (recoveryCheckInterval) return; // Already running
   
-  console.log('🔄 Starting fast recovery check (every 10s)...');
+  console.log('🔄 Starting recovery check with exponential backoff...');
   logToCloud('Recovery check started - monitoring for idle device');
+  
+  // Use base interval for the check loop, but skip attempts based on backoff
   recoveryCheckInterval = setInterval(async () => {
     const timeSinceTakeover = Date.now() - lastTakeoverTime;
     
@@ -297,39 +393,59 @@ function startRecoveryCheck() {
       return;
     }
     
+    // Check if we should attempt based on backoff
+    if (!canAttemptIPRecovery()) {
+      const waitTime = ipRecoveryState.currentInterval - (Date.now() - ipRecoveryState.lastAttemptTime);
+      const waitDisplay = waitTime >= 60000 
+        ? `${Math.ceil(waitTime / 60000)} min`
+        : `${Math.ceil(waitTime / 1000)}s`;
+      console.log(`⏳ [RECOVERY] Backoff active, next attempt in ${waitDisplay}`);
+      return;
+    }
+    
     // Cooldown over - check if device is idle
-    console.log('🔍 [RECOVERY] Cooldown over, checking device status...');
+    console.log('🔍 [RECOVERY] Checking device status...');
     const result = await isChromecastIdle();
     
     if (result.status === 'idle') {
       console.log('✅ [RECOVERY] Device idle, triggering screensaver...');
       logToCloud('Device idle after cooldown - reactivating screensaver');
+      resetIPRecoveryBackoff();
       stopRecoveryCheck();
       checkAndActivateScreensaver();
     } else if (result.status === 'our_app') {
       console.log('✅ [RECOVERY] Our app already running, stopping recovery check');
+      resetIPRecoveryBackoff();
       stopRecoveryCheck();
     } else if (result.status === 'error') {
-      // Device unreachable - trigger rediscovery
+      // Device unreachable - trigger rediscovery with backoff
       console.log('🔄 [RECOVERY] Device unreachable, triggering rediscovery...');
       const selectedDevice = await getSelectedChromecast();
       if (selectedDevice) {
         const rediscovered = await rediscoverDevice(selectedDevice.name, selectedDevice.host);
         if (rediscovered && rediscovered.id && rediscovered.id !== selectedDevice.id) {
           await updateSelectedChromecast(rediscovered.id);
+          resetIPRecoveryBackoff();
           console.log('✅ [RECOVERY] Device rediscovered with new IP, will retry next check');
+        } else {
+          // Device not found - increase backoff
+          recordIPRecoveryFailure();
         }
+      } else {
+        recordIPRecoveryFailure();
       }
     } else {
       console.log(`⏭️  [RECOVERY] Device still busy (${result.status}), will check again...`);
+      // Device is busy (not an error), reset backoff since we can reach it
+      resetIPRecoveryBackoff();
     }
-  }, RECOVERY_CHECK_INTERVAL);
+  }, BASE_RECOVERY_CHECK_INTERVAL);
 }
 
 // Stop fast recovery checking
 function stopRecoveryCheck() {
   if (recoveryCheckInterval) {
-    console.log('🛑 Stopping fast recovery check');
+    console.log('🛑 Stopping recovery check');
     clearInterval(recoveryCheckInterval);
     recoveryCheckInterval = null;
   }

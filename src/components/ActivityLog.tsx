@@ -62,7 +62,7 @@ const ActivityLogItem = memo(({ log, allLogs, logIndex }: { log: ActivityLogEntr
         ? <Zap className="h-4 w-4 text-destructive" />
         : <Zap className="h-4 w-4 text-primary" />;
     }
-    if (log.command_type === 'ip_recovery') {
+    if (log.command_type === 'ip_recovery' || log.command_type === 'ip_recovery_backoff') {
       return <RefreshCw className="h-4 w-4 text-blue-500" />;
     }
     if (log.command_type === 'screensaver_start') {
@@ -115,6 +115,14 @@ const ActivityLogItem = memo(({ log, allLogs, logIndex }: { log: ActivityLogEntr
         return `${deviceName}: ${data.oldIP} → ${data.newIP}`;
       } catch {
         return 'IP recovery';
+      }
+    }
+    if (log.command_type === 'ip_recovery_backoff') {
+      try {
+        const data = JSON.parse(log.url);
+        return `IP recovery backoff: next in ${data.nextInterval} (attempt ${data.attempts})`;
+      } catch {
+        return 'IP recovery backoff';
       }
     }
     if (log.command_type === 'screensaver_start') return 'Screensaver started';
