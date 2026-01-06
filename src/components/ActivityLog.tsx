@@ -65,6 +65,9 @@ const ActivityLogItem = memo(({ log, allLogs, logIndex }: { log: ActivityLogEntr
     if (log.command_type === 'ip_recovery' || log.command_type === 'ip_recovery_backoff') {
       return <RefreshCw className="h-4 w-4 text-blue-500" />;
     }
+    if (log.command_type === 'ip_recovery_maintenance') {
+      return <RefreshCw className="h-4 w-4 text-orange-500" />;
+    }
     if (log.command_type === 'screensaver_start') {
       return log.status === 'failed' 
         ? <XCircle className="h-4 w-4 text-destructive" />
@@ -124,6 +127,9 @@ const ActivityLogItem = memo(({ log, allLogs, logIndex }: { log: ActivityLogEntr
       } catch {
         return 'IP recovery backoff';
       }
+    }
+    if (log.command_type === 'ip_recovery_maintenance') {
+      return 'Maintenance mode: checking every hour';
     }
     if (log.command_type === 'screensaver_start') return 'Screensaver started';
     if (log.command_type === 'screensaver_resumed') return 'Screensaver resumed';
