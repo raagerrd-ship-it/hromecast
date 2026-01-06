@@ -2,6 +2,7 @@ import { ScreensaverSettings, ScreensaverConfig } from "@/components/Screensaver
 import { Link } from "react-router-dom";
 import { ChromecastSelector } from "@/components/ChromecastSelector";
 import { ActivityLog } from "@/components/ActivityLog";
+import { IPRecoveryStatus } from "@/components/IPRecoveryStatus";
 import { Play, Tv, HelpCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -396,6 +397,9 @@ const Index = () => {
               </div>
             </section>
           )}
+
+          {/* IP Recovery Status */}
+          <IPRecoveryStatus activityLog={activityLog} />
 
           {/* Activity */}
           <ActivityLog activityLog={activityLog} screensaverActive={screensaverActive} />
