@@ -5,8 +5,9 @@ const Bonjour = require('bonjour-hap');
 require('dotenv').config();
 
 // Version - uppdateras vid varje ändring
-const VERSION = '1.0.18';
+const VERSION = '1.0.19';
 // Changelog:
+// 1.0.19 - Snabbare recovery: 30s cooldown, skippa cooldown vid nätverksfel, force_discovery nollställer cooldown
 // 1.0.18 - Intelligent IP-recovery med aktiv mDNS re-discovery vid anslutningsfel
 // 1.0.17 - Minskat cooldown till 2 minuter
 // 1.0.16 - Minskat log-lagringstid till 24 timmar
@@ -45,7 +46,7 @@ let isScreensaverActive = false; // Track if screensaver is currently casting
 let lastTakeoverTime = 0; // Track when another app took over
 let recoveryCheckInterval = null; // Fast checking during cooldown
 const SCREENSAVER_CHECK_INTERVAL = 60000;
-const COOLDOWN_AFTER_TAKEOVER = 2 * 60 * 1000; // 2 minutes cooldown after another app takes over
+const COOLDOWN_AFTER_TAKEOVER = 30 * 1000; // 30 seconds cooldown after another app takes over
 const BASE_RECOVERY_CHECK_INTERVAL = 10000; // Base interval: 10 seconds
 // REDISCOVERY_INTERVAL removed - manual discovery only via force_discovery command
 
@@ -63,6 +64,9 @@ let ipRecoveryState = {
   lastAttemptTime: 0,
   currentInterval: IP_RECOVERY_BACKOFF.baseInterval
 };
+
+// Track last error type: 'takeover' (needs cooldown) or 'network_error' (skip cooldown)
+let lastErrorType = 'takeover';
 
 // Retry configuration
 const MAX_RETRIES = 3;
@@ -154,11 +158,13 @@ function recordCircuitSuccess() {
 }
 
 // Helper function to log screensaver stop (refactored from duplicated code)
-async function logScreensaverStop(url) {
+// reason: 'takeover' (user took over, needs cooldown) or 'network_error' (skip cooldown)
+async function logScreensaverStop(url, reason = 'takeover') {
   if (!isScreensaverActive) return; // Already stopped
   
   isScreensaverActive = false;
   lastTakeoverTime = Date.now();
+  lastErrorType = reason;
   
   await Promise.all([
     supabase.from('cast_commands').insert({
@@ -173,7 +179,8 @@ async function logScreensaverStop(url) {
       .eq('device_id', DEVICE_ID)
   ]);
   
-  console.log('✅ screensaver_stop logged - cooldown started');
+  const cooldownMsg = reason === 'network_error' ? 'no cooldown (network error)' : 'cooldown started';
+  console.log(`✅ screensaver_stop logged - ${cooldownMsg}`);
   startRecoveryCheck();
 }
 
@@ -402,10 +409,13 @@ function startRecoveryCheck() {
   recoveryCheckInterval = setInterval(async () => {
     const timeSinceTakeover = Date.now() - lastTakeoverTime;
     
-    // Still in cooldown?
-    if (timeSinceTakeover < COOLDOWN_AFTER_TAKEOVER) {
-      const remainingMinutes = Math.ceil((COOLDOWN_AFTER_TAKEOVER - timeSinceTakeover) / 60000);
-      console.log(`⏸️  [RECOVERY] Cooldown: ${remainingMinutes} min remaining`);
+    // Skip cooldown if last error was a network error (we want to reconnect ASAP)
+    const skipCooldown = lastErrorType === 'network_error';
+    
+    // Still in cooldown? (only if not a network error)
+    if (!skipCooldown && timeSinceTakeover < COOLDOWN_AFTER_TAKEOVER) {
+      const remainingSecs = Math.ceil((COOLDOWN_AFTER_TAKEOVER - timeSinceTakeover) / 1000);
+      console.log(`⏸️  [RECOVERY] Cooldown: ${remainingSecs}s remaining`);
       return;
     }
     
@@ -931,12 +941,13 @@ async function checkAndActivateScreensaver() {
   }
   
   if (result.status === 'busy' || result.status === 'error') {
-    console.log('⏭️  [AUTO-SCREENSAVER] Device busy, skipping');
+    console.log(`⏭️  [AUTO-SCREENSAVER] Device ${result.status}, skipping`);
     
-    // Mark screensaver as inactive if device is busy (someone else took over)
+    // Mark screensaver as inactive if device is busy (someone else took over) or error (network issue)
     if (isScreensaverActive) {
-      await logScreensaverStop(settings.url || '');
-      console.log('📝 [AUTO-SCREENSAVER] Logged screensaver stop (device taken over)');
+      const reason = result.status === 'error' ? 'network_error' : 'takeover';
+      await logScreensaverStop(settings.url || '', reason);
+      console.log(`📝 [AUTO-SCREENSAVER] Logged screensaver stop (${reason})`);
     }
     return;
   }
@@ -1367,7 +1378,13 @@ async function processPendingCommands() {
       } else if (command.command_type === 'force_discovery') {
         console.log('🔍 Force discovery requested, scanning network...');
         await discoverDevices();
-        console.log(`✅ Discovery complete, found ${discoveredDevices.length} devices`);
+        console.log(`✅ Discovery complete, found ${discoveredDevices.size} devices`);
+        
+        // Reset cooldown after successful force discovery
+        lastTakeoverTime = 0;
+        lastErrorType = 'takeover'; // Reset to normal mode
+        resetIPRecoveryBackoff();
+        console.log('✅ Force discovery complete - cooldown reset, will check immediately');
       }
 
       // Mark as completed
