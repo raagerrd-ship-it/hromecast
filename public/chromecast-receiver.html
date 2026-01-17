@@ -138,6 +138,17 @@
       };
     }
     
+    // Keep connection alive (every 10 seconds)
+    setInterval(() => {
+      console.log('Keep-alive:', new Date().toISOString());
+    }, 10000);
+    
+    // Auto-refresh every 45 minutes to clear memory
+    setInterval(() => {
+      console.log('Auto-refresh to clear memory');
+      window.location.reload();
+    }, 45 * 60 * 1000);
+    
     // Start the receiver
     const options = new cast.framework.CastReceiverOptions();
     options.disableIdleTimeout = true;
