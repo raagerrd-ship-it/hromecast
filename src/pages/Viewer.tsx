@@ -8,12 +8,22 @@ const Viewer = () => {
   useEffect(() => {
     if (url) {
       console.log('Viewer loading URL:', url);
-      // Keep-alive ping
+      
+      // Keep-alive ping every 10 seconds (reduced from 2s)
       const keepAlive = setInterval(() => {
         console.log('Keep-alive');
-      }, 2000);
+      }, 10000);
       
-      return () => clearInterval(keepAlive);
+      // Auto-refresh every 45 minutes to clear memory on Chromecast
+      const autoRefresh = setInterval(() => {
+        console.log('Auto-refresh to clear memory');
+        window.location.reload();
+      }, 45 * 60 * 1000);
+      
+      return () => {
+        clearInterval(keepAlive);
+        clearInterval(autoRefresh);
+      };
     }
   }, [url]);
 
