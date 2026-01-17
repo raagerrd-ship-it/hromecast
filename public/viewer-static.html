@@ -37,10 +37,16 @@
     <iframe id="content" style="display:none;"></iframe>
     
     <script>
-        // Keep connection alive
+        // Keep connection alive (every 10 seconds, reduced from 2s)
         setInterval(() => {
             console.log('Keep-alive:', new Date().toISOString());
-        }, 2000);
+        }, 10000);
+        
+        // Auto-refresh every 45 minutes to clear memory on Chromecast
+        setInterval(() => {
+            console.log('Auto-refresh to clear memory');
+            location.reload();
+        }, 45 * 60 * 1000);
         
         // Get URL from query parameter
         const params = new URLSearchParams(window.location.search);
