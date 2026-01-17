@@ -92,15 +92,29 @@
     playerManager.setMessageInterceptor(
       cast.framework.messages.MessageType.LOAD,
       (loadRequestData) => {
-        console.log('Load request:', loadRequestData);
+        console.log('Load request received:', JSON.stringify(loadRequestData, null, 2));
         
-        if (loadRequestData.media && loadRequestData.media.contentId) {
-          const url = loadRequestData.media.contentId;
+        let url = null;
+        
+        // Try multiple ways to extract the URL
+        if (loadRequestData.media) {
+          url = loadRequestData.media.contentId || loadRequestData.media.contentUrl;
+          console.log('Media contentId:', loadRequestData.media.contentId);
+          console.log('Media contentUrl:', loadRequestData.media.contentUrl);
+          console.log('Media contentType:', loadRequestData.media.contentType);
+        }
+        
+        if (url) {
+          // Check if this is a website URL (not a video/audio file)
+          const isWebsite = 
+            loadRequestData.media.contentType === 'text/html' ||
+            url.endsWith('.html') ||
+            (!url.match(/\.(mp4|mp3|webm|mkv|avi|mov|m3u8|mpd)$/i) && 
+             (url.startsWith('http://') || url.startsWith('https://')));
           
-          // Check if this is an HTML/website URL
-          if (loadRequestData.media.contentType === 'text/html' || 
-              url.startsWith('http://') || 
-              url.startsWith('https://')) {
+          console.log('Is website:', isWebsite, 'URL:', url);
+          
+          if (isWebsite) {
             loadWebsite(url);
             return null; // Block default media handling
           }
