@@ -7,6 +7,7 @@ export interface LocalBridge {
   port: number;
   lastSeen: string | null;
   isOnline: boolean;
+  version: string | null;
 }
 
 const BRIDGES_KEY = "chromecast-bridges";
@@ -50,6 +51,7 @@ export function useLocalBridges() {
       port,
       lastSeen: null,
       isOnline: false,
+      version: null,
     };
 
     saveBridges([...bridges, newBridge]);
@@ -79,6 +81,7 @@ export function useLocalBridges() {
           name: data.deviceId || bridge.name,
           lastSeen: new Date().toISOString(),
           isOnline: true,
+          version: data.version || null,
         };
       }
     } catch (e) {
@@ -88,6 +91,7 @@ export function useLocalBridges() {
     return {
       ...bridge,
       isOnline: false,
+      version: null,
     };
   }, []);
 
@@ -129,6 +133,7 @@ export function useLocalBridges() {
               port,
               lastSeen: new Date().toISOString(),
               isOnline: true,
+              version: data.version || null,
             });
           } else {
             const idx = foundBridges.findIndex(b => b.id === id);
@@ -138,6 +143,7 @@ export function useLocalBridges() {
                 name: data.deviceId || foundBridges[idx].name,
                 lastSeen: new Date().toISOString(),
                 isOnline: true,
+                version: data.version || null,
               };
             }
           }

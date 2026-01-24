@@ -2,6 +2,7 @@ import { memo, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { 
   ExternalLink, 
   RefreshCw, 
@@ -10,9 +11,11 @@ import {
   Wifi, 
   WifiOff,
   Search,
-  Server
+  Server,
+  AlertTriangle
 } from "lucide-react";
 import { useLocalBridges, LocalBridge } from "@/hooks/use-local-bridges";
+import { BRIDGE_VERSION } from "@/config/version";
 
 export const BridgeDiscovery = memo(() => {
   const { bridges, isScanning, addBridge, removeBridge, checkAllBridges, scanLocalhost } = useLocalBridges();
@@ -156,12 +159,30 @@ export const BridgeDiscovery = memo(() => {
               </div>
               
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{bridge.name}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium truncate">{bridge.name}</p>
+                  {bridge.isOnline && bridge.version && (
+                    <Badge 
+                      variant={bridge.version === BRIDGE_VERSION ? "secondary" : "destructive"}
+                      className="text-xs"
+                    >
+                      v{bridge.version}
+                      {bridge.version !== BRIDGE_VERSION && (
+                        <AlertTriangle className="h-3 w-3 ml-1" />
+                      )}
+                    </Badge>
+                  )}
+                </div>
                 <p className="text-xs text-muted-foreground">
                   {bridge.host}:{bridge.port}
                   {bridge.lastSeen && (
                     <span className="ml-2">
                       • Sedd {new Date(bridge.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                  {bridge.isOnline && bridge.version && bridge.version !== BRIDGE_VERSION && (
+                    <span className="ml-2 text-destructive">
+                      • Ny version tillgänglig (v{BRIDGE_VERSION})
                     </span>
                   )}
                 </p>
