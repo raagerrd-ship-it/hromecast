@@ -6,6 +6,8 @@ import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useDownloadBridge } from "@/hooks/use-download-bridge";
 import { useLatestVersion } from "@/hooks/use-latest-version";
+import { useLanguage } from "@/i18n/LanguageContext";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 type Platform = 'windows' | 'linux' | 'raspberry';
 
@@ -17,6 +19,7 @@ const Setup = () => {
   const { toast } = useToast();
   const { downloadBridge, isDownloading } = useDownloadBridge();
   const { version, changelog, isLoading: isLoadingVersion } = useLatestVersion();
+  const { t } = useLanguage();
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -41,22 +44,22 @@ const Setup = () => {
         const data = await response.json();
         setBridgeStatus('online');
         toast({
-          title: "Bridge är igång! ✓",
-          description: `Device ID: ${data.deviceId || 'okänt'}`,
+          title: t('bridgeOnline'),
+          description: `${t('deviceId')} ${data.deviceId || t('unknown')}`,
         });
       } else {
         setBridgeStatus('offline');
         toast({
-          title: "Bridge svarar inte korrekt",
-          description: "Servern svarade men returnerade ett fel.",
+          title: t('bridgeNotResponding'),
+          description: t('serverError'),
           variant: "destructive",
         });
       }
     } catch (error) {
       setBridgeStatus('offline');
       toast({
-        title: "Kunde inte ansluta till bridge",
-        description: "Kontrollera att bridge körs på localhost:3000",
+        title: t('couldNotConnect'),
+        description: t('checkBridgeRunning'),
         variant: "destructive",
       });
     } finally {
@@ -75,15 +78,18 @@ const Setup = () => {
       {/* Header */}
       <header className="flex-shrink-0 px-4 pt-6 pb-4 sm:px-6 sm:pt-8 border-b bg-card/50">
         <div className="max-w-2xl mx-auto">
-          <Link 
-            to="/" 
-            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Tillbaka
-          </Link>
+          <div className="flex items-center justify-between mb-4">
+            <Link 
+              to="/" 
+              className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              {t('back')}
+            </Link>
+            <LanguageSwitcher />
+          </div>
           
-          <h1 className="text-2xl font-bold tracking-tight">Installationsguide</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t('installGuide')}</h1>
         </div>
       </header>
 
@@ -97,7 +103,7 @@ const Setup = () => {
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground font-semibold">
                 1
               </div>
-              <h2 className="text-lg font-semibold">Ladda ner</h2>
+              <h2 className="text-lg font-semibold">{t('downloadStep')}</h2>
             </div>
             
             <Card className="border-primary/50 bg-primary/5">
@@ -105,7 +111,7 @@ const Setup = () => {
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div>
                     <p className="font-medium">chromecast-bridge.zip <span className="text-xs text-muted-foreground font-normal">{isLoadingVersion ? "" : `v${version}`}</span></p>
-                    <p className="text-sm text-muted-foreground">Innehåller allt du behöver</p>
+                    <p className="text-sm text-muted-foreground">{t('containsEverything')}</p>
                   </div>
                   <Button 
                     onClick={downloadBridge} 
@@ -116,12 +122,12 @@ const Setup = () => {
                     {isDownloading ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        Laddar ner...
+                        {t('downloading')}
                       </>
                     ) : (
                       <>
                         <Download className="h-4 w-4" />
-                        Ladda ner
+                        {t('download')}
                       </>
                     )}
                   </Button>
@@ -136,7 +142,7 @@ const Setup = () => {
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground font-semibold">
                 2
               </div>
-              <h2 className="text-lg font-semibold">Installera</h2>
+              <h2 className="text-lg font-semibold">{t('installStep')}</h2>
             </div>
 
             {/* Platform tabs */}
@@ -169,25 +175,25 @@ const Setup = () => {
                     <div className="space-y-3">
                       <div className="flex items-start gap-3">
                         <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground text-sm font-medium">1</div>
-                        <p className="text-sm">Packa upp zip-filen</p>
+                        <p className="text-sm">{t('unzipFile')}</p>
                       </div>
                       <div className="flex items-start gap-3">
                         <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground text-sm font-medium">2</div>
                         <div>
-                          <p className="text-sm">Högerklicka på <code className="bg-muted px-1.5 py-0.5 rounded text-xs">install-windows.ps1</code></p>
-                          <p className="text-xs text-muted-foreground mt-0.5">Välj "Kör med PowerShell som administratör"</p>
+                          <p className="text-sm">{t('rightClickPowershell')} <code className="bg-muted px-1.5 py-0.5 rounded text-xs">install-windows.ps1</code></p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{t('runWithPowershell')}</p>
                         </div>
                       </div>
                       <div className="flex items-start gap-3">
                         <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
                           <CheckCircle className="h-3.5 w-3.5" />
                         </div>
-                        <p className="text-sm font-medium text-primary">Klart! Bridge startar automatiskt</p>
+                        <p className="text-sm font-medium text-primary">{t('done')}</p>
                       </div>
                     </div>
                     <div className="pt-3 border-t">
                       <p className="text-xs text-muted-foreground">
-                        💡 Scriptet installerar Node.js automatiskt om det saknas och skapar autostart vid systemstart.
+                        💡 {t('windowsTip')}
                       </p>
                     </div>
                   </>
@@ -202,12 +208,12 @@ const Setup = () => {
                     <div className="space-y-3">
                       <div className="flex items-start gap-3">
                         <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground text-sm font-medium">1</div>
-                        <p className="text-sm">Packa upp och öppna en terminal i mappen</p>
+                        <p className="text-sm">{t('unzipAndOpenTerminal')}</p>
                       </div>
                       <div className="flex items-start gap-3">
                         <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground text-sm font-medium">2</div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm mb-2">Kör installationsscriptet:</p>
+                          <p className="text-sm mb-2">{t('runInstallScript')}</p>
                           <div className="flex items-center gap-2">
                             <pre className="flex-1 min-w-0 bg-muted p-3 rounded-lg text-xs overflow-x-auto font-mono">
                               <code>chmod +x install-linux.sh && ./install-linux.sh</code>
@@ -227,12 +233,12 @@ const Setup = () => {
                         <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
                           <CheckCircle className="h-3.5 w-3.5" />
                         </div>
-                        <p className="text-sm font-medium text-primary">Klart! Startar automatiskt vid inloggning</p>
+                        <p className="text-sm font-medium text-primary">{t('doneLinux')}</p>
                       </div>
                     </div>
                     <div className="pt-3 border-t">
                       <p className="text-xs text-muted-foreground break-words">
-                        💡 Skapar en systemd user service. Kontrollera status med: <code className="bg-muted px-1 rounded break-all">systemctl --user status chromecast-bridge</code>
+                        💡 {t('linuxTip')} <code className="bg-muted px-1 rounded break-all">systemctl --user status chromecast-bridge</code>
                       </p>
                     </div>
                   </>
@@ -248,14 +254,14 @@ const Setup = () => {
                       <div className="flex items-start gap-3">
                         <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground text-sm font-medium">1</div>
                         <div>
-                          <p className="text-sm">Kopiera zip-filen till din Raspberry Pi</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">Via USB, SCP eller SFTP</p>
+                          <p className="text-sm">{t('copyZipToRpi')}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{t('viaUsb')}</p>
                         </div>
                       </div>
                       <div className="flex items-start gap-3">
                         <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground text-sm font-medium">2</div>
                         <div className="flex-1">
-                          <p className="text-sm mb-2">Packa upp och kör:</p>
+                          <p className="text-sm mb-2">{t('unzipAndRun')}</p>
                           <div className="relative">
                             <pre className="bg-muted p-3 rounded-lg text-xs overflow-x-auto pr-12 font-mono">
                               <code>unzip chromecast-bridge.zip{'\n'}cd chromecast-bridge{'\n'}chmod +x install-linux.sh{'\n'}./install-linux.sh</code>
@@ -275,12 +281,12 @@ const Setup = () => {
                         <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
                           <CheckCircle className="h-3.5 w-3.5" />
                         </div>
-                        <p className="text-sm font-medium text-primary">Klart! Perfekt som always-on bridge</p>
+                        <p className="text-sm font-medium text-primary">{t('doneRpi')}</p>
                       </div>
                     </div>
                     <div className="pt-3 border-t">
                       <p className="text-xs text-muted-foreground">
-                        💡 Raspberry Pi är perfekt som dedikerad bridge eftersom den är tyst och drar lite ström.
+                        💡 {t('rpiTip')}
                       </p>
                     </div>
                   </>
@@ -295,7 +301,7 @@ const Setup = () => {
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground font-semibold">
                 3
               </div>
-              <h2 className="text-lg font-semibold">Öppna & konfigurera</h2>
+              <h2 className="text-lg font-semibold">{t('configureStep')}</h2>
             </div>
 
             <Card className="border-primary/50 bg-primary/5">
@@ -303,7 +309,7 @@ const Setup = () => {
                 <div className="space-y-4">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div>
-                      <p className="font-medium mb-1">Öppna i webbläsaren:</p>
+                      <p className="font-medium mb-1">{t('openInBrowser')}</p>
                       <code className="text-xl text-primary font-mono">localhost:3000</code>
                     </div>
                     <Button 
@@ -314,33 +320,33 @@ const Setup = () => {
                       {isTesting ? (
                         <>
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Testar...
+                          {t('testing')}
                         </>
                       ) : bridgeStatus === 'online' ? (
                         <>
                           <Wifi className="h-4 w-4 mr-2" />
-                          Online
+                          {t('online')}
                         </>
                       ) : bridgeStatus === 'offline' ? (
                         <>
                           <WifiOff className="h-4 w-4 mr-2" />
-                          Testa igen
+                          {t('tryAgain')}
                         </>
                       ) : (
                         <>
                           <Wifi className="h-4 w-4 mr-2" />
-                          Testa anslutning
+                          {t('testConnection')}
                         </>
                       )}
                     </Button>
                   </div>
                   
                   <div className="pt-3 border-t space-y-2">
-                    <p className="text-sm font-medium">I bridge-gränssnittet:</p>
+                    <p className="text-sm font-medium">{t('inBridgeInterface')}</p>
                     <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
-                      <li>Välj din Chromecast från listan</li>
-                      <li>Ange URL till din screensaver</li>
-                      <li>Aktivera och testa!</li>
+                      <li>{t('selectChromecast')}</li>
+                      <li>{t('enterUrl')}</li>
+                      <li>{t('activateAndTest')}</li>
                     </ol>
                   </div>
                 </div>
@@ -350,44 +356,44 @@ const Setup = () => {
 
           {/* FAQ / Troubleshooting */}
           <section className="space-y-4 pt-4 border-t">
-            <h2 className="text-lg font-semibold">Vanliga frågor</h2>
+            <h2 className="text-lg font-semibold">{t('faq')}</h2>
             
             <div className="space-y-3">
               <details className="group">
                 <summary className="flex items-center justify-between cursor-pointer text-sm font-medium py-2">
-                  Kan jag köra flera bridges?
+                  {t('faqMultipleBridges')}
                   <span className="text-muted-foreground group-open:rotate-180 transition-transform">▼</span>
                 </summary>
                 <div className="text-sm text-muted-foreground pb-3 pl-4 space-y-2">
-                  <p>Ja! Varje bridge har sin egen konfiguration.</p>
+                  <p>{t('faqMultipleBridgesAnswer1')}</p>
                   <ul className="list-disc list-inside space-y-1">
-                    <li><strong>Samma dator:</strong> Kör installern igen med unikt namn + port</li>
-                    <li><strong>Olika datorer:</strong> Installera på varje dator</li>
+                    <li><strong>{t('faqMultipleBridgesSameComputer')}</strong> {t('faqMultipleBridgesSameComputerAnswer')}</li>
+                    <li><strong>{t('faqMultipleBridgesDifferent')}</strong> {t('faqMultipleBridgesDifferentAnswer')}</li>
                   </ul>
-                  <p className="text-xs">Exempel: Vardagsrum :3000, Sovrum :3001, Kök :3002</p>
+                  <p className="text-xs">{t('faqMultipleBridgesExample')}</p>
                 </div>
               </details>
 
               <details className="group">
                 <summary className="flex items-center justify-between cursor-pointer text-sm font-medium py-2">
-                  Hittar ingen Chromecast
+                  {t('faqNoChromecast')}
                   <span className="text-muted-foreground group-open:rotate-180 transition-transform">▼</span>
                 </summary>
                 <div className="text-sm text-muted-foreground pb-3 pl-4">
-                  <p>Kontrollera att Chromecast och datorn är på samma nätverk. Klicka "Sök" i bridge-gränssnittet för att söka igen.</p>
+                  <p>{t('faqNoChromecastAnswer')}</p>
                 </div>
               </details>
 
               <details className="group">
                 <summary className="flex items-center justify-between cursor-pointer text-sm font-medium py-2">
-                  Sidan localhost:3000 laddas inte
+                  {t('faqLocalhostNotLoading')}
                   <span className="text-muted-foreground group-open:rotate-180 transition-transform">▼</span>
                 </summary>
                 <div className="text-sm text-muted-foreground pb-3 pl-4 space-y-2">
-                  <p>Kontrollera att bridge-tjänsten körs:</p>
+                  <p>{t('faqLocalhostNotLoadingAnswer')}</p>
                   <ul className="list-disc list-inside space-y-1">
                     <li>
-                      <strong>Windows:</strong> Tryck <kbd className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">Windows + R</kbd>, skriv <code className="bg-muted px-1 rounded">taskschd.msc</code> och tryck Enter. Kontrollera att "ChromecastBridge" finns i listan.
+                      <strong>Windows:</strong> {t('faqLocalhostWindows')} <kbd className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">Windows + R</kbd>, {t('faqLocalhostWindowsWrite')} <code className="bg-muted px-1 rounded">taskschd.msc</code> {t('faqLocalhostWindowsEnter')}
                     </li>
                     <li><strong>Linux:</strong> <code className="bg-muted px-1 rounded">systemctl --user status chromecast-bridge</code></li>
                   </ul>
@@ -396,11 +402,11 @@ const Setup = () => {
 
               <details className="group">
                 <summary className="flex items-center justify-between cursor-pointer text-sm font-medium py-2">
-                  Hur avinstallerar jag?
+                  {t('faqUninstall')}
                   <span className="text-muted-foreground group-open:rotate-180 transition-transform">▼</span>
                 </summary>
                 <div className="text-sm text-muted-foreground pb-3 pl-4">
-                  <p>Kör avinstallationsscriptet:</p>
+                  <p>{t('faqUninstallAnswer')}</p>
                   <ul className="list-disc list-inside space-y-1 mt-1">
                     <li><strong>Windows:</strong> <code className="bg-muted px-1 rounded">uninstall-windows.ps1</code></li>
                     <li><strong>Linux:</strong> <code className="bg-muted px-1 rounded">./uninstall-linux.sh</code></li>
@@ -412,10 +418,10 @@ const Setup = () => {
 
           {/* Changelog */}
           <section className="space-y-4 pt-4 border-t">
-            <h2 className="text-lg font-semibold">Ändringslogg</h2>
+            <h2 className="text-lg font-semibold">{t('changelog')}</h2>
             
             {isLoadingVersion ? (
-              <div className="text-sm text-muted-foreground">Laddar...</div>
+              <div className="text-sm text-muted-foreground">{t('loading')}</div>
             ) : (
               <div className="space-y-4">
                 {changelog.map((release) => (
@@ -425,7 +431,7 @@ const Setup = () => {
                         <span className="font-semibold">v{release.version}</span>
                         <span className="text-xs text-muted-foreground">{release.date}</span>
                         {release.version === version && (
-                          <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full">Senaste</span>
+                          <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full">{t('latest')}</span>
                         )}
                       </div>
                       <ul className="space-y-1.5">
@@ -446,24 +452,24 @@ const Setup = () => {
           {/* Manual install (collapsed) */}
           <details className="group pt-4 border-t">
             <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground transition-colors">
-              Manuell installation (avancerat)
+              {t('manualInstall')}
             </summary>
             <Card className="mt-4">
               <CardContent className="pt-5 pb-5 space-y-4 text-sm">
                 <div>
-                  <p className="font-medium mb-1">1. Installera Node.js 18+</p>
-                  <p className="text-xs text-muted-foreground">Ladda ner från nodejs.org</p>
+                  <p className="font-medium mb-1">1. {t('installNodejs')}</p>
+                  <p className="text-xs text-muted-foreground">{t('downloadFromNodejs')}</p>
                 </div>
                 <div>
-                  <p className="font-medium mb-1">2. Installera dependencies</p>
+                  <p className="font-medium mb-1">2. {t('installDependencies')}</p>
                   <pre className="bg-muted p-3 rounded-lg text-xs font-mono">cd chromecast-bridge && npm install</pre>
                 </div>
                 <div>
-                  <p className="font-medium mb-1">3. Skapa .env-fil</p>
-                  <pre className="bg-muted p-3 rounded-lg text-xs font-mono">DEVICE_ID=mitt-hem{'\n'}PORT=3000</pre>
+                  <p className="font-medium mb-1">3. {t('createEnvFile')}</p>
+                  <pre className="bg-muted p-3 rounded-lg text-xs font-mono">DEVICE_ID=my-home{'\n'}PORT=3000</pre>
                 </div>
                 <div>
-                  <p className="font-medium mb-1">4. Starta</p>
+                  <p className="font-medium mb-1">4. {t('start')}</p>
                   <pre className="bg-muted p-3 rounded-lg text-xs font-mono">node index.js</pre>
                 </div>
               </CardContent>

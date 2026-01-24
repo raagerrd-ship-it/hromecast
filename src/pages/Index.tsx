@@ -5,23 +5,31 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useDownloadBridge } from "@/hooks/use-download-bridge";
 import { useLatestVersion } from "@/hooks/use-latest-version";
+import { useLanguage } from "@/i18n/LanguageContext";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 const Index = () => {
   const { downloadBridge, isDownloading } = useDownloadBridge();
   const { version, isLoading: isLoadingVersion } = useLatestVersion();
+  const { t } = useLanguage();
+
   return (
     <div className="min-h-screen min-h-[100dvh] flex flex-col safe-top safe-bottom">
       {/* Hero Header */}
       <header className="flex-shrink-0 px-4 pt-8 pb-6 sm:px-6 sm:pt-10 bg-gradient-to-b from-primary/10 to-transparent">
         <div className="max-w-lg mx-auto">
+          {/* Language switcher */}
+          <div className="flex justify-end mb-4">
+            <LanguageSwitcher />
+          </div>
           
           <div className="text-center space-y-4">
             <img src={logo} alt="Chromecast Screensaver" className="h-16 w-auto mx-auto" />
             <div className="space-y-2">
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Chromecast Screensaver</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{t('heroTitle')}</h1>
               <p className="text-sm text-muted-foreground leading-relaxed max-w-md mx-auto">
-                Visar automatiskt en webbsida på din Chromecast när den är inaktiv<br />
-                – perfekt som digital skyltning, dashboard eller bildspel
+                {t('heroDescription')}<br />
+                {t('heroDescriptionSub')}
               </p>
             </div>
           </div>
@@ -41,9 +49,9 @@ const Index = () => {
                     <Download className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <h2 className="font-semibold text-base">Kom igång på 2 minuter</h2>
+                    <h2 className="font-semibold text-base">{t('getStarted')}</h2>
                     <p className="text-sm text-muted-foreground mt-0.5">
-                      Ladda ner och installera bridge-tjänsten på din dator
+                      {t('getStartedDesc')}
                     </p>
                   </div>
                 </div>
@@ -52,16 +60,16 @@ const Index = () => {
                 <div className="space-y-2 pl-1">
                   <div className="flex items-center gap-3 text-sm">
                     <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium">1</div>
-                    <span>Ladda ner bridge-paketet</span>
+                    <span>{t('step1')}</span>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
                     <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium">2</div>
-                    <span>Packa upp och kör installern</span>
+                    <span>{t('step2')}</span>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
                     <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium">3</div>
                     <span className="flex items-center gap-1">
-                      Öppna <code className="bg-background/50 px-1.5 py-0.5 rounded text-xs">localhost:3000</code>
+                      {t('step3Open')} <code className="bg-background/50 px-1.5 py-0.5 rounded text-xs">localhost:3000</code>
                     </span>
                   </div>
                 </div>
@@ -76,12 +84,12 @@ const Index = () => {
                   {isDownloading ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Laddar ner...
+                      {t('downloading')}
                     </>
                   ) : (
                     <>
                       <Download className="h-4 w-4" />
-                      Ladda ner för Windows / Linux
+                      {t('downloadForPlatforms')}
                     </>
                   )}
                 </Button>
@@ -91,7 +99,7 @@ const Index = () => {
                   className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
                   <HelpCircle className="h-3.5 w-3.5" />
-                  Detaljerade instruktioner
+                  {t('detailedInstructions')}
                   <ChevronRight className="h-3 w-3" />
                 </Link>
               </div>
@@ -103,8 +111,8 @@ const Index = () => {
             <CardContent className="pt-4 pb-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="space-y-0.5">
-                  <h3 className="font-medium text-sm">Redan installerat?</h3>
-                  <p className="text-xs text-muted-foreground">Öppna din lokala dashboard direkt</p>
+                  <h3 className="font-medium text-sm">{t('alreadyInstalled')}</h3>
+                  <p className="text-xs text-muted-foreground">{t('openLocalDashboard')}</p>
                 </div>
                 <Button 
                   variant="outline" 
@@ -126,10 +134,10 @@ const Index = () => {
       <footer className="flex-shrink-0 px-4 py-3 sm:px-6 border-t bg-card/50">
         <div className="max-w-lg mx-auto flex items-center justify-between gap-4">
           <p className="text-xs text-muted-foreground">
-            Körs lokalt • Ingen molnanslutning
+            {t('runsLocally')}
           </p>
           <p className="text-xs text-muted-foreground">
-            Senaste version: <span className="font-medium text-foreground">
+            {t('latestVersion')}: <span className="font-medium text-foreground">
               {isLoadingVersion ? "..." : `v${version}`}
             </span>
           </p>
