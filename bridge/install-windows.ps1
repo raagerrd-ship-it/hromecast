@@ -2,11 +2,11 @@
 # Hogerklicka -> "Kor med PowerShell" eller dubbelklicka
 # Kors vid systemstart (fore inloggning)
 
+param([switch]$Elevated)
+
 # Fix console encoding for Swedish characters
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
-
-param([switch]$Elevated)
 
 # Funktion for att pausa vid fel
 function Pause-OnError {
