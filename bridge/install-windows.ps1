@@ -37,7 +37,7 @@ if (-not $isAdmin) {
             if (-not $scriptPath) {
                 $scriptPath = $PSCommandPath
             }
-            Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`" -Elevated" -Verb RunAs -Wait
+            Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`" -Elevated" -Verb RunAs
         } catch {
             Pause-OnError "Kunde inte begara admin-rattigheter: $($_.Exception.Message)"
         }
