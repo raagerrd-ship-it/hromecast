@@ -11,9 +11,17 @@ const corsHeaders = {
 // ============================================================================
 
 const VERSION_INFO = {
-  version: "1.2.4",
+  version: "1.2.5",
   releasedAt: "2025-01-24",
   changelog: [
+    {
+      version: "1.2.5",
+      date: "2025-01-24",
+      changes: [
+        "Fixat cast-knappen: URL sparas nu automatiskt innan casting startar",
+        "Lagt till varning om ingen URL är angiven",
+      ]
+    },
     {
       version: "1.2.4",
       date: "2025-01-24",
