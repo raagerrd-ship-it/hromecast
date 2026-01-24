@@ -111,9 +111,12 @@ function createZip(files: Record<string, string>): Uint8Array {
   return uint8.slice(0, offset + 2);
 }
 
-// Bridge files content
-const files: Record<string, string> = {
-  "index.js": `require('dotenv').config();
+// ============================================================================
+// BRIDGE FILES - Synced with bridge/ folder
+// Last updated: 2026-01-24
+// ============================================================================
+
+const INDEX_JS = `require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
@@ -171,18 +174,22 @@ function getNetworkIP() {
 
 function writeNetworkInfo() {
   const ip = getNetworkIP();
-  const info = 'Chromecast Bridge - Nätverksinfo\\n' +
-    '================================\\n' +
-    'Startad: ' + new Date().toLocaleString('sv-SE') + '\\n' +
-    'Device ID: ' + DEVICE_ID + '\\n\\n' +
-    'Åtkomst från denna dator:\\n' +
-    '  http://localhost:' + PORT + '\\n\\n' +
-    'Åtkomst från mobil/annan enhet:\\n' +
-    '  http://' + ip + ':' + PORT + '\\n\\n' +
-    'mDNS (om stöds):\\n' +
-    '  http://' + DEVICE_ID + '.local:' + PORT;
+  const info = \`Chromecast Bridge - Nätverksinfo
+================================
+Startad: \${new Date().toLocaleString('sv-SE')}
+Device ID: \${DEVICE_ID}
+
+Åtkomst från denna dator:
+  http://localhost:\${PORT}
+
+Åtkomst från mobil/annan enhet:
+  http://\${ip}:\${PORT}
+
+mDNS (om stöds):
+  http://\${DEVICE_ID}.local:\${PORT}
+\`;
   try {
-    fs.writeFileSync(path.join(__dirname, 'network-info.txt'), info);
+    fs.writeFileSync(path.join(__dirname, 'network-info.txt'), info.trim());
   } catch (error) {
     console.error('Could not write network-info.txt:', error.message);
   }
@@ -216,7 +223,7 @@ function saveConfig(config) {
 
 function discoverDevices() {
   return new Promise((resolve) => {
-    console.log('Scanning for Chromecast devices...');
+    console.log('🔍 Scanning for Chromecast devices...');
     
     const browser = bonjour.find({ type: 'googlecast' });
     const foundDevices = [];
@@ -229,7 +236,7 @@ function discoverDevices() {
       if (host && !foundDevices.find(d => d.host === host)) {
         const device = { name, host, port };
         foundDevices.push(device);
-        console.log('Found:', name, 'at', host + ':' + port);
+        console.log(\`✅ Found: \${name} at \${host}:\${port}\`);
         
         // Report to Supabase if connected
         if (supabase) {
@@ -241,7 +248,7 @@ function discoverDevices() {
     setTimeout(() => {
       browser.stop();
       discoveredDevices = foundDevices;
-      console.log('Discovery complete:', foundDevices.length, 'device(s)');
+      console.log(\`📡 Discovery complete: \${foundDevices.length} device(s)\`);
       resolve(foundDevices);
     }, 8000);
   });
@@ -304,19 +311,19 @@ async function castMedia(chromecastName, url) {
   return new Promise((resolve, reject) => {
     const player = findDevice(chromecastName);
     if (!player) {
-      reject(new Error('Device "' + chromecastName + '" not found'));
+      reject(new Error(\`Device "\${chromecastName}" not found\`));
       return;
     }
     
     currentDevice = player;
-    console.log('Casting to', chromecastName + ':', url);
+    console.log(\`📺 Casting to \${chromecastName}: \${url}\`);
     
     player.play(url, { type: 'text/html', autoplay: true, appId: CUSTOM_APP_ID }, (err) => {
       if (err) {
-        console.error('Cast failed:', err.message);
+        console.error('❌ Cast failed:', err.message);
         reject(err);
       } else {
-        console.log('Cast successful');
+        console.log('✅ Cast successful');
         screensaverActive = true;
         keepSessionAlive();
         resolve({ success: true });
@@ -329,7 +336,7 @@ async function stopCast(chromecastName) {
   return new Promise((resolve, reject) => {
     const player = findDevice(chromecastName);
     if (!player) {
-      reject(new Error('Device "' + chromecastName + '" not found'));
+      reject(new Error(\`Device "\${chromecastName}" not found\`));
       return;
     }
     
@@ -337,7 +344,7 @@ async function stopCast(chromecastName) {
       player.stop(() => {
         screensaverActive = false;
         if (keepAliveInterval) clearInterval(keepAliveInterval);
-        console.log('Cast stopped');
+        console.log('⏹️ Cast stopped');
         resolve({ success: true });
       });
     } catch (error) {
@@ -357,7 +364,7 @@ async function checkAndActivateScreensaver() {
   
   const idle = await isChromecastIdle(player);
   if (idle && !screensaverActive) {
-    console.log('Device idle, activating screensaver...');
+    console.log('💤 Device idle, activating screensaver...');
     try {
       await castMedia(config.selectedChromecast, config.url);
     } catch (error) {
@@ -407,8 +414,7 @@ function parseBody(req) {
   });
 }
 
-function sendJson(res, data, status) {
-  status = status || 200;
+function sendJson(res, data, status = 200) {
   res.writeHead(status, { 
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*'
@@ -417,7 +423,7 @@ function sendJson(res, data, status) {
 }
 
 const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, 'http://localhost:' + PORT);
+  const url = new URL(req.url, \`http://localhost:\${PORT}\`);
   const pathname = url.pathname;
   
   // CORS
@@ -440,7 +446,7 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, { 
           ...config, 
           deviceId: DEVICE_ID,
-          screensaverActive: screensaverActive 
+          screensaverActive 
         });
         return;
       }
@@ -464,7 +470,7 @@ const server = http.createServer(async (req, res) => {
       // POST /api/chromecasts/refresh
       if (req.method === 'POST' && pathname === '/api/chromecasts/refresh') {
         const devices = await discoverDevices();
-        sendJson(res, { devices: devices });
+        sendJson(res, { devices });
         return;
       }
       
@@ -473,14 +479,14 @@ const server = http.createServer(async (req, res) => {
         const body = await parseBody(req);
         const config = loadConfig();
         const chromecastName = body.chromecast || config.selectedChromecast;
-        const castUrl = body.url || config.url;
+        const url = body.url || config.url;
         
-        if (!chromecastName || !castUrl) {
+        if (!chromecastName || !url) {
           sendJson(res, { error: 'Missing chromecast or url' }, 400);
           return;
         }
         
-        await castMedia(chromecastName, castUrl);
+        await castMedia(chromecastName, url);
         sendJson(res, { success: true });
         return;
       }
@@ -503,11 +509,11 @@ const server = http.createServer(async (req, res) => {
           deviceId: DEVICE_ID,
           port: PORT,
           networkIP: networkIP,
-          networkUrl: 'http://' + networkIP + ':' + PORT,
-          mdnsUrl: 'http://' + DEVICE_ID + '.local:' + PORT,
+          networkUrl: \`http://\${networkIP}:\${PORT}\`,
+          mdnsUrl: \`http://\${DEVICE_ID}.local:\${PORT}\`,
           devices: discoveredDevices.length,
           selectedChromecast: config.selectedChromecast,
-          screensaverActive: screensaverActive,
+          screensaverActive,
           uptime: process.uptime()
         });
         return;
@@ -540,21 +546,21 @@ async function main() {
   const networkIP = getNetworkIP();
   
   console.log('');
-  console.log('========================================');
-  console.log('  Chromecast Bridge Service');
-  console.log('========================================');
+  console.log('╔════════════════════════════════════════╗');
+  console.log('║     Chromecast Bridge Service          ║');
+  console.log('╚════════════════════════════════════════╝');
   console.log('');
-  console.log('Device ID:', DEVICE_ID);
+  console.log(\`📍 Device ID: \${DEVICE_ID}\`);
   console.log('');
-  console.log('Åtkomst:');
-  console.log('  Lokal:    http://localhost:' + PORT);
-  console.log('  Nätverk:  http://' + networkIP + ':' + PORT);
-  console.log('  mDNS:     http://' + DEVICE_ID + '.local:' + PORT);
+  console.log('🌐 Åtkomst:');
+  console.log(\`   Lokal:    http://localhost:\${PORT}\`);
+  console.log(\`   Nätverk:  http://\${networkIP}:\${PORT}\`);
+  console.log(\`   mDNS:     http://\${DEVICE_ID}.local:\${PORT}\`);
   console.log('');
   
-  // Write network info to file
+  // Write network info to file (for background services)
   writeNetworkInfo();
-  console.log('Nätverksinfo sparad till: network-info.txt');
+  console.log(\`📄 Nätverksinfo sparad till: network-info.txt\`);
   console.log('');
   
   // Initial discovery
@@ -562,12 +568,12 @@ async function main() {
   
   // Start chromecasts library discovery
   chromecasts.on('update', (player) => {
-    console.log('Chromecasts lib found:', player.name);
+    console.log(\`📡 Chromecasts lib found: \${player.name}\`);
   });
   
   // Start HTTP server
   server.listen(PORT, '0.0.0.0', () => {
-    console.log('Server running');
+    console.log(\`🚀 Server running\`);
     
     // Publish mDNS service
     try {
@@ -580,7 +586,7 @@ async function main() {
           version: '1.0.0'
         }
       });
-      console.log('mDNS publicerad:', DEVICE_ID + '.local');
+      console.log(\`📡 mDNS publicerad: \${DEVICE_ID}.local\`);
     } catch (error) {
       console.error('mDNS publishing failed:', error.message);
     }
@@ -592,15 +598,14 @@ async function main() {
   // Screensaver check every minute
   setInterval(checkAndActivateScreensaver, 60000);
   
-  // Update network info periodically
+  // Update network info periodically (in case IP changes)
   setInterval(writeNetworkInfo, 5 * 60 * 1000);
   
   console.log('');
   console.log('Press Ctrl+C to stop.');
   
   process.on('SIGINT', () => {
-    console.log('');
-    console.log('Shutting down...');
+    console.log('\\n👋 Shutting down...');
     if (keepAliveInterval) clearInterval(keepAliveInterval);
     bonjour.destroy();
     server.close();
@@ -608,68 +613,35 @@ async function main() {
   });
 }
 
-main().catch(console.error);
-`,
+main().catch(console.error);`;
 
-  "package.json": `{
+const PACKAGE_JSON = `{
   "name": "chromecast-bridge",
-  "version": "2.0.0",
+  "version": "1.0.0",
+  "description": "Local bridge service for controlling Chromecast",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.39.0",
+    "@supabase/supabase-js": "^2.39.3",
+    "chromecasts": "^2.2.0",
     "bonjour-service": "^1.2.1",
-    "chromecasts": "^1.10.2",
     "dotenv": "^16.3.1"
   }
-}
-`,
+}`;
 
-  ".env.example": `# Chromecast Bridge Configuration
+const ENV_EXAMPLE = `# Chromecast Bridge Configuration
 
 # Supabase (optional - for cloud sync)
 SUPABASE_URL=https://umxwaxzmoxwasryjibhe.supabase.co
-SUPABASE_ANON_KEY=your-anon-key-here
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVteHdheHptb3h3YXNyeWppYmhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0OTc3OTgsImV4cCI6MjA4MDA3Mzc5OH0.R4hVdnkp310Wk-g0jZfy52EwxfV6z3Pfnv6uwhsf0ps
 
-# Bridge settings
-DEVICE_ID=mitt-hem
-PORT=3000
-`,
+# Device settings
+DEVICE_ID=my-bridge
+PORT=3000`;
 
-  "README.md": `# Chromecast Bridge
-
-Lokal bridge-tjänst för att styra Chromecast från ditt nätverk.
-
-## Snabbinstallation
-
-### Windows
-Högerklicka på \`install-windows.ps1\` och välj "Kör med PowerShell"
-
-### Linux / Raspberry Pi
-\`\`\`bash
-chmod +x install-linux.sh && ./install-linux.sh
-\`\`\`
-
-## Användning
-
-Efter installation, öppna webbläsaren och gå till:
-
-- **Lokal:** http://localhost:3000
-- **Från annan enhet:** http://<din-dators-ip>:3000
-
-## Multi-instance
-
-Du kan köra flera bridges på samma dator (t.ex. en per rum).
-Installern frågar efter instansnamn och port.
-
-## Avinstallation
-
-Kör \`uninstall-windows.ps1\` eller \`./uninstall-linux.sh\`
-`,
-
-  "public/index.html": `<!DOCTYPE html>
+const PUBLIC_INDEX_HTML = `<!DOCTYPE html>
 <html lang="sv">
 <head>
   <meta charset="UTF-8">
@@ -688,10 +660,13 @@ Kör \`uninstall-windows.ps1\` eller \`./uninstall-linux.sh\`
     </header>
 
     <main>
+      <!-- Device Selection -->
       <section class="card">
         <div class="card-header">
           <h2>Välj Chromecast</h2>
-          <button id="refresh-btn" class="btn btn-secondary" title="Sök efter enheter">🔄 Sök</button>
+          <button id="refresh-btn" class="btn btn-secondary" title="Sök efter enheter">
+            🔄 Sök
+          </button>
         </div>
         <div class="card-content">
           <select id="chromecast-select">
@@ -701,6 +676,7 @@ Kör \`uninstall-windows.ps1\` eller \`./uninstall-linux.sh\`
         </div>
       </section>
 
+      <!-- Screensaver Settings -->
       <section class="card">
         <div class="card-header">
           <h2>Screensaver</h2>
@@ -721,16 +697,22 @@ Kör \`uninstall-windows.ps1\` eller \`./uninstall-linux.sh\`
         </div>
       </section>
 
+      <!-- Controls -->
       <section class="card">
         <div class="card-header">
           <h2>Kontroller</h2>
         </div>
         <div class="card-content controls">
-          <button id="cast-btn" class="btn btn-primary">▶️ Starta nu</button>
-          <button id="stop-btn" class="btn btn-danger">⏹️ Stoppa</button>
+          <button id="cast-btn" class="btn btn-primary">
+            ▶️ Starta nu
+          </button>
+          <button id="stop-btn" class="btn btn-danger">
+            ⏹️ Stoppa
+          </button>
         </div>
       </section>
 
+      <!-- Preview -->
       <section class="card preview-card">
         <div class="card-header">
           <h2>Förhandsvisning</h2>
@@ -769,10 +751,9 @@ Kör \`uninstall-windows.ps1\` eller \`./uninstall-linux.sh\`
 
   <script src="app.js"></script>
 </body>
-</html>
-`,
+</html>`;
 
-  "public/style.css": `* {
+const PUBLIC_STYLE_CSS = `* {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -875,6 +856,7 @@ main {
   padding: 1rem;
 }
 
+/* Form elements */
 select, input[type="url"], input[type="text"] {
   width: 100%;
   padding: 0.75rem 1rem;
@@ -912,6 +894,7 @@ select:focus, input:focus {
   margin-top: 0.5rem;
 }
 
+/* Toggle switch */
 .switch {
   position: relative;
   display: inline-block;
@@ -957,6 +940,7 @@ input:checked + .slider:before {
   transform: translateX(22px);
 }
 
+/* Buttons */
 .btn {
   padding: 0.75rem 1.5rem;
   border: none;
@@ -1012,6 +996,7 @@ input:checked + .slider:before {
   flex: 1;
 }
 
+/* Screensaver status */
 .screensaver-status {
   display: flex;
   align-items: center;
@@ -1034,6 +1019,7 @@ input:checked + .slider:before {
   box-shadow: 0 0 10px var(--success);
 }
 
+/* Preview */
 .preview-container {
   aspect-ratio: 16/9;
   background: var(--bg);
@@ -1057,6 +1043,7 @@ input:checked + .slider:before {
   border: none;
 }
 
+/* Footer */
 footer {
   margin-top: 2rem;
 }
@@ -1113,6 +1100,7 @@ footer .network-card {
   font-family: monospace;
 }
 
+/* Responsive */
 @media (max-width: 480px) {
   .controls {
     flex-direction: column;
@@ -1124,18 +1112,31 @@ footer .network-card {
     text-align: center;
   }
 }
-`,
 
-  "public/app.js": `// API helpers
+/* Loading state */
+.loading {
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}`;
+
+const PUBLIC_APP_JS = `// API helpers
 const API_BASE = '';
 
-async function api(path, options) {
-  options = options || {};
+async function api(path, options = {}) {
   const res = await fetch(API_BASE + path, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      ...(options.headers || {})
+      ...options.headers
     }
   });
   return res.json();
@@ -1162,7 +1163,7 @@ const elements = {
 };
 
 // State
-var state = {
+let state = {
   settings: {},
   devices: [],
   isLoading: false
@@ -1171,29 +1172,27 @@ var state = {
 // ============ UI Updates ============
 
 function updateStatus(online, text) {
-  var dot = elements.status.querySelector('.status-dot');
-  if (online) {
-    dot.classList.add('online');
-  } else {
-    dot.classList.remove('online');
-  }
+  const dot = elements.status.querySelector('.status-dot');
+  dot.classList.toggle('online', online);
   elements.statusText.textContent = text;
 }
 
 function updateDeviceList(devices) {
-  var select = elements.chromecastSelect;
-  var currentValue = select.value;
+  const select = elements.chromecastSelect;
+  const currentValue = select.value;
   
+  // Keep first option
   select.innerHTML = '<option value="">-- Välj enhet --</option>';
   
-  devices.forEach(function(device) {
-    var option = document.createElement('option');
+  devices.forEach(device => {
+    const option = document.createElement('option');
     option.value = device.name;
     option.textContent = device.name;
     select.appendChild(option);
   });
   
-  if (currentValue && devices.find(function(d) { return d.name === currentValue; })) {
+  // Restore selection if still available
+  if (currentValue && devices.find(d => d.name === currentValue)) {
     select.value = currentValue;
   } else if (state.settings.selectedChromecast) {
     select.value = state.settings.selectedChromecast;
@@ -1203,22 +1202,17 @@ function updateDeviceList(devices) {
 }
 
 function updateScreensaverStatus(active) {
-  var statusEl = elements.screensaverStatus;
-  var indicator = statusEl.querySelector('.status-indicator');
-  var text = statusEl.querySelector('span:last-child');
+  const statusEl = elements.screensaverStatus;
+  const indicator = statusEl.querySelector('.status-indicator');
+  const text = statusEl.querySelector('span:last-child');
   
-  if (active) {
-    indicator.classList.add('on');
-    indicator.classList.remove('off');
-  } else {
-    indicator.classList.remove('on');
-    indicator.classList.add('off');
-  }
+  indicator.classList.toggle('on', active);
+  indicator.classList.toggle('off', !active);
   text.textContent = active ? 'Aktiv på TV' : 'Inaktiv';
 }
 
 function updatePreview(url) {
-  var container = elements.previewContainer;
+  const container = elements.previewContainer;
   
   if (!url) {
     container.innerHTML = '<p class="preview-placeholder">Ange en URL ovan för att se förhandsvisning</p>';
@@ -1233,13 +1227,19 @@ function setLoading(loading) {
   elements.refreshBtn.disabled = loading;
   elements.castBtn.disabled = loading;
   elements.stopBtn.disabled = loading;
+  
+  if (loading) {
+    elements.refreshBtn.classList.add('spin');
+  } else {
+    elements.refreshBtn.classList.remove('spin');
+  }
 }
 
 // ============ API Calls ============
 
 async function loadSettings() {
   try {
-    var data = await api('/api/settings');
+    const data = await api('/api/settings');
     state.settings = data;
     
     elements.enabledToggle.checked = data.enabled;
@@ -1261,7 +1261,7 @@ async function loadSettings() {
 
 async function loadDevices() {
   try {
-    var data = await api('/api/chromecasts');
+    const data = await api('/api/chromecasts');
     state.devices = data.devices || [];
     updateDeviceList(state.devices);
   } catch (error) {
@@ -1271,7 +1271,7 @@ async function loadDevices() {
 
 async function loadStatus() {
   try {
-    var data = await api('/api/status');
+    const data = await api('/api/status');
     elements.port.textContent = data.port || '-';
     updateScreensaverStatus(data.screensaverActive);
     
@@ -1289,7 +1289,7 @@ async function loadStatus() {
 
 async function saveSettings(updates) {
   try {
-    var newSettings = Object.assign({}, state.settings, updates);
+    const newSettings = { ...state.settings, ...updates };
     await api('/api/settings', {
       method: 'POST',
       body: JSON.stringify(updates)
@@ -1305,7 +1305,7 @@ async function refreshDevices() {
   elements.deviceCount.textContent = 'Söker...';
   
   try {
-    var data = await api('/api/chromecasts/refresh', { method: 'POST' });
+    const data = await api('/api/chromecasts/refresh', { method: 'POST' });
     state.devices = data.devices || [];
     updateDeviceList(state.devices);
   } catch (error) {
@@ -1345,17 +1345,17 @@ async function stopCast() {
 
 // ============ Event Handlers ============
 
-elements.chromecastSelect.addEventListener('change', function(e) {
+elements.chromecastSelect.addEventListener('change', (e) => {
   saveSettings({ selectedChromecast: e.target.value || null });
 });
 
-elements.enabledToggle.addEventListener('change', function(e) {
+elements.enabledToggle.addEventListener('change', (e) => {
   saveSettings({ enabled: e.target.checked });
 });
 
-elements.urlInput.addEventListener('change', function(e) {
-  var url = e.target.value.trim();
-  saveSettings({ url: url });
+elements.urlInput.addEventListener('change', (e) => {
+  const url = e.target.value.trim();
+  saveSettings({ url });
   updatePreview(url);
 });
 
@@ -1364,12 +1364,12 @@ elements.castBtn.addEventListener('click', startCast);
 elements.stopBtn.addEventListener('click', stopCast);
 
 if (elements.copyUrlBtn) {
-  elements.copyUrlBtn.addEventListener('click', function() {
-    var url = elements.networkUrl ? elements.networkUrl.textContent : null;
+  elements.copyUrlBtn.addEventListener('click', () => {
+    const url = elements.networkUrl?.textContent;
     if (url && url !== '-') {
-      navigator.clipboard.writeText(url).then(function() {
+      navigator.clipboard.writeText(url).then(() => {
         elements.copyUrlBtn.textContent = '✓ Kopierad!';
-        setTimeout(function() {
+        setTimeout(() => {
           elements.copyUrlBtn.textContent = '📋 Kopiera';
         }, 2000);
       });
@@ -1386,13 +1386,16 @@ async function init() {
   await loadDevices();
   await loadStatus();
   
+  // Poll status every 10 seconds
   setInterval(loadStatus, 10000);
 }
 
-init();
-`,
+init();`;
 
-  "install-windows.ps1": `# Högerklicka -> "Kör med PowerShell som administratör"
+const INSTALL_WINDOWS_PS1 = `# Chromecast Bridge - Windows Installer (Multi-Instance Support)
+# Högerklicka → "Kör med PowerShell som administratör"
+# Körs vid systemstart (före inloggning)
+
 $ErrorActionPreference = "Stop"
 $DefaultAppName = "ChromecastBridge"
 $DefaultPort = 3000
@@ -1403,16 +1406,8 @@ Write-Host "  Chromecast Bridge Installer" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Kontrollera admin-rättigheter
-$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-if (-not $isAdmin) {
-    Write-Host "VARNING: Kör scriptet som administratör för systemstart." -ForegroundColor Yellow
-    Write-Host "Högerklicka -> 'Kör med PowerShell som administratör'" -ForegroundColor Gray
-    Read-Host "Tryck Enter för att avsluta"
-    exit 1
-}
-
-Write-Host "Om du vill köra flera bridges, ge varje ett unikt namn." -ForegroundColor Gray
+# Fråga om instansnamn för multi-instance stöd
+Write-Host "Om du vill köra flera bridges (t.ex. en per rum), ge varje en unik namn." -ForegroundColor Gray
 Write-Host "Lämna tomt för standardinstallation." -ForegroundColor Gray
 Write-Host ""
 $InstanceName = Read-Host "Instansnamn (tryck Enter för standard)"
@@ -1425,56 +1420,143 @@ if ([string]::IsNullOrWhiteSpace($InstanceName)) {
     $CleanName = $InstanceName -replace '[^a-zA-Z0-9-]', ''
     $AppName = "$DefaultAppName-$CleanName"
     $TaskName = "$DefaultAppName-$CleanName"
+    
+    # Fråga om port för multi-instance
     $PortInput = Read-Host "Port (standard: $DefaultPort)"
-    if ([string]::IsNullOrWhiteSpace($PortInput)) { $Port = $DefaultPort } else { $Port = [int]$PortInput }
+    if ([string]::IsNullOrWhiteSpace($PortInput)) {
+        $Port = $DefaultPort
+    } else {
+        $Port = [int]$PortInput
+    }
 }
 
 $AppDir = "$env:APPDATA\\$AppName"
 
 Write-Host ""
-Write-Host "Installation: $AppName på port $Port" -ForegroundColor Yellow
+Write-Host "Installation:" -ForegroundColor Yellow
+Write-Host "  Namn: $AppName" -ForegroundColor Gray
+Write-Host "  Port: $Port" -ForegroundColor Gray
+Write-Host "  Mapp: $AppDir" -ForegroundColor Gray
 Write-Host ""
 
+# 1. Kontrollera/installera Node.js
+Write-Host "[1/6] Kontrollerar Node.js..." -ForegroundColor Yellow
 $nodeVersion = $null
-try { $nodeVersion = node --version 2>$null } catch {}
-if (-not $nodeVersion) {
-    Write-Host "Installerar Node.js..."
-    winget install OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements
-    $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-}
+try {
+    $nodeVersion = node --version 2>$null
+} catch {}
 
-if (Test-Path $AppDir) { Remove-Item -Path $AppDir -Recurse -Force }
+if (-not $nodeVersion) {
+    Write-Host "  Node.js hittades inte. Installerar via winget..." -ForegroundColor Gray
+    try {
+        winget install OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+    } catch {
+        Write-Host "  VARNING: Kunde inte installera Node.js automatiskt." -ForegroundColor Red
+        Write-Host "  Ladda ner manuellt från: https://nodejs.org" -ForegroundColor Red
+        Write-Host ""
+        Read-Host "Tryck Enter för att avsluta"
+        exit 1
+    }
+}
+$nodeVersion = node --version
+Write-Host "  Node.js $nodeVersion OK" -ForegroundColor Green
+
+# 2. Skapa app-mapp
+Write-Host "[2/6] Skapar app-mapp..." -ForegroundColor Yellow
+if (Test-Path $AppDir) {
+    Write-Host "  Tar bort befintlig installation..." -ForegroundColor Gray
+    Remove-Item -Path $AppDir -Recurse -Force
+}
 New-Item -ItemType Directory -Path $AppDir -Force | Out-Null
 New-Item -ItemType Directory -Path "$AppDir\\public" -Force | Out-Null
+Write-Host "  $AppDir" -ForegroundColor Green
 
+# 3. Kopiera bridge-filer
+Write-Host "[3/6] Kopierar filer..." -ForegroundColor Yellow
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-Copy-Item -Path "$ScriptDir\\index.js" -Destination $AppDir -ErrorAction SilentlyContinue
-Copy-Item -Path "$ScriptDir\\package.json" -Destination $AppDir -ErrorAction SilentlyContinue
-if (Test-Path "$ScriptDir\\public") {
-    Copy-Item -Path "$ScriptDir\\public\\*" -Destination "$AppDir\\public" -Recurse
+
+# Kopiera huvudfiler
+$mainFiles = @("index.js", "package.json", "package-lock.json")
+foreach ($file in $mainFiles) {
+    $sourcePath = Join-Path $ScriptDir $file
+    if (Test-Path $sourcePath) {
+        Copy-Item -Path $sourcePath -Destination $AppDir
+        Write-Host "  Kopierade $file" -ForegroundColor Gray
+    }
 }
 
+# Kopiera public-mapp
+$publicDir = Join-Path $ScriptDir "public"
+if (Test-Path $publicDir) {
+    Copy-Item -Path "$publicDir\\*" -Destination "$AppDir\\public" -Recurse
+    Write-Host "  Kopierade public-mapp" -ForegroundColor Gray
+}
+
+Write-Host "  Filer kopierade" -ForegroundColor Green
+
+# 4. Installera dependencies
+Write-Host "[4/6] Installerar dependencies (detta kan ta några minuter)..." -ForegroundColor Yellow
 Set-Location $AppDir
 npm install --production 2>&1 | Out-Null
+Write-Host "  Dependencies installerade" -ForegroundColor Green
 
+# 5. Skapa .env-fil
+Write-Host "[5/6] Skapar konfiguration..." -ForegroundColor Yellow
 $DeviceId = $env:COMPUTERNAME.ToLower() -replace '[^a-z0-9-]', '-'
-if (-not [string]::IsNullOrWhiteSpace($InstanceName)) { $DeviceId = "$DeviceId-$CleanName" }
+if (-not [string]::IsNullOrWhiteSpace($InstanceName)) {
+    $DeviceId = "$DeviceId-$CleanName"
+}
 
-@"
+$EnvContent = @"
+# Chromecast Bridge Configuration
+# Genererad automatiskt $(Get-Date -Format "yyyy-MM-dd HH:mm")
+
 SUPABASE_URL=https://umxwaxzmoxwasryjibhe.supabase.co
 SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVteHdheHptb3h3YXNyeWppYmhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0OTc3OTgsImV4cCI6MjA4MDA3Mzc5OH0.R4hVdnkp310Wk-g0jZfy52EwxfV6z3Pfnv6uwhsf0ps
 DEVICE_ID=$DeviceId
 PORT=$Port
-"@ | Out-File -FilePath "$AppDir\\.env" -Encoding UTF8
+"@
+$EnvContent | Out-File -FilePath "$AppDir\\.env" -Encoding UTF8
+Write-Host "  Device ID: $DeviceId" -ForegroundColor Green
+Write-Host "  Port: $Port" -ForegroundColor Green
 
+# 6. Skapa Scheduled Task (körs vid systemstart som SYSTEM)
+Write-Host "[6/6] Skapar autostart-tjänst..." -ForegroundColor Yellow
+
+# Kontrollera admin-rättigheter
+$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $isAdmin) {
+    Write-Host ""
+    Write-Host "VARNING: Kör scriptet som administratör för att bridge:n" -ForegroundColor Yellow
+    Write-Host "ska kunna starta vid systemstart (före inloggning)." -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Högerklicka på install-windows.ps1 och välj:" -ForegroundColor Gray
+    Write-Host "'Kör med PowerShell som administratör'" -ForegroundColor Cyan
+    Write-Host ""
+    Read-Host "Tryck Enter för att avsluta"
+    exit 1
+}
+
+# Ta bort eventuell befintlig task
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
+
+# Hitta node.exe
 $NodePath = (Get-Command node).Source
+
+# Skapa task som körs vid systemstart som SYSTEM-användare
 $Action = New-ScheduledTaskAction -Execute $NodePath -Argument "index.js" -WorkingDirectory $AppDir
 $Trigger = New-ScheduledTaskTrigger -AtStartup
 $Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
 $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Days 9999)
-Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Principal $Principal -Settings $Settings -Description "Chromecast Bridge (systemstart)" | Out-Null
 
+Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Principal $Principal -Settings $Settings -Description "Chromecast Bridge - $AppName (startar vid systemstart)" | Out-Null
+
+Write-Host "  Scheduled Task skapad (körs vid systemstart)" -ForegroundColor Green
+
+# Starta tjänsten direkt
+Write-Host ""
+Write-Host "Startar bridge..." -ForegroundColor Yellow
 Start-ScheduledTask -TaskName $TaskName
 Start-Sleep -Seconds 3
 
@@ -1483,15 +1565,26 @@ Write-Host "========================================" -ForegroundColor Green
 Write-Host "  Installation klar!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "Öppna: http://localhost:$Port" -ForegroundColor Cyan
+Write-Host "Öppna webbläsaren och gå till:" -ForegroundColor White
+Write-Host ""
+Write-Host "  http://localhost:$Port" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Där kan du välja Chromecast och konfigurera screensaver." -ForegroundColor Gray
 Write-Host ""
 Write-Host "Device ID: $DeviceId" -ForegroundColor Yellow
-Write-Host "Bridge startar automatiskt vid systemstart." -ForegroundColor Green
+Write-Host "Task Name: $TaskName" -ForegroundColor Yellow
 Write-Host ""
-Read-Host "Tryck Enter"
-`,
+Write-Host "Bridge startar automatiskt vid systemstart (före inloggning)." -ForegroundColor Green
+Write-Host ""
+Write-Host "För att avinstallera, kör: uninstall-windows.ps1" -ForegroundColor Gray
+Write-Host ""
+Read-Host "Tryck Enter för att stänga"`;
 
-  "uninstall-windows.ps1": `$ErrorActionPreference = "SilentlyContinue"
+const UNINSTALL_WINDOWS_PS1 = `# Chromecast Bridge - Windows Uninstaller (Multi-Instance Support)
+# Högerklicka → "Kör med PowerShell"
+
+$ErrorActionPreference = "SilentlyContinue"
+$DefaultAppName = "ChromecastBridge"
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
@@ -1499,23 +1592,54 @@ Write-Host "  Chromecast Bridge Avinstallation" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
+# Lista alla installerade instanser
+Write-Host "Söker efter installerade bridges..." -ForegroundColor Yellow
+Write-Host ""
+
 $Tasks = Get-ScheduledTask | Where-Object { $_.TaskName -like "ChromecastBridge*" }
 $Folders = Get-ChildItem "$env:APPDATA" -Directory | Where-Object { $_.Name -like "ChromecastBridge*" }
 
 if ($Tasks.Count -eq 0 -and $Folders.Count -eq 0) {
-    Write-Host "Inga installationer hittades." -ForegroundColor Gray
-    Read-Host "Tryck Enter"
+    Write-Host "Inga Chromecast Bridge-installationer hittades." -ForegroundColor Gray
+    Read-Host "Tryck Enter för att avsluta"
     exit 0
 }
 
-Write-Host "Hittade:" -ForegroundColor White
+Write-Host "Hittade följande installationer:" -ForegroundColor White
 $index = 1
 $Installations = @()
 
 foreach ($task in $Tasks) {
-    Write-Host "  [$index] $($task.TaskName)" -ForegroundColor Cyan
-    $Installations += @{ TaskName = $task.TaskName; FolderPath = "$env:APPDATA\\$($task.TaskName)" }
+    $taskName = $task.TaskName
+    $folderPath = "$env:APPDATA\\$taskName"
+    
+    Write-Host "  [$index] $taskName" -ForegroundColor Cyan
+    if (Test-Path $folderPath) {
+        Write-Host "      Mapp: $folderPath" -ForegroundColor Gray
+    }
+    
+    $Installations += @{
+        TaskName = $taskName
+        FolderPath = $folderPath
+    }
     $index++
+}
+
+# Lägg till eventuella mappar utan task
+foreach ($folder in $Folders) {
+    $folderName = $folder.Name
+    $existsInTasks = $Installations | Where-Object { $_.TaskName -eq $folderName }
+    
+    if (-not $existsInTasks) {
+        Write-Host "  [$index] $folderName (endast mapp)" -ForegroundColor Yellow
+        Write-Host "      Mapp: $($folder.FullName)" -ForegroundColor Gray
+        
+        $Installations += @{
+            TaskName = $null
+            FolderPath = $folder.FullName
+        }
+        $index++
+    }
 }
 
 Write-Host ""
@@ -1523,38 +1647,64 @@ Write-Host "  [A] Avinstallera ALLA" -ForegroundColor Red
 Write-Host "  [0] Avbryt" -ForegroundColor Gray
 Write-Host ""
 
-$choice = Read-Host "Välj"
+$choice = Read-Host "Välj installation att avinstallera"
 
-if ($choice -eq "0" -or [string]::IsNullOrWhiteSpace($choice)) { exit 0 }
+if ($choice -eq "0" -or [string]::IsNullOrWhiteSpace($choice)) {
+    Write-Host "Avbryter." -ForegroundColor Gray
+    exit 0
+}
 
 $toUninstall = @()
-if ($choice -eq "A" -or $choice -eq "a") { $toUninstall = $Installations }
-else {
+
+if ($choice -eq "A" -or $choice -eq "a") {
+    $toUninstall = $Installations
+} else {
     $choiceNum = [int]$choice
     if ($choiceNum -ge 1 -and $choiceNum -le $Installations.Count) {
         $toUninstall += $Installations[$choiceNum - 1]
+    } else {
+        Write-Host "Ogiltigt val." -ForegroundColor Red
+        exit 1
     }
-}
-
-foreach ($install in $toUninstall) {
-    if ($install.TaskName) {
-        Stop-ScheduledTask -TaskName $install.TaskName -ErrorAction SilentlyContinue
-        Unregister-ScheduledTask -TaskName $install.TaskName -Confirm:$false -ErrorAction SilentlyContinue
-    }
-    if ($install.FolderPath -and (Test-Path $install.FolderPath)) {
-        Remove-Item -Path $install.FolderPath -Recurse -Force -ErrorAction SilentlyContinue
-    }
-    Write-Host "  Avinstallerad: $($install.TaskName)" -ForegroundColor Green
 }
 
 Write-Host ""
-Write-Host "Klart!" -ForegroundColor Green
-Read-Host "Tryck Enter"
-`,
+Write-Host "Avinstallerar..." -ForegroundColor Yellow
 
-  "install-linux.sh": `#!/bin/bash
+foreach ($install in $toUninstall) {
+    $taskName = $install.TaskName
+    $folderPath = $install.FolderPath
+    
+    if ($taskName) {
+        Write-Host "  Stoppar task: $taskName" -ForegroundColor Gray
+        Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+        
+        Write-Host "  Tar bort task: $taskName" -ForegroundColor Gray
+        Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+    }
+    
+    if ($folderPath -and (Test-Path $folderPath)) {
+        Write-Host "  Tar bort mapp: $folderPath" -ForegroundColor Gray
+        Remove-Item -Path $folderPath -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    
+    $displayName = if ($taskName) { $taskName } else { Split-Path $folderPath -Leaf }
+    Write-Host "  ✓ $displayName avinstallerad" -ForegroundColor Green
+}
+
+Write-Host ""
+Write-Host "========================================" -ForegroundColor Green
+Write-Host "  Avinstallation klar!" -ForegroundColor Green
+Write-Host "========================================" -ForegroundColor Green
+Write-Host ""
+Read-Host "Tryck Enter för att stänga"`;
+
+const INSTALL_LINUX_SH = `#!/bin/bash
+# Chromecast Bridge - Linux/Raspberry Pi Installer (Multi-Instance Support)
+
 set -e
 
+DEFAULT_APP_NAME="chromecast-bridge"
 DEFAULT_PORT=3000
 
 echo ""
@@ -1563,69 +1713,153 @@ echo "  Chromecast Bridge Installer"
 echo "========================================"
 echo ""
 
-read -p "Instansnamn (Enter för standard): " INSTANCE_NAME
+# Fråga om instansnamn
+echo "Om du vill köra flera bridges (t.ex. en per rum), ge varje ett unikt namn."
+echo "Lämna tomt för standardinstallation."
+echo ""
+read -p "Instansnamn (tryck Enter för standard): " INSTANCE_NAME
 
 if [ -z "$INSTANCE_NAME" ]; then
-    APP_NAME="chromecast-bridge"
-    SERVICE_NAME="chromecast-bridge"
+    APP_NAME="$DEFAULT_APP_NAME"
+    SERVICE_NAME="$DEFAULT_APP_NAME"
     PORT=$DEFAULT_PORT
 else
     CLEAN_NAME=$(echo "$INSTANCE_NAME" | tr -cd '[:alnum:]-' | tr '[:upper:]' '[:lower:]')
-    APP_NAME="chromecast-bridge-$CLEAN_NAME"
-    SERVICE_NAME="chromecast-bridge-$CLEAN_NAME"
+    APP_NAME="$DEFAULT_APP_NAME-$CLEAN_NAME"
+    SERVICE_NAME="$DEFAULT_APP_NAME-$CLEAN_NAME"
+    
     read -p "Port (standard: $DEFAULT_PORT): " PORT_INPUT
-    PORT=\${PORT_INPUT:-$DEFAULT_PORT}
+    if [ -z "$PORT_INPUT" ]; then
+        PORT=$DEFAULT_PORT
+    else
+        PORT=$PORT_INPUT
+    fi
 fi
 
 APP_DIR="$HOME/.local/share/$APP_NAME"
 
+echo ""
+echo "Installation:"
+echo "  Namn: $APP_NAME"
+echo "  Port: $PORT"
+echo "  Mapp: $APP_DIR"
+echo ""
+
+# Kontrollera att vi inte kör som root
 if [ "$EUID" -eq 0 ]; then
-    echo "Kör inte som root!"
+    echo "❌ Kör inte detta script som root!"
+    echo "   Använd: ./install-linux.sh"
     exit 1
 fi
 
+# 1. Kontrollera/installera Node.js
+echo "[1/6] Kontrollerar Node.js..."
 if ! command -v node &> /dev/null; then
+    echo "  Node.js hittades inte. Försöker installera..."
+    
     if command -v apt-get &> /dev/null; then
+        # Debian/Ubuntu/Raspberry Pi
         curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
         sudo apt-get install -y nodejs
+    elif command -v dnf &> /dev/null; then
+        # Fedora
+        sudo dnf install -y nodejs
+    elif command -v pacman &> /dev/null; then
+        # Arch
+        sudo pacman -S nodejs npm
+    else
+        echo "  ❌ Kunde inte installera Node.js automatiskt."
+        echo "     Installera Node.js 18+ manuellt: https://nodejs.org"
+        exit 1
     fi
 fi
+echo "  ✓ Node.js $(node --version)"
 
+# 2. Skapa app-mapp
+echo "[2/6] Skapar app-mapp..."
+mkdir -p "$APP_DIR"
 mkdir -p "$APP_DIR/public"
+echo "  ✓ $APP_DIR"
+
+# 3. Kopiera filer
+echo "[3/6] Kopierar filer..."
 SCRIPT_DIR="$(cd "$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
-cp "$SCRIPT_DIR/index.js" "$APP_DIR/" 2>/dev/null || true
-cp "$SCRIPT_DIR/package.json" "$APP_DIR/" 2>/dev/null || true
-[ -d "$SCRIPT_DIR/public" ] && cp -r "$SCRIPT_DIR/public/"* "$APP_DIR/public/"
 
-cd "$APP_DIR" && npm install --production
+# Kopiera huvudfiler
+for file in index.js package.json package-lock.json; do
+    if [ -f "$SCRIPT_DIR/$file" ]; then
+        cp "$SCRIPT_DIR/$file" "$APP_DIR/"
+        echo "  Kopierade $file"
+    fi
+done
 
+# Kopiera public-mapp
+if [ -d "$SCRIPT_DIR/public" ]; then
+    cp -r "$SCRIPT_DIR/public/"* "$APP_DIR/public/"
+    echo "  Kopierade public-mapp"
+fi
+
+echo "  ✓ Filer kopierade"
+
+# 4. Installera dependencies
+echo "[4/6] Installerar dependencies..."
+cd "$APP_DIR"
+npm install --production
+echo "  ✓ Dependencies installerade"
+
+# 5. Skapa .env-fil
+echo "[5/6] Skapar konfiguration..."
 DEVICE_ID=$(hostname | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]-')
-[ -n "$CLEAN_NAME" ] && DEVICE_ID="$DEVICE_ID-$CLEAN_NAME"
+if [ -n "$CLEAN_NAME" ]; then
+    DEVICE_ID="$DEVICE_ID-$CLEAN_NAME"
+fi
 
 cat > "$APP_DIR/.env" << EOF
+# Chromecast Bridge Configuration
+# Genererad $(date +"%Y-%m-%d %H:%M")
+
 SUPABASE_URL=https://umxwaxzmoxwasryjibhe.supabase.co
 SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVteHdheHptb3h3YXNyeWppYmhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0OTc3OTgsImV4cCI6MjA4MDA3Mzc5OH0.R4hVdnkp310Wk-g0jZfy52EwxfV6z3Pfnv6uwhsf0ps
 DEVICE_ID=$DEVICE_ID
 PORT=$PORT
 EOF
 
+echo "  ✓ Device ID: $DEVICE_ID"
+echo "  ✓ Port: $PORT"
+
+# 6. Skapa systemd user service
+echo "[6/6] Skapar systemd service..."
 mkdir -p "$HOME/.config/systemd/user"
+
 cat > "$HOME/.config/systemd/user/$SERVICE_NAME.service" << EOF
 [Unit]
 Description=Chromecast Bridge - $APP_NAME
 After=network-online.target
+Wants=network-online.target
+
 [Service]
+Type=simple
 WorkingDirectory=$APP_DIR
 ExecStart=$(which node) index.js
 Restart=always
+RestartSec=10
+Environment=NODE_ENV=production
+
 [Install]
 WantedBy=default.target
 EOF
 
+# Aktivera lingering för att köra services utan inloggning
+loginctl enable-linger "$USER" 2>/dev/null || true
+
+# Ladda om och starta service
 systemctl --user daemon-reload
 systemctl --user enable "$SERVICE_NAME"
 systemctl --user start "$SERVICE_NAME"
 
+echo "  ✓ Service skapad och startad"
+
+# Hämta IP-adress
 IP_ADDR=$(hostname -I | awk '{print $1}')
 
 echo ""
@@ -1633,14 +1867,27 @@ echo "========================================"
 echo "  Installation klar!"
 echo "========================================"
 echo ""
-echo "Öppna: http://localhost:$PORT"
-echo "LAN:   http://$IP_ADDR:$PORT"
+echo "Öppna webbläsaren och gå till:"
+echo ""
+echo "  Lokal:  http://localhost:$PORT"
+echo "  LAN:    http://$IP_ADDR:$PORT"
+echo ""
+echo "Där kan du välja Chromecast och konfigurera screensaver."
 echo ""
 echo "Device ID: $DEVICE_ID"
+echo "Service:   $SERVICE_NAME"
 echo ""
-`,
+echo "Användbara kommandon:"
+echo "  Status:  systemctl --user status $SERVICE_NAME"
+echo "  Loggar:  journalctl --user -u $SERVICE_NAME -f"
+echo "  Stoppa:  systemctl --user stop $SERVICE_NAME"
+echo "  Starta:  systemctl --user start $SERVICE_NAME"
+echo ""
+echo "För att avinstallera: ./uninstall-linux.sh"
+echo ""`;
 
-  "uninstall-linux.sh": `#!/bin/bash
+const UNINSTALL_LINUX_SH = `#!/bin/bash
+# Chromecast Bridge - Linux Uninstaller (Multi-Instance Support)
 
 echo ""
 echo "========================================"
@@ -1648,76 +1895,175 @@ echo "  Chromecast Bridge Avinstallation"
 echo "========================================"
 echo ""
 
-SERVICES=$(systemctl --user list-units --all --type=service 2>/dev/null | grep "chromecast-bridge" | awk '{print $1}' | sed 's/.service$//')
+# Hitta alla installationer
+echo "Söker efter installerade bridges..."
+echo ""
 
-if [ -z "$SERVICES" ]; then
-    echo "Inga installationer hittades."
-    exit 0
-fi
+SERVICES=$(systemctl --user list-units --all --type=service | grep "chromecast-bridge" | awk '{print $1}' | sed 's/.service$//')
+FOLDERS=$(find "$HOME/.local/share" -maxdepth 1 -type d -name "chromecast-bridge*" 2>/dev/null)
 
-echo "Hittade:"
-index=1
 declare -a INSTALLATIONS
+
+index=1
+
+# Lista services
 for service in $SERVICES; do
+    folder="$HOME/.local/share/$service"
     echo "  [$index] $service"
-    INSTALLATIONS+=("$service")
+    if [ -d "$folder" ]; then
+        echo "      Mapp: $folder"
+    fi
+    INSTALLATIONS+=("$service|$folder")
     ((index++))
 done
+
+# Lista mappar utan service
+for folder in $FOLDERS; do
+    folder_name=$(basename "$folder")
+    exists=false
+    for install in "\${INSTALLATIONS[@]}"; do
+        if [[ "$install" == *"$folder_name"* ]]; then
+            exists=true
+            break
+        fi
+    done
+    
+    if [ "$exists" = false ]; then
+        echo "  [$index] $folder_name (endast mapp)"
+        echo "      Mapp: $folder"
+        INSTALLATIONS+=("|$folder")
+        ((index++))
+    fi
+done
+
+if [ \${#INSTALLATIONS[@]} -eq 0 ]; then
+    echo "Inga Chromecast Bridge-installationer hittades."
+    exit 0
+fi
 
 echo ""
 echo "  [A] Avinstallera ALLA"
 echo "  [0] Avbryt"
 echo ""
 
-read -p "Välj: " choice
+read -p "Välj installation att avinstallera: " choice
 
-[ -z "$choice" ] || [ "$choice" = "0" ] && exit 0
+if [ -z "$choice" ] || [ "$choice" = "0" ]; then
+    echo "Avbryter."
+    exit 0
+fi
 
 declare -a TO_UNINSTALL
+
 if [ "$choice" = "A" ] || [ "$choice" = "a" ]; then
     TO_UNINSTALL=("\${INSTALLATIONS[@]}")
 else
-    idx=$((choice - 1))
-    [ $idx -ge 0 ] && [ $idx -lt \${#INSTALLATIONS[@]} ] && TO_UNINSTALL=("\${INSTALLATIONS[$idx]}")
+    choice_num=$((choice - 1))
+    if [ $choice_num -ge 0 ] && [ $choice_num -lt \${#INSTALLATIONS[@]} ]; then
+        TO_UNINSTALL=("\${INSTALLATIONS[$choice_num]}")
+    else
+        echo "Ogiltigt val."
+        exit 1
+    fi
 fi
 
-for service in "\${TO_UNINSTALL[@]}"; do
-    systemctl --user stop "$service" 2>/dev/null || true
-    systemctl --user disable "$service" 2>/dev/null || true
-    rm -f "$HOME/.config/systemd/user/$service.service"
-    rm -rf "$HOME/.local/share/$service"
-    echo "  Avinstallerad: $service"
+echo ""
+echo "Avinstallerar..."
+
+for install in "\${TO_UNINSTALL[@]}"; do
+    IFS='|' read -r service_name folder_path <<< "$install"
+    
+    if [ -n "$service_name" ]; then
+        echo "  Stoppar service: $service_name"
+        systemctl --user stop "$service_name" 2>/dev/null || true
+        
+        echo "  Inaktiverar service: $service_name"
+        systemctl --user disable "$service_name" 2>/dev/null || true
+        
+        echo "  Tar bort service-fil"
+        rm -f "$HOME/.config/systemd/user/$service_name.service"
+    fi
+    
+    if [ -n "$folder_path" ] && [ -d "$folder_path" ]; then
+        echo "  Tar bort mapp: $folder_path"
+        rm -rf "$folder_path"
+    fi
+    
+    display_name=\${service_name:-$(basename "$folder_path")}
+    echo "  ✓ $display_name avinstallerad"
 done
 
+# Ladda om systemd
 systemctl --user daemon-reload
 
 echo ""
-echo "Klart!"
-echo ""
-`
+echo "========================================"
+echo "  Avinstallation klar!"
+echo "========================================"
+echo ""`;
+
+const README = `# Chromecast Bridge
+
+Lokal bridge-tjänst för att styra Chromecast-enheter via webbgränssnitt.
+
+## Snabbinstallation
+
+### Windows
+1. Högerklicka på \`install-windows.ps1\`
+2. Välj "Kör med PowerShell som administratör"
+3. Följ instruktionerna
+
+### Linux / Raspberry Pi
+\`\`\`bash
+chmod +x install-linux.sh
+./install-linux.sh
+\`\`\`
+
+## Efter installation
+
+Öppna http://localhost:3000 i webbläsaren.
+
+## Avinstallation
+
+- **Windows:** Kör \`uninstall-windows.ps1\`
+- **Linux:** Kör \`./uninstall-linux.sh\`
+`;
+
+// Collect all files
+const files: Record<string, string> = {
+  "index.js": INDEX_JS,
+  "package.json": PACKAGE_JSON,
+  ".env.example": ENV_EXAMPLE,
+  "public/index.html": PUBLIC_INDEX_HTML,
+  "public/style.css": PUBLIC_STYLE_CSS,
+  "public/app.js": PUBLIC_APP_JS,
+  "install-windows.ps1": INSTALL_WINDOWS_PS1,
+  "uninstall-windows.ps1": UNINSTALL_WINDOWS_PS1,
+  "install-linux.sh": INSTALL_LINUX_SH,
+  "uninstall-linux.sh": UNINSTALL_LINUX_SH,
+  "README.md": README,
 };
 
 serve(async (req) => {
+  // Handle CORS
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
     const zipData = createZip(files);
-    
-    // Create a proper ArrayBuffer copy to avoid SharedArrayBuffer issues
-    const arrayBuffer = new ArrayBuffer(zipData.length);
-    new Uint8Array(arrayBuffer).set(zipData);
 
-    return new Response(arrayBuffer, {
+    return new Response(zipData.buffer as ArrayBuffer, {
       headers: {
         ...corsHeaders,
         "Content-Type": "application/zip",
         "Content-Disposition": "attachment; filename=chromecast-bridge.zip",
+        "Content-Length": zipData.length.toString(),
       },
     });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
+  } catch (error) {
+    console.error("Error creating zip:", error);
+    const message = error instanceof Error ? error.message : "Unknown error";
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
