@@ -19,10 +19,28 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.3";
+const VERSION = "1.3.4";
 const RELEASED_AT = "2026-01-24";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.4",
+    date: "2026-01-24",
+    changes: {
+      sv: [
+        "Omedelbar återanslutning: Vid nätverksfel försöker bridge nu återansluta direkt",
+        "Snabbare recovery: Skippar recovery-loopen vid nätverksavbrott",
+        "Förbättrad logik: Kontrollerar enhetsstatus innan återanslutning",
+        "Fixat: 'Ready to cast' som visades efter tillfälliga nätverksavbrott",
+      ],
+      en: [
+        "Immediate reconnection: On network errors, bridge now attempts to reconnect immediately",
+        "Faster recovery: Skips recovery loop on network interruptions",
+        "Improved logic: Checks device status before reconnecting",
+        "Fixed: 'Ready to cast' appearing after temporary network interruptions",
+      ],
+    }
+  },
   {
     version: "1.3.3",
     date: "2026-01-24",
