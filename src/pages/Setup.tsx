@@ -238,14 +238,14 @@ const Setup = () => {
                         <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground text-sm font-medium">2</div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm mb-2">Kör installationsscriptet:</p>
-                          <div className="relative">
-                            <pre className="bg-muted p-3 rounded-lg text-xs overflow-x-auto pr-12 font-mono">
+                          <div className="flex items-center gap-2">
+                            <pre className="flex-1 min-w-0 bg-muted p-3 rounded-lg text-xs overflow-x-auto font-mono">
                               <code>chmod +x install-linux.sh && ./install-linux.sh</code>
                             </pre>
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="absolute right-1 top-1 h-8 w-8 p-0"
+                              className="shrink-0 h-8 w-8 p-0"
                               onClick={() => copyToClipboard('chmod +x install-linux.sh && ./install-linux.sh')}
                             >
                               {copiedCommand ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
