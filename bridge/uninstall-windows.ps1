@@ -1,5 +1,9 @@
 # Chromecast Bridge - Windows Uninstaller (Multi-Instance Support)
-# Högerklicka → "Kör med PowerShell"
+# Hogerklicka -> "Kor med PowerShell"
+
+# Fix console encoding
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
 
 $ErrorActionPreference = "SilentlyContinue"
 $DefaultAppName = "ChromecastBridge"
@@ -11,7 +15,7 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
 # Lista alla installerade instanser
-Write-Host "Söker efter installerade bridges..." -ForegroundColor Yellow
+Write-Host "Soker efter installerade bridges..." -ForegroundColor Yellow
 Write-Host ""
 
 $Tasks = Get-ScheduledTask | Where-Object { $_.TaskName -like "ChromecastBridge*" }
@@ -19,11 +23,11 @@ $Folders = Get-ChildItem "$env:APPDATA" -Directory | Where-Object { $_.Name -lik
 
 if ($Tasks.Count -eq 0 -and $Folders.Count -eq 0) {
     Write-Host "Inga Chromecast Bridge-installationer hittades." -ForegroundColor Gray
-    Read-Host "Tryck Enter för att avsluta"
+    Read-Host "Tryck Enter for att avsluta"
     exit 0
 }
 
-Write-Host "Hittade följande installationer:" -ForegroundColor White
+Write-Host "Hittade foljande installationer:" -ForegroundColor White
 $index = 1
 $Installations = @()
 
@@ -43,7 +47,7 @@ foreach ($task in $Tasks) {
     $index++
 }
 
-# Lägg till eventuella mappar utan task
+# Lagg till eventuella mappar utan task
 foreach ($folder in $Folders) {
     $folderName = $folder.Name
     $existsInTasks = $Installations | Where-Object { $_.TaskName -eq $folderName }
@@ -65,7 +69,7 @@ Write-Host "  [A] Avinstallera ALLA" -ForegroundColor Red
 Write-Host "  [0] Avbryt" -ForegroundColor Gray
 Write-Host ""
 
-$choice = Read-Host "Välj installation att avinstallera"
+$choice = Read-Host "Valj installation att avinstallera"
 
 if ($choice -eq "0" -or [string]::IsNullOrWhiteSpace($choice)) {
     Write-Host "Avbryter." -ForegroundColor Gray
@@ -107,7 +111,7 @@ foreach ($install in $toUninstall) {
     }
     
     $displayName = if ($taskName) { $taskName } else { Split-Path $folderPath -Leaf }
-    Write-Host "  ✓ $displayName avinstallerad" -ForegroundColor Green
+    Write-Host "  [OK] $displayName avinstallerad" -ForegroundColor Green
 }
 
 Write-Host ""
@@ -115,4 +119,4 @@ Write-Host "========================================" -ForegroundColor Green
 Write-Host "  Avinstallation klar!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
-Read-Host "Tryck Enter för att stänga"
+Read-Host "Tryck Enter for att stanga"
