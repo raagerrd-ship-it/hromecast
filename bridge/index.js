@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.2.1';
+const BRIDGE_VERSION = '1.2.2';
 
 // Configuration
 const CONFIG_FILE = path.join(__dirname, 'config.json');
@@ -486,64 +486,16 @@ async function stopCast(chromecastName) {
 
 // ============ Auto-Screensaver ============
 
-// Check if our app is still running (read-only, doesn't disturb the session)
-async function isOurAppStillRunning(deviceName) {
-  const device = findDevice(deviceName);
-  if (!device) return false;
-  
-  const config = loadConfig();
-  const timeoutMs = (config.idleStatusTimeout || 5) * 1000;
-  
-  return new Promise((resolve) => {
-    const checkClient = new castv2.Client();
-    
-    const timeout = setTimeout(() => {
-      checkClient.close();
-      resolve(true); // Assume still running on timeout (be conservative)
-    }, timeoutMs);
-    
-    checkClient.on('error', () => {
-      clearTimeout(timeout);
-      checkClient.close();
-      resolve(true); // Assume still running on error (be conservative)
-    });
-    
-    checkClient.connect(device.host, () => {
-      const connection = checkClient.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.tp.connection', 'JSON');
-      const receiver = checkClient.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.receiver', 'JSON');
-      
-      connection.send({ type: 'CONNECT' });
-      receiver.send({ type: 'GET_STATUS', requestId: 1 });
-      
-      receiver.on('message', (data) => {
-        if (data.type === 'RECEIVER_STATUS') {
-          clearTimeout(timeout);
-          connection.send({ type: 'CLOSE' });
-          checkClient.close();
-          
-          const apps = data.status?.applications || [];
-          const ourAppRunning = apps.some(app => app.appId === CUSTOM_APP_ID);
-          resolve(ourAppRunning);
-        }
-      });
-    });
-  });
-}
-
 async function checkAndActivateScreensaver() {
   const config = loadConfig();
   if (!config.enabled || !config.url || !config.selectedChromecast) return;
   
-  // If we think screensaver is active, verify it's still running
+  // If screensaver is already active, skip check entirely
+  // The idle check in isChromecastIdle will detect if our app is running
+  // and return false (not idle), preventing duplicate casts
   if (screensaverActive) {
-    const stillRunning = await isOurAppStillRunning(config.selectedChromecast);
-    if (stillRunning) {
-      log.debug('Screensaver verified running, skipping check');
-      return;
-    }
-    // App stopped externally, reset flag
-    log.info('📴 Screensaver app no longer running, resetting state');
-    screensaverActive = false;
+    log.debug('Screensaver flag active, skipping check');
+    return;
   }
   
   const idle = await isChromecastIdle(config.selectedChromecast);
