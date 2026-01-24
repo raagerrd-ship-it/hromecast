@@ -1570,7 +1570,7 @@ Write-Host "  Filer kopierade" -ForegroundColor Green
 # 4. Installera dependencies
 Write-Host "[4/6] Installerar dependencies (detta kan ta nagra minuter)..." -ForegroundColor Yellow
 Set-Location $AppDir
-npm install --production 2>&1 | Out-Null
+npm install --omit=dev 2>&1 | Out-Null
 Write-Host "  Dependencies installerade" -ForegroundColor Green
 
 # 5. Skapa .env-fil
