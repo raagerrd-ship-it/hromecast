@@ -3,7 +3,6 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const os = require('os');
-const { createClient } = require('@supabase/supabase-js');
 const Chromecasts = require('chromecasts');
 const Bonjour = require('bonjour-service').Bonjour;
 
@@ -11,16 +10,8 @@ const Bonjour = require('bonjour-service').Bonjour;
 const CONFIG_FILE = path.join(__dirname, 'config.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const PORT = parseInt(process.env.PORT || '3000');
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const DEVICE_ID = process.env.DEVICE_ID || 'default-bridge';
 const CUSTOM_APP_ID = 'FE376873';
-
-// Initialize Supabase client (optional - for device reporting)
-let supabase = null;
-if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-  supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-}
 
 // Initialize Bonjour and Chromecasts
 const bonjour = new Bonjour();
@@ -119,11 +110,6 @@ function discoverDevices() {
         const device = { name, host, port };
         foundDevices.push(device);
         console.log(`✅ Found: ${name} at ${host}:${port}`);
-        
-        // Report to Supabase if connected
-        if (supabase) {
-          reportDiscoveredDevice(name, host, port);
-        }
       }
     });
     
@@ -134,21 +120,6 @@ function discoverDevices() {
       resolve(foundDevices);
     }, 8000);
   });
-}
-
-async function reportDiscoveredDevice(name, host, port) {
-  if (!supabase) return;
-  try {
-    await supabase.from('discovered_chromecasts').upsert({
-      device_id: DEVICE_ID,
-      chromecast_name: name,
-      chromecast_host: host,
-      chromecast_port: port,
-      last_seen: new Date().toISOString()
-    }, { onConflict: 'device_id,chromecast_name' });
-  } catch (error) {
-    console.error('Error reporting device:', error.message);
-  }
 }
 
 // ============ Chromecast Control ============
