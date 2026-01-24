@@ -11,9 +11,23 @@ const corsHeaders = {
 // ============================================================================
 
 const VERSION_INFO = {
-  version: "1.1.0",
+  version: "1.2.0",
   releasedAt: "2025-01-24",
   changelog: [
+    {
+      version: "1.2.0",
+      date: "2025-01-24",
+      changes: [
+        "Förbättrad idle-detektering: Fixat kritiskt logikfel som kunde störa aktiva sessioner",
+        "Retry-logik: Automatiska omförsök med exponentiell backoff vid castingfel",
+        "Bättre keep-alive: Detekterar förlorade sessioner och flaggar för återanslutning",
+        "Strukturerad loggning: Tidsstämplade loggar med [INFO], [WARN], [ERROR] nivåer",
+        "Snabbare discovery: Early-resolve efter 3 sekunder om enheter hittats",
+        "Auto-elevation: Windows-installer begär automatiskt admin-rättigheter",
+        "Bättre felhantering: Fönstret stannar öppet vid fel med tydligt meddelande",
+        "Versionerat filnamn: ZIP-filen inkluderar nu versionsnummer",
+      ]
+    },
     {
       version: "1.1.0",
       date: "2025-01-24",
