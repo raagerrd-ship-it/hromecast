@@ -190,6 +190,20 @@ async function startCast() {
   setLoading(true);
   
   try {
+    // Spara URL:en först om den har ändrats
+    const currentUrl = elements.urlInput.value.trim();
+    if (currentUrl && currentUrl !== state.settings.url) {
+      await saveSettings({ url: currentUrl });
+      updatePreview(currentUrl);
+    }
+    
+    // Kontrollera att vi har en URL att casta
+    if (!currentUrl) {
+      alert('Ange en URL att visa först!');
+      setLoading(false);
+      return;
+    }
+    
     await api('/api/cast', { method: 'POST' });
     updateScreensaverStatus(true);
   } catch (error) {
