@@ -11,9 +11,24 @@ const corsHeaders = {
 // ============================================================================
 
 const VERSION_INFO = {
-  version: "1.2.0",
+  version: "1.2.2",
   releasedAt: "2025-01-24",
   changelog: [
+    {
+      version: "1.2.2",
+      date: "2025-01-24",
+      changes: [
+        "Fixat npm install: Ändrat deprecated --production till --omit=dev",
+      ]
+    },
+    {
+      version: "1.2.1",
+      date: "2025-01-24",
+      changes: [
+        "Fixat PowerShell param-fel: param() måste vara först i scriptet",
+        "Förbättrad felhantering: try-catch runt hela scriptet",
+      ]
+    },
     {
       version: "1.2.0",
       date: "2025-01-24",
