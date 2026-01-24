@@ -332,6 +332,7 @@ async function castMedia(chromecastName, url) {
       }, 120000);
       
       let appLaunched = false;
+      let mediaLoaded = false;
       
       receiver.on('message', async (data) => {
         log.debug('📨 Receiver message:', JSON.stringify(data));
@@ -367,17 +368,20 @@ async function castMedia(chromecastName, url) {
             return;
           }
           
-          // App launched - now load media
-          if (data.status && data.status.applications && data.status.applications.length > 0) {
+          // App launched - now load media (only once)
+          if (!mediaLoaded && data.status && data.status.applications && data.status.applications.length > 0) {
             const app = data.status.applications[0];
-            log.info(`📱 App launched: ${app.displayName} (${app.appId})`);
             
             if (app.appId !== CUSTOM_APP_ID) {
               log.warn('⚠️ Wrong app detected during cast');
               return;
             }
             
+            // Mark as loaded immediately to prevent duplicates
+            mediaLoaded = true;
             clearTimeout(launchTimeout);
+            
+            log.info(`📱 App launched: ${app.displayName} (${app.appId})`);
             
             const sessionId = app.sessionId;
             const transportId = app.transportId;
