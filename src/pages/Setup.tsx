@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 const Setup = () => {
@@ -22,14 +21,10 @@ const Setup = () => {
   const downloadBridge = async () => {
     setIsDownloading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('download-bridge', {
-        method: 'GET',
-      });
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/download-bridge`);
+      if (!response.ok) throw new Error('Download failed');
       
-      if (error) throw error;
-      
-      // Convert the response to blob and download
-      const blob = new Blob([data], { type: 'application/zip' });
+      const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -40,21 +35,11 @@ const Setup = () => {
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Download failed:', error);
-      // Fallback: direct fetch
-      try {
-        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/download-bridge`);
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'chromecast-bridge.zip';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      } catch (fallbackError) {
-        console.error('Fallback download failed:', fallbackError);
-      }
+      toast({
+        title: "Nedladdning misslyckades",
+        description: "Försök igen eller kontrollera anslutningen.",
+        variant: "destructive",
+      });
     } finally {
       setIsDownloading(false);
     }
