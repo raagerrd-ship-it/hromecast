@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 
 export interface VersionInfo {
   version: string;
@@ -16,74 +16,48 @@ const FALLBACK_VERSION: VersionInfo = {
   changelog: []
 };
 
-// Cache to avoid multiple API calls
-let cachedVersionInfo: VersionInfo | null = null;
-let fetchPromise: Promise<VersionInfo> | null = null;
-
-async function fetchVersionInfo(): Promise<VersionInfo> {
-  // Return cached data if available
-  if (cachedVersionInfo) {
-    return cachedVersionInfo;
-  }
-  
-  // Return existing promise if fetch is in progress
-  if (fetchPromise) {
-    return fetchPromise;
-  }
-  
-  // Start new fetch
-  fetchPromise = (async () => {
-    try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-version`
-      );
-      
-      if (!response.ok) {
-        throw new Error("Failed to fetch version");
-      }
-      
-      const data = await response.json();
-      cachedVersionInfo = data;
-      return data;
-    } catch (err) {
-      console.error("Error fetching version:", err);
-      return FALLBACK_VERSION;
-    } finally {
-      fetchPromise = null;
-    }
-  })();
-  
-  return fetchPromise;
-}
+// Simple module-level cache
+let cache: VersionInfo | null = null;
 
 export function useLatestVersion() {
-  const [versionInfo, setVersionInfo] = useState<VersionInfo>(cachedVersionInfo || FALLBACK_VERSION);
-  const [isLoading, setIsLoading] = useState(!cachedVersionInfo);
+  // Always initialize with cache or fallback - consistent hook order
+  const [versionInfo, setVersionInfo] = useState<VersionInfo>(() => cache || FALLBACK_VERSION);
+  const [isLoading, setIsLoading] = useState(() => cache === null);
   const [error, setError] = useState<string | null>(null);
-  const hasFetched = useRef(false);
 
   useEffect(() => {
-    // Only fetch once per component mount, and skip if already cached
-    if (hasFetched.current) return;
-    hasFetched.current = true;
-    
-    if (cachedVersionInfo) {
-      setVersionInfo(cachedVersionInfo);
+    // Skip fetch if already cached
+    if (cache) {
+      setVersionInfo(cache);
       setIsLoading(false);
       return;
     }
 
-    fetchVersionInfo()
+    let isMounted = true;
+
+    fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-version`)
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch version");
+        return res.json();
+      })
       .then((data) => {
-        setVersionInfo(data);
-        setError(null);
+        cache = data;
+        if (isMounted) {
+          setVersionInfo(data);
+          setIsLoading(false);
+        }
       })
       .catch((err) => {
-        setError(err instanceof Error ? err.message : "Unknown error");
-      })
-      .finally(() => {
-        setIsLoading(false);
+        console.error("Error fetching version:", err);
+        if (isMounted) {
+          setError(err instanceof Error ? err.message : "Unknown error");
+          setIsLoading(false);
+        }
       });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   return {
