@@ -31,12 +31,20 @@ let screensaverActive = false;
 const LOG_BUFFER_SIZE = 100;
 let logBuffer = [];
 
-// Default config
+// Default config with timing settings (all in seconds unless noted)
 const DEFAULT_CONFIG = {
   enabled: false,
   url: '',
   selectedChromecast: null,
-  idleTimeout: 5
+  // Timing settings
+  screensaverCheckInterval: 60,      // How often to check if device is idle (seconds)
+  keepAliveInterval: 5,              // Keep-alive ping interval (seconds)
+  discoveryInterval: 30,             // Re-scan for devices interval (minutes)
+  discoveryTimeout: 8,               // Max time to wait for discovery (seconds)
+  discoveryEarlyResolve: 3,          // Early resolve if devices found (seconds)
+  idleStatusTimeout: 5,              // Timeout for idle check (seconds)
+  castRetryDelay: 2,                 // Base delay for retry backoff (seconds)
+  castMaxRetries: 3                  // Max cast retry attempts
 };
 
 // ============ Structured Logging ============
@@ -158,7 +166,12 @@ function discoverDevices() {
       }
     });
     
-    // Early resolve if devices found after 3 seconds
+    // Get timing from config
+    const config = loadConfig();
+    const earlyResolveMs = (config.discoveryEarlyResolve || 3) * 1000;
+    const maxTimeoutMs = (config.discoveryTimeout || 8) * 1000;
+    
+    // Early resolve if devices found
     const earlyResolveTimeout = setTimeout(() => {
       if (foundDevices.length > 0 && !resolved) {
         resolved = true;
@@ -167,9 +180,9 @@ function discoverDevices() {
         log.info(`📡 Discovery complete (early): ${foundDevices.length} device(s)`);
         resolve(foundDevices);
       }
-    }, 3000);
+    }, earlyResolveMs);
     
-    // Max timeout of 8 seconds
+    // Max timeout
     setTimeout(() => {
       clearTimeout(earlyResolveTimeout);
       if (!resolved) {
@@ -179,7 +192,7 @@ function discoverDevices() {
         log.info(`📡 Discovery complete: ${foundDevices.length} device(s)`);
         resolve(foundDevices);
       }
-    }, 8000);
+    }, maxTimeoutMs);
   });
 }
 
@@ -187,6 +200,9 @@ function discoverDevices() {
 
 function keepSessionAlive() {
   if (keepAliveInterval) clearInterval(keepAliveInterval);
+  const config = loadConfig();
+  const intervalMs = (config.keepAliveInterval || 5) * 1000;
+  
   keepAliveInterval = setInterval(() => {
     if (currentDevice) {
       try {
@@ -206,13 +222,15 @@ function keepSessionAlive() {
         log.warn('⚠️ Keep-alive exception:', e.message);
       }
     }
-  }, 5000);
+  }, intervalMs);
 }
 
 async function isChromecastIdle(device) {
   return new Promise((resolve) => {
     if (!device) { resolve(true); return; }
-    const timeout = setTimeout(() => resolve(true), 5000);
+    const config = loadConfig();
+    const timeoutMs = (config.idleStatusTimeout || 5) * 1000;
+    const timeout = setTimeout(() => resolve(true), timeoutMs);
     try {
       device.status((err, status) => {
         clearTimeout(timeout);
@@ -265,14 +283,18 @@ async function castMedia(chromecastName, url) {
 }
 
 // Retry wrapper for cast operations with exponential backoff
-async function castMediaWithRetry(chromecastName, url, maxRetries = 3) {
+async function castMediaWithRetry(chromecastName, url) {
+  const config = loadConfig();
+  const maxRetries = config.castMaxRetries || 3;
+  const baseDelay = (config.castRetryDelay || 2) * 1000;
+  
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       return await castMedia(chromecastName, url);
     } catch (error) {
       log.warn(`⚠️ Cast attempt ${attempt}/${maxRetries} failed: ${error.message}`);
       if (attempt === maxRetries) throw error;
-      const delay = 2000 * attempt; // Exponential backoff: 2s, 4s, 6s
+      const delay = baseDelay * attempt; // Exponential backoff
       log.info(`🔄 Retrying in ${delay / 1000}s...`);
       await new Promise(r => setTimeout(r, delay));
     }
@@ -553,11 +575,18 @@ async function main() {
     }
   });
   
-  // Periodic discovery
-  setInterval(discoverDevices, 30 * 60 * 1000);
+  // Get timing config for intervals
+  const config = loadConfig();
+  const discoveryIntervalMs = (config.discoveryInterval || 30) * 60 * 1000;
+  const screensaverCheckMs = (config.screensaverCheckInterval || 60) * 1000;
   
-  // Screensaver check every minute
-  setInterval(checkAndActivateScreensaver, 60000);
+  log.info(`⏱️ Timing: screensaver check ${config.screensaverCheckInterval || 60}s, discovery ${config.discoveryInterval || 30}min`);
+  
+  // Periodic discovery
+  setInterval(discoverDevices, discoveryIntervalMs);
+  
+  // Screensaver check
+  setInterval(checkAndActivateScreensaver, screensaverCheckMs);
   
   // Update network info periodically (in case IP changes)
   setInterval(writeNetworkInfo, 5 * 60 * 1000);

@@ -32,7 +32,16 @@ const elements = {
   mdnsUrl: document.getElementById('mdns-url'),
   copyUrlBtn: document.getElementById('copy-url-btn'),
   logsContainer: document.getElementById('logs-container'),
-  clearLogsBtn: document.getElementById('clear-logs-btn')
+  clearLogsBtn: document.getElementById('clear-logs-btn'),
+  // Settings elements
+  toggleSettingsBtn: document.getElementById('toggle-settings-btn'),
+  settingsContent: document.getElementById('settings-content'),
+  screensaverCheckInput: document.getElementById('screensaver-check-input'),
+  keepAliveInput: document.getElementById('keep-alive-input'),
+  discoveryIntervalInput: document.getElementById('discovery-interval-input'),
+  discoveryTimeoutInput: document.getElementById('discovery-timeout-input'),
+  castRetryInput: document.getElementById('cast-retry-input'),
+  castMaxRetriesInput: document.getElementById('cast-max-retries-input')
 };
 
 // State
@@ -146,6 +155,26 @@ async function loadSettings() {
     
     if (data.selectedChromecast) {
       elements.chromecastSelect.value = data.selectedChromecast;
+    }
+    
+    // Load timing settings
+    if (elements.screensaverCheckInput) {
+      elements.screensaverCheckInput.value = data.screensaverCheckInterval || 60;
+    }
+    if (elements.keepAliveInput) {
+      elements.keepAliveInput.value = data.keepAliveInterval || 5;
+    }
+    if (elements.discoveryIntervalInput) {
+      elements.discoveryIntervalInput.value = data.discoveryInterval || 30;
+    }
+    if (elements.discoveryTimeoutInput) {
+      elements.discoveryTimeoutInput.value = data.discoveryTimeout || 8;
+    }
+    if (elements.castRetryInput) {
+      elements.castRetryInput.value = data.castRetryDelay || 2;
+    }
+    if (elements.castMaxRetriesInput) {
+      elements.castMaxRetriesInput.value = data.castMaxRetries || 3;
     }
     
     updateScreensaverStatus(data.screensaverActive);
@@ -293,6 +322,36 @@ elements.urlInput.addEventListener('change', (e) => {
 elements.refreshBtn.addEventListener('click', refreshDevices);
 elements.castBtn.addEventListener('click', startCast);
 elements.stopBtn.addEventListener('click', stopCast);
+
+// Toggle settings visibility
+if (elements.toggleSettingsBtn && elements.settingsContent) {
+  elements.toggleSettingsBtn.addEventListener('click', () => {
+    const isHidden = elements.settingsContent.style.display === 'none';
+    elements.settingsContent.style.display = isHidden ? 'block' : 'none';
+    elements.toggleSettingsBtn.textContent = isHidden ? 'Dölj' : 'Visa';
+  });
+}
+
+// Settings input handlers
+const settingsInputs = [
+  { el: elements.screensaverCheckInput, key: 'screensaverCheckInterval' },
+  { el: elements.keepAliveInput, key: 'keepAliveInterval' },
+  { el: elements.discoveryIntervalInput, key: 'discoveryInterval' },
+  { el: elements.discoveryTimeoutInput, key: 'discoveryTimeout' },
+  { el: elements.castRetryInput, key: 'castRetryDelay' },
+  { el: elements.castMaxRetriesInput, key: 'castMaxRetries' }
+];
+
+settingsInputs.forEach(({ el, key }) => {
+  if (el) {
+    el.addEventListener('change', (e) => {
+      const value = parseInt(e.target.value, 10);
+      if (!isNaN(value)) {
+        saveSettings({ [key]: value });
+      }
+    });
+  }
+});
 
 if (elements.copyUrlBtn) {
   elements.copyUrlBtn.addEventListener('click', () => {

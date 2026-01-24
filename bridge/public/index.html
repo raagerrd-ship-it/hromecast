@@ -84,6 +84,49 @@
         </div>
       </section>
 
+      <!-- Timing Settings -->
+      <section class="card settings-card">
+        <div class="card-header">
+          <h2>⏱️ Tidsinställningar</h2>
+          <button id="toggle-settings-btn" class="btn btn-secondary btn-small">Visa</button>
+        </div>
+        <div class="card-content settings-content" id="settings-content" style="display: none;">
+          <div class="settings-grid">
+            <div class="form-group">
+              <label for="screensaver-check-input">Screensaver-kontroll (sek)</label>
+              <input type="number" id="screensaver-check-input" min="10" max="600" step="5" value="60">
+              <span class="hint">Hur ofta kontrollera om enheten är ledig</span>
+            </div>
+            <div class="form-group">
+              <label for="keep-alive-input">Keep-alive ping (sek)</label>
+              <input type="number" id="keep-alive-input" min="1" max="60" step="1" value="5">
+              <span class="hint">Intervall för session-kontroll</span>
+            </div>
+            <div class="form-group">
+              <label for="discovery-interval-input">Enhetsökning (min)</label>
+              <input type="number" id="discovery-interval-input" min="5" max="120" step="5" value="30">
+              <span class="hint">Hur ofta söka efter nya enheter</span>
+            </div>
+            <div class="form-group">
+              <label for="discovery-timeout-input">Sök-timeout (sek)</label>
+              <input type="number" id="discovery-timeout-input" min="3" max="30" step="1" value="8">
+              <span class="hint">Max tid för enhetssökning</span>
+            </div>
+            <div class="form-group">
+              <label for="cast-retry-input">Retry-fördröjning (sek)</label>
+              <input type="number" id="cast-retry-input" min="1" max="30" step="1" value="2">
+              <span class="hint">Bas-fördröjning vid misslyckad cast</span>
+            </div>
+            <div class="form-group">
+              <label for="cast-max-retries-input">Max försök</label>
+              <input type="number" id="cast-max-retries-input" min="1" max="10" step="1" value="3">
+              <span class="hint">Antal försök innan ge upp</span>
+            </div>
+          </div>
+          <p class="hint settings-note">⚠️ Ändringar kräver omstart av bridge för full effekt</p>
+        </div>
+      </section>
+
       <!-- Logs -->
       <section class="card logs-card">
         <div class="card-header">

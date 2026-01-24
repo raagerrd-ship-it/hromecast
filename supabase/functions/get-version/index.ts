@@ -11,9 +11,18 @@ const corsHeaders = {
 // ============================================================================
 
 const VERSION_INFO = {
-  version: "1.2.7",
+  version: "1.3.0",
   releasedAt: "2025-01-24",
   changelog: [
+    {
+      version: "1.3.0",
+      date: "2025-01-24",
+      changes: [
+        "Konfigurerbar timing: Alla tidsintervall kan nu justeras via inställningar",
+        "Ny inställningssektion i dashboarden för tidskonfiguration",
+        "Justerbar screensaver-kontroll, keep-alive, discovery, retry mm",
+      ]
+    },
     {
       version: "1.2.7",
       date: "2025-01-24",
