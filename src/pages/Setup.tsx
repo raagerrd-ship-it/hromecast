@@ -1,8 +1,26 @@
-import { ArrowLeft, Terminal, Settings, Monitor, Zap } from "lucide-react";
+import { ArrowLeft, Download, Terminal, CheckCircle, Copy, Check } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { useState } from "react";
 
 const Setup = () => {
+  const [copiedWindows, setCopiedWindows] = useState(false);
+  const [copiedLinux, setCopiedLinux] = useState(false);
+
+  const deviceIdExample = "datornamn";
+
+  const copyToClipboard = (text: string, type: 'windows' | 'linux') => {
+    navigator.clipboard.writeText(text);
+    if (type === 'windows') {
+      setCopiedWindows(true);
+      setTimeout(() => setCopiedWindows(false), 2000);
+    } else {
+      setCopiedLinux(true);
+      setTimeout(() => setCopiedLinux(false), 2000);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground p-4 md:p-8">
       <div className="max-w-3xl mx-auto space-y-6">
@@ -16,119 +34,114 @@ const Setup = () => {
 
         <div>
           <h1 className="text-2xl font-bold">Installationsguide</h1>
-          <p className="text-muted-foreground">Sätt upp Chromecast-screensaver i ett nytt hem</p>
+          <p className="text-muted-foreground">Sätt upp Chromecast-screensaver på 2 minuter</p>
         </div>
 
+        {/* Quick Install - Windows */}
+        <Card className="border-primary">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Download className="h-5 w-5" />
+              Windows - Snabbinstallation
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-3">
+              <div className="flex items-start gap-3">
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">1</div>
+                <div>
+                  <p className="font-medium">Ladda ner bridge-mappen</p>
+                  <p className="text-sm text-muted-foreground">Klona eller ladda ner <code className="bg-muted px-1 rounded">bridge/</code> mappen från projektet</p>
+                </div>
+              </div>
+              
+              <div className="flex items-start gap-3">
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">2</div>
+                <div>
+                  <p className="font-medium">Kör installern</p>
+                  <p className="text-sm text-muted-foreground">Högerklicka på <code className="bg-muted px-1 rounded">install-windows.ps1</code> → "Kör med PowerShell"</p>
+                </div>
+              </div>
+              
+              <div className="flex items-start gap-3">
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">3</div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-primary" />
+                  <p className="font-medium">Klart!</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t">
+              <p className="text-xs text-muted-foreground mb-2">Scriptet installerar Node.js (om det saknas), konfigurerar bridge och skapar autostart.</p>
+              <p className="text-xs text-muted-foreground">Device ID genereras automatiskt från datornamnet (t.ex. <code className="bg-muted px-1 rounded">{deviceIdExample}</code>)</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Quick Install - Linux */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Terminal className="h-5 w-5" />
-              Förutsättningar
+              Linux / Raspberry Pi
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-              <li>En dator (Windows/Mac/Linux) som alltid är igång på samma nätverk som Chromecast</li>
-              <li>Node.js 18 eller högre installerat</li>
-              <li>En Chromecast-enhet på nätverket</li>
-            </ul>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Steg 1: Klona projektet</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
-              <code>{`git clone <repository-url>
-cd <project-folder>`}</code>
-            </pre>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Steg 2: Konfigurera bridge-tjänsten</CardTitle>
-          </CardHeader>
           <CardContent className="space-y-4">
-            <div>
-              <p className="text-sm text-muted-foreground mb-2">Gå till bridge-mappen och installera:</p>
-              <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
-                <code>{`cd bridge
-npm install
-cp .env.example .env`}</code>
-              </pre>
+            <div className="space-y-3">
+              <div className="flex items-start gap-3">
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground text-sm font-medium">1</div>
+                <div className="flex-1">
+                  <p className="font-medium mb-2">Ladda ner och kör</p>
+                  <div className="relative">
+                    <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto pr-12">
+                      <code>{`cd bridge && chmod +x install-linux.sh && ./install-linux.sh`}</code>
+                    </pre>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-1 top-1 h-8 w-8 p-0"
+                      onClick={() => copyToClipboard('cd bridge && chmod +x install-linux.sh && ./install-linux.sh', 'linux')}
+                    >
+                      {copiedLinux ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex items-start gap-3">
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground text-sm font-medium">2</div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-primary" />
+                  <p className="font-medium">Klart!</p>
+                </div>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground mb-2">Redigera <code className="bg-muted px-1 rounded">.env</code> med dina uppgifter:</p>
-              <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
-                <code>{`SUPABASE_URL=https://umxwaxzmoxwasryjibhe.supabase.co
-SUPABASE_ANON_KEY=<din-anon-key>
-DEVICE_ID=mitt-hem
-POLL_INTERVAL=5000`}</code>
-              </pre>
-              <p className="text-xs text-muted-foreground mt-2">
-                💡 Använd ett unikt DEVICE_ID för varje hem (t.ex. stockholm, goteborg)
-              </p>
+
+            <div className="pt-2 border-t">
+              <p className="text-xs text-muted-foreground">Skapar en systemd user service som startar automatiskt vid inloggning.</p>
             </div>
           </CardContent>
         </Card>
 
+        {/* After Installation */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Zap className="h-5 w-5" />
-              Steg 3: Starta bridge-tjänsten
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
-              <code>node index.js</code>
-            </pre>
-            <p className="text-sm text-muted-foreground">Du bör se loggar som:</p>
-            <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto text-primary">
-              <code>{`🔍 Starting Chromecast discovery...
-📺 Found 2 Chromecast device(s)
-✅ Selected device: Chromecast Ultra`}</code>
-            </pre>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Settings className="h-5 w-5" />
-              Steg 4: Konfigurera via webbgränssnittet
-            </CardTitle>
+            <CardTitle>Efter installation</CardTitle>
           </CardHeader>
           <CardContent>
             <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
-              <li>Öppna webbappen (denna sida)</li>
-              <li>Välj rätt Chromecast i dropdown-menyn</li>
+              <li>Öppna webbappen och välj din Chromecast i dropdown-menyn</li>
               <li>Aktivera screensaver och ange URL</li>
-              <li>Klicka "Spara"</li>
+              <li>Klicka "Spara" - klart!</li>
             </ol>
+            <p className="text-xs text-muted-foreground mt-4">
+              💡 Bridge körs automatiskt i bakgrunden och startar vid varje omstart av datorn.
+            </p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Monitor className="h-5 w-5" />
-              Steg 5: Kör som Windows-tjänst (valfritt)
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">För att bridge ska starta automatiskt vid omstart, använd NSSM:</p>
-            <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
-              <code>{`nssm install ChromecastBridge "C:\\Program Files\\nodejs\\node.exe" "C:\\path\\to\\bridge\\index.js"
-nssm set ChromecastBridge AppDirectory "C:\\path\\to\\bridge"
-nssm start ChromecastBridge`}</code>
-            </pre>
-          </CardContent>
-        </Card>
-
+        {/* Troubleshooting */}
         <Card>
           <CardHeader>
             <CardTitle>Felsökning</CardTitle>
@@ -136,20 +149,56 @@ nssm start ChromecastBridge`}</code>
           <CardContent>
             <div className="text-sm space-y-3">
               <div className="flex gap-4">
-                <span className="font-medium min-w-32">Hittar ingen Chromecast</span>
-                <span className="text-muted-foreground">Kontrollera att enheten är på samma nätverk</span>
+                <span className="font-medium min-w-40">Hittar ingen Chromecast</span>
+                <span className="text-muted-foreground">Kontrollera att enheten är på samma nätverk som datorn</span>
               </div>
               <div className="flex gap-4">
-                <span className="font-medium min-w-32">Bridge startar inte</span>
-                <span className="text-muted-foreground">Verifiera att .env har korrekta uppgifter</span>
+                <span className="font-medium min-w-40">Bridge startar inte</span>
+                <span className="text-muted-foreground">Kör scriptet igen eller kontrollera Activity Log i webbappen</span>
               </div>
               <div className="flex gap-4">
-                <span className="font-medium min-w-32">Screensaver startar inte</span>
-                <span className="text-muted-foreground">Kontrollera Activity Log i webbappen</span>
+                <span className="font-medium min-w-40">Avinstallera</span>
+                <span className="text-muted-foreground">Kör <code className="bg-muted px-1 rounded">uninstall-windows.ps1</code> eller <code className="bg-muted px-1 rounded">uninstall-linux.sh</code></span>
               </div>
             </div>
           </CardContent>
         </Card>
+
+        {/* Manual Installation (collapsed) */}
+        <details className="group">
+          <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground transition-colors">
+            Visa manuell installation (för avancerade användare)
+          </summary>
+          <Card className="mt-4">
+            <CardContent className="pt-6 space-y-4">
+              <div>
+                <p className="text-sm font-medium mb-2">1. Installera Node.js 18+</p>
+                <p className="text-xs text-muted-foreground">Ladda ner från nodejs.org</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium mb-2">2. Installera dependencies</p>
+                <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
+                  <code>{`cd bridge && npm install`}</code>
+                </pre>
+              </div>
+              <div>
+                <p className="text-sm font-medium mb-2">3. Skapa .env-fil</p>
+                <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
+                  <code>{`SUPABASE_URL=https://umxwaxzmoxwasryjibhe.supabase.co
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+DEVICE_ID=mitt-hem
+POLL_INTERVAL=5000`}</code>
+                </pre>
+              </div>
+              <div>
+                <p className="text-sm font-medium mb-2">4. Starta bridge</p>
+                <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
+                  <code>{`node index.js`}</code>
+                </pre>
+              </div>
+            </CardContent>
+          </Card>
+        </details>
       </div>
     </div>
   );
