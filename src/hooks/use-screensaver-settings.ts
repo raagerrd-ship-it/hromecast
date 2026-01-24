@@ -121,8 +121,8 @@ export function useScreensaverSettings(deviceId: string) {
     saveSettings();
   }, [debouncedConfig, debouncedChromecastId, deviceId, isLoading]);
 
-  const handleConfigChange = useCallback((config: ScreensaverConfig) => {
-    setScreensaverConfig(config);
+  const handleConfigChange = useCallback((updates: Partial<ScreensaverConfig>) => {
+    setScreensaverConfig(prev => ({ ...prev, ...updates }));
   }, []);
 
   const handleChromecastSelected = useCallback((id: string | null) => {

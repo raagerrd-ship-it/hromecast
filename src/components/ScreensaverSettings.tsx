@@ -1,10 +1,10 @@
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Link } from "lucide-react";
-import { useState, useEffect, useCallback, memo } from "react";
+import { memo, useCallback } from "react";
 
 interface ScreensaverSettingsProps {
-  onSave: (settings: ScreensaverConfig) => void;
+  onSave: (settings: Partial<ScreensaverConfig>) => void;
   currentSettings: ScreensaverConfig;
   isActive?: boolean;
 }
@@ -17,43 +17,17 @@ export interface ScreensaverConfig {
 }
 
 export const ScreensaverSettings = memo(({ onSave, currentSettings, isActive = false }: ScreensaverSettingsProps) => {
-  const [enabled, setEnabled] = useState(currentSettings.enabled);
-  const [url, setUrl] = useState(currentSettings.url);
-  const [idleTimeout, setIdleTimeout] = useState(currentSettings.idleTimeout);
-  const [checkInterval, setCheckInterval] = useState(currentSettings.checkInterval);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
-
-  // Sync with external settings
-  useEffect(() => {
-    setEnabled(currentSettings.enabled);
-    setUrl(currentSettings.url);
-    setIdleTimeout(currentSettings.idleTimeout);
-    setCheckInterval(currentSettings.checkInterval);
-    setIsInitialLoad(false);
-  }, [currentSettings]);
-
-  // Save changes
-  useEffect(() => {
-    if (isInitialLoad) return;
-    
-    if (!enabled || (enabled && url)) {
-      onSave({ enabled, url, idleTimeout, checkInterval });
-    }
-  }, [enabled, url, idleTimeout, checkInterval, isInitialLoad, onSave]);
+  const { enabled, url } = currentSettings;
 
   const handleEnabledChange = useCallback((checked: boolean) => {
-    setEnabled(checked);
-  }, []);
+    onSave({ enabled: checked });
+  }, [onSave]);
 
   const handleUrlChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setUrl(e.target.value);
-  }, []);
+    onSave({ url: e.target.value });
+  }, [onSave]);
 
-  const getStatusText = useCallback(() => {
-    if (!enabled) return 'Disabled';
-    if (isActive) return 'On TV';
-    return 'Waiting';
-  }, [enabled, isActive]);
+  const statusText = !enabled ? 'Disabled' : isActive ? 'On TV' : 'Waiting';
 
   return (
     <div className="space-y-4">
@@ -77,7 +51,7 @@ export const ScreensaverSettings = memo(({ onSave, currentSettings, isActive = f
           <div>
             <p className="text-sm font-medium">Screensaver</p>
             <p className={`text-xs ${enabled && isActive ? 'text-primary' : 'text-muted-foreground'}`}>
-              {getStatusText()}
+              {statusText}
             </p>
           </div>
         </div>
