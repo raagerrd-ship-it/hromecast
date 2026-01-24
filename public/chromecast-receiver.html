@@ -120,21 +120,11 @@
           
           if (isWebsite) {
             loadWebsite(url);
-            
-            // Create a fake media session to keep the receiver alive
             mediaSessionActive = true;
             
-            // Return a modified request that simulates a live stream
-            // This keeps the Cast SDK happy and prevents session timeout
-            loadRequestData.media.streamType = cast.framework.messages.StreamType.LIVE;
-            loadRequestData.media.contentType = 'application/x-mpegurl'; // Fake HLS stream
-            loadRequestData.autoplay = false; // Don't actually try to play
-            
-            // Set up idle timeout prevention
-            playerManager.setIdleTimerDisabled(true);
-            
-            console.log('Returning modified load request to keep session alive');
-            return loadRequestData;
+            // Return null to prevent default media handling
+            // The iframe handles the content instead
+            return null;
           }
         }
         
