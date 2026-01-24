@@ -11,9 +11,16 @@ const corsHeaders = {
 // ============================================================================
 
 const VERSION_INFO = {
-  version: "1.2.2",
+  version: "1.2.3",
   releasedAt: "2025-01-24",
   changelog: [
+    {
+      version: "1.2.3",
+      date: "2025-01-24",
+      changes: [
+        "Auto-stäng första fönstret: Det icke-eleverade fönstret stängs nu automatiskt",
+      ]
+    },
     {
       version: "1.2.2",
       date: "2025-01-24",
