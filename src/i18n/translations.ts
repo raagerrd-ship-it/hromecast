@@ -40,7 +40,7 @@ export const translations = {
     // Windows instructions
     unzipFile: 'Packa upp zip-filen',
     rightClickPowershell: 'Högerklicka på',
-    runWithPowershell: 'Välj "Kör med PowerShell som administratör"',
+    runWithPowershell: 'Välj "Kör med PowerShell"',
     done: 'Klart! Bridge startar automatiskt',
     windowsTip: 'Scriptet installerar Node.js automatiskt om det saknas och skapar autostart vid systemstart.',
     
@@ -142,7 +142,7 @@ export const translations = {
     // Windows instructions
     unzipFile: 'Extract the zip file',
     rightClickPowershell: 'Right-click on',
-    runWithPowershell: 'Select "Run with PowerShell as administrator"',
+    runWithPowershell: 'Select "Run with PowerShell"',
     done: 'Done! Bridge starts automatically',
     windowsTip: 'The script automatically installs Node.js if missing and sets up autostart on system boot.',
     
