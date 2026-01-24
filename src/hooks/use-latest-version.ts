@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 export interface VersionInfo {
   version: string;
@@ -16,35 +16,74 @@ const FALLBACK_VERSION: VersionInfo = {
   changelog: []
 };
 
+// Cache to avoid multiple API calls
+let cachedVersionInfo: VersionInfo | null = null;
+let fetchPromise: Promise<VersionInfo> | null = null;
+
+async function fetchVersionInfo(): Promise<VersionInfo> {
+  // Return cached data if available
+  if (cachedVersionInfo) {
+    return cachedVersionInfo;
+  }
+  
+  // Return existing promise if fetch is in progress
+  if (fetchPromise) {
+    return fetchPromise;
+  }
+  
+  // Start new fetch
+  fetchPromise = (async () => {
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-version`
+      );
+      
+      if (!response.ok) {
+        throw new Error("Failed to fetch version");
+      }
+      
+      const data = await response.json();
+      cachedVersionInfo = data;
+      return data;
+    } catch (err) {
+      console.error("Error fetching version:", err);
+      return FALLBACK_VERSION;
+    } finally {
+      fetchPromise = null;
+    }
+  })();
+  
+  return fetchPromise;
+}
+
 export function useLatestVersion() {
-  const [versionInfo, setVersionInfo] = useState<VersionInfo>(FALLBACK_VERSION);
-  const [isLoading, setIsLoading] = useState(true);
+  const [versionInfo, setVersionInfo] = useState<VersionInfo>(cachedVersionInfo || FALLBACK_VERSION);
+  const [isLoading, setIsLoading] = useState(!cachedVersionInfo);
   const [error, setError] = useState<string | null>(null);
+  const hasFetched = useRef(false);
 
   useEffect(() => {
-    const fetchVersion = async () => {
-      try {
-        const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-version`
-        );
-        
-        if (!response.ok) {
-          throw new Error("Failed to fetch version");
-        }
-        
-        const data = await response.json();
+    // Only fetch once per component mount, and skip if already cached
+    if (hasFetched.current) return;
+    hasFetched.current = true;
+    
+    if (cachedVersionInfo) {
+      setVersionInfo(cachedVersionInfo);
+      setIsLoading(false);
+      return;
+    }
+
+    fetchVersionInfo()
+      .then((data) => {
         setVersionInfo(data);
         setError(null);
-      } catch (err) {
-        console.error("Error fetching version:", err);
+      })
+      .catch((err) => {
         setError(err instanceof Error ? err.message : "Unknown error");
-        // Keep fallback version
-      } finally {
+      })
+      .finally(() => {
         setIsLoading(false);
-      }
-    };
-
-    fetchVersion();
+      });
   }, []);
 
   return {
