@@ -11,9 +11,18 @@ const corsHeaders = {
 // ============================================================================
 
 const VERSION_INFO = {
-  version: "1.2.0",
+  version: "1.2.1",
   releasedAt: "2026-01-24",
   changelog: [
+    {
+      version: "1.2.1",
+      date: "2026-01-24",
+      changes: [
+        "Fix: Förhindrar att bridge försöker återansluta till redan körande screensaver",
+        "Health check: Verifierar att appen fortfarande körs innan idle-check",
+        "Konservativ felhantering: Antar att appen körs vid timeout/error",
+      ]
+    },
     {
       version: "1.2.0",
       date: "2025-01-24",
