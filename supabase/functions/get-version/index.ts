@@ -19,10 +19,28 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.2.2";
+const VERSION = "1.2.3";
 const RELEASED_AT = "2026-01-24";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.2.3",
+    date: "2026-01-24",
+    changes: {
+      sv: [
+        "Flerspråksstöd: Svenska och engelska med språkväljare",
+        "Dynamisk översättning av ändringslogg via API",
+        "Utökad manuell installationsguide med nedladdningssteg",
+        "Ändringslogg kollapsad som standard, visar 5 senaste",
+      ],
+      en: [
+        "Multi-language support: Swedish and English with language switcher",
+        "Dynamic changelog translation via API",
+        "Extended manual installation guide with download step",
+        "Changelog collapsed by default, shows 5 most recent",
+      ],
+    }
+  },
   {
     version: "1.2.2",
     date: "2026-01-24",
