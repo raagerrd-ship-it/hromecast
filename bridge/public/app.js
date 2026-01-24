@@ -29,7 +29,9 @@ const elements = {
   port: document.getElementById('port'),
   networkUrl: document.getElementById('network-url'),
   mdnsUrl: document.getElementById('mdns-url'),
-  copyUrlBtn: document.getElementById('copy-url-btn')
+  copyUrlBtn: document.getElementById('copy-url-btn'),
+  logsContainer: document.getElementById('logs-container'),
+  clearLogsBtn: document.getElementById('clear-logs-btn')
 };
 
 // State
@@ -92,6 +94,31 @@ function updatePreview(url) {
   container.innerHTML = `<iframe src="${url}" sandbox="allow-scripts allow-same-origin"></iframe>`;
 }
 
+function formatLogTime(timestamp) {
+  const date = new Date(timestamp);
+  return date.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function updateLogs(logs) {
+  const container = elements.logsContainer;
+  
+  if (!logs || logs.length === 0) {
+    container.innerHTML = '<p class="logs-placeholder">Inga loggar ännu...</p>';
+    return;
+  }
+  
+  // Show newest first
+  const reversedLogs = [...logs].reverse();
+  
+  container.innerHTML = reversedLogs.map(log => `
+    <div class="log-entry ${log.level}">
+      <span class="log-time">${formatLogTime(log.timestamp)}</span>
+      <span class="log-level">${log.level}</span>
+      <span class="log-message">${log.message}</span>
+    </div>
+  `).join('');
+}
+
 function setLoading(loading) {
   state.isLoading = loading;
   elements.refreshBtn.disabled = loading;
@@ -152,6 +179,9 @@ async function loadStatus() {
     if (data.mdnsUrl && elements.mdnsUrl) {
       elements.mdnsUrl.textContent = data.mdnsUrl;
     }
+    // Also load logs
+    const logsData = await api('/api/logs');
+    updateLogs(logsData.logs || []);
   } catch (error) {
     console.error('Failed to load status:', error);
   }
@@ -168,6 +198,17 @@ async function saveSettings(updates) {
   } catch (error) {
     console.error('Failed to save settings:', error);
   }
+}
+
+if (elements.clearLogsBtn) {
+  elements.clearLogsBtn.addEventListener('click', async () => {
+    try {
+      await api('/api/logs', { method: 'DELETE' });
+      updateLogs([]);
+    } catch (error) {
+      console.error('Failed to clear logs:', error);
+    }
+  });
 }
 
 async function refreshDevices() {
