@@ -27,6 +27,9 @@ let currentDevice = null;
 let activeSession = null;
 let lastScreensaverCheck = 0;
 const SCREENSAVER_CHECK_INTERVAL = 60000; // Check every minute
+const HEALTH_CHECK_INTERVAL = 300000; // Health check every 5 minutes
+const bridgeStartTime = Date.now();
+const BRIDGE_VERSION = '2.1.0';
 
 // Keep session alive
 function keepSessionAlive() {
@@ -449,6 +452,69 @@ function subscribeToCommands() {
   return channel;
 }
 
+// Log bridge status to database for cloud monitoring
+async function logBridgeStatus(message, level = 'info') {
+  try {
+    await supabase
+      .from('cast_commands')
+      .insert({
+        device_id: DEVICE_ID,
+        command_type: 'bridge_log',
+        url: JSON.stringify({ message, level, timestamp: new Date().toISOString() }),
+        status: 'completed',
+        processed_at: new Date().toISOString()
+      });
+  } catch (error) {
+    console.error('Failed to log to database:', error.message);
+  }
+}
+
+// Health check - logs bridge status to database
+async function performHealthCheck() {
+  const uptime = Math.floor((Date.now() - bridgeStartTime) / 1000);
+  const uptimeFormatted = formatUptime(uptime);
+  const memoryUsage = process.memoryUsage();
+  const heapUsedMB = Math.round(memoryUsage.heapUsed / 1024 / 1024);
+  const heapTotalMB = Math.round(memoryUsage.heapTotal / 1024 / 1024);
+  
+  const deviceCount = discoveredDevices.size;
+  const hasActiveSession = !!activeSession;
+  const selectedDevice = await getSelectedChromecast();
+  
+  const healthStatus = {
+    version: BRIDGE_VERSION,
+    uptime: uptimeFormatted,
+    uptimeSeconds: uptime,
+    memory: `${heapUsedMB}/${heapTotalMB} MB`,
+    devices: deviceCount,
+    selectedDevice: selectedDevice?.name || 'None',
+    activeSession: hasActiveSession,
+    sessionUrl: hasActiveSession ? activeSession.url : null,
+    timestamp: new Date().toISOString()
+  };
+  
+  console.log(`💚 Health check: v${BRIDGE_VERSION}, up ${uptimeFormatted}, ${heapUsedMB}MB, ${deviceCount} device(s)`);
+  
+  await logBridgeStatus(`Bridge v${BRIDGE_VERSION} | Up: ${uptimeFormatted} | Mem: ${heapUsedMB}MB | Devices: ${deviceCount} | Active: ${hasActiveSession}`, 'health');
+  
+  return healthStatus;
+}
+
+// Format uptime in human readable format
+function formatUptime(seconds) {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  
+  if (days > 0) {
+    return `${days}d ${hours}h ${minutes}m`;
+  } else if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  } else {
+    return `${minutes}m`;
+  }
+}
+
 // Main service
 async function main() {
   console.log('🚀 Starting Chromecast Bridge Service (Windows) with Custom Receiver');
@@ -511,17 +577,33 @@ async function main() {
   console.log('🎬 Starting auto-screensaver monitoring (checks every 60s)...');
   const screensaverInterval = setInterval(checkAndActivateScreensaver, SCREENSAVER_CHECK_INTERVAL);
 
+  // Start health check monitoring
+  console.log('💚 Starting health check monitoring (every 5 min)...');
+  const healthInterval = setInterval(performHealthCheck, HEALTH_CHECK_INTERVAL);
+
   // Initial poll
   processPendingCommands();
   
   // Initial screensaver check after 10 seconds
   setTimeout(checkAndActivateScreensaver, 10000);
 
+  // Log startup to database
+  await logBridgeStatus(`Bridge v${BRIDGE_VERSION} started | Device: ${DEVICE_ID} | Found ${discoveredDevices.size} Chromecast(s)`, 'startup');
+
+  // Initial health check after 30 seconds
+  setTimeout(performHealthCheck, 30000);
+
+  console.log('');
+  console.log('✅ Bridge service is running');
+  console.log('Press Ctrl+C to stop');
+
   // Handle shutdown
   process.on('SIGINT', async () => {
     console.log('\n🛑 Shutting down bridge service...');
     clearInterval(pollInterval);
     clearInterval(screensaverInterval);
+    clearInterval(healthInterval);
+    await logBridgeStatus(`Bridge v${BRIDGE_VERSION} shutting down`, 'shutdown');
     await channel.unsubscribe();
     chromecasts.destroy();
     bonjour.destroy();
