@@ -117,8 +117,6 @@ cat > "$APP_DIR/.env" << EOF
 # Chromecast Bridge Configuration
 # Genererad $(date +"%Y-%m-%d %H:%M")
 
-SUPABASE_URL=https://umxwaxzmoxwasryjibhe.supabase.co
-SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVteHdheHptb3h3YXNyeWppYmhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0OTc3OTgsImV4cCI6MjA4MDA3Mzc5OH0.R4hVdnkp310Wk-g0jZfy52EwxfV6z3Pfnv6uwhsf0ps
 DEVICE_ID=$DEVICE_ID
 PORT=$PORT
 EOF

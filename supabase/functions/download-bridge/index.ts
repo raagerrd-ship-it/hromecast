@@ -112,7 +112,7 @@ function createZip(files: Record<string, string>): Uint8Array {
 }
 
 // ============================================================================
-// BRIDGE FILES - Synced with bridge/ folder
+// BRIDGE FILES - Offline version (no cloud dependencies)
 // Last updated: 2026-01-24
 // ============================================================================
 
@@ -121,7 +121,6 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const os = require('os');
-const { createClient } = require('@supabase/supabase-js');
 const Chromecasts = require('chromecasts');
 const Bonjour = require('bonjour-service').Bonjour;
 
@@ -129,16 +128,8 @@ const Bonjour = require('bonjour-service').Bonjour;
 const CONFIG_FILE = path.join(__dirname, 'config.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const PORT = parseInt(process.env.PORT || '3000');
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const DEVICE_ID = process.env.DEVICE_ID || 'default-bridge';
 const CUSTOM_APP_ID = 'FE376873';
-
-// Initialize Supabase client (optional - for device reporting)
-let supabase = null;
-if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-  supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-}
 
 // Initialize Bonjour and Chromecasts
 const bonjour = new Bonjour();
@@ -237,11 +228,6 @@ function discoverDevices() {
         const device = { name, host, port };
         foundDevices.push(device);
         console.log(\`✅ Found: \${name} at \${host}:\${port}\`);
-        
-        // Report to Supabase if connected
-        if (supabase) {
-          reportDiscoveredDevice(name, host, port);
-        }
       }
     });
     
@@ -252,21 +238,6 @@ function discoverDevices() {
       resolve(foundDevices);
     }, 8000);
   });
-}
-
-async function reportDiscoveredDevice(name, host, port) {
-  if (!supabase) return;
-  try {
-    await supabase.from('discovered_chromecasts').upsert({
-      device_id: DEVICE_ID,
-      chromecast_name: name,
-      chromecast_host: host,
-      chromecast_port: port,
-      last_seen: new Date().toISOString()
-    }, { onConflict: 'device_id,chromecast_name' });
-  } catch (error) {
-    console.error('Error reporting device:', error.message);
-  }
 }
 
 // ============ Chromecast Control ============
@@ -618,26 +589,19 @@ main().catch(console.error);`;
 const PACKAGE_JSON = `{
   "name": "chromecast-bridge",
   "version": "1.0.0",
-  "description": "Local bridge service for controlling Chromecast",
+  "description": "Local service for controlling Chromecast screensaver",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.39.3",
-    "chromecasts": "^2.2.0",
-    "bonjour-service": "^1.2.1",
+    "bonjour-service": "^1.3.0",
+    "chromecasts": "^1.10.1",
     "dotenv": "^16.3.1"
   }
 }`;
 
-const ENV_EXAMPLE = `# Chromecast Bridge Configuration
-
-# Supabase (optional - for cloud sync)
-SUPABASE_URL=https://umxwaxzmoxwasryjibhe.supabase.co
-SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVteHdheHptb3h3YXNyeWppYmhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0OTc3OTgsImV4cCI6MjA4MDA3Mzc5OH0.R4hVdnkp310Wk-g0jZfy52EwxfV6z3Pfnv6uwhsf0ps
-
-# Device settings
+const ENV_EXAMPLE = `# Bridge Configuration
 DEVICE_ID=my-bridge
 PORT=3000`;
 
@@ -1392,9 +1356,8 @@ async function init() {
 
 init();`;
 
-const INSTALL_WINDOWS_PS1 = `# Chromecast Bridge - Windows Installer (Multi-Instance Support)
+const INSTALL_WINDOWS_PS1 = `# Chromecast Bridge - Windows Installer
 # Högerklicka → "Kör med PowerShell som administratör"
-# Körs vid systemstart (före inloggning)
 
 $ErrorActionPreference = "Stop"
 $DefaultAppName = "ChromecastBridge"
@@ -1421,7 +1384,6 @@ if ([string]::IsNullOrWhiteSpace($InstanceName)) {
     $AppName = "$DefaultAppName-$CleanName"
     $TaskName = "$DefaultAppName-$CleanName"
     
-    # Fråga om port för multi-instance
     $PortInput = Read-Host "Port (standard: $DefaultPort)"
     if ([string]::IsNullOrWhiteSpace($PortInput)) {
         $Port = $DefaultPort
@@ -1476,7 +1438,6 @@ Write-Host "  $AppDir" -ForegroundColor Green
 Write-Host "[3/6] Kopierar filer..." -ForegroundColor Yellow
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-# Kopiera huvudfiler
 $mainFiles = @("index.js", "package.json", "package-lock.json")
 foreach ($file in $mainFiles) {
     $sourcePath = Join-Path $ScriptDir $file
@@ -1486,7 +1447,6 @@ foreach ($file in $mainFiles) {
     }
 }
 
-# Kopiera public-mapp
 $publicDir = Join-Path $ScriptDir "public"
 if (Test-Path $publicDir) {
     Copy-Item -Path "$publicDir\\*" -Destination "$AppDir\\public" -Recurse
@@ -1496,7 +1456,7 @@ if (Test-Path $publicDir) {
 Write-Host "  Filer kopierade" -ForegroundColor Green
 
 # 4. Installera dependencies
-Write-Host "[4/6] Installerar dependencies (detta kan ta några minuter)..." -ForegroundColor Yellow
+Write-Host "[4/6] Installerar dependencies..." -ForegroundColor Yellow
 Set-Location $AppDir
 npm install --production 2>&1 | Out-Null
 Write-Host "  Dependencies installerade" -ForegroundColor Green
@@ -1510,10 +1470,6 @@ if (-not [string]::IsNullOrWhiteSpace($InstanceName)) {
 
 $EnvContent = @"
 # Chromecast Bridge Configuration
-# Genererad automatiskt $(Get-Date -Format "yyyy-MM-dd HH:mm")
-
-SUPABASE_URL=https://umxwaxzmoxwasryjibhe.supabase.co
-SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVteHdheHptb3h3YXNyeWppYmhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0OTc3OTgsImV4cCI6MjA4MDA3Mzc5OH0.R4hVdnkp310Wk-g0jZfy52EwxfV6z3Pfnv6uwhsf0ps
 DEVICE_ID=$DeviceId
 PORT=$Port
 "@
@@ -1521,15 +1477,14 @@ $EnvContent | Out-File -FilePath "$AppDir\\.env" -Encoding UTF8
 Write-Host "  Device ID: $DeviceId" -ForegroundColor Green
 Write-Host "  Port: $Port" -ForegroundColor Green
 
-# 6. Skapa Scheduled Task (körs vid systemstart som SYSTEM)
+# 6. Skapa Scheduled Task
 Write-Host "[6/6] Skapar autostart-tjänst..." -ForegroundColor Yellow
 
-# Kontrollera admin-rättigheter
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
     Write-Host ""
     Write-Host "VARNING: Kör scriptet som administratör för att bridge:n" -ForegroundColor Yellow
-    Write-Host "ska kunna starta vid systemstart (före inloggning)." -ForegroundColor Yellow
+    Write-Host "ska kunna starta vid systemstart." -ForegroundColor Yellow
     Write-Host ""
     Write-Host "Högerklicka på install-windows.ps1 och välj:" -ForegroundColor Gray
     Write-Host "'Kör med PowerShell som administratör'" -ForegroundColor Cyan
@@ -1538,23 +1493,19 @@ if (-not $isAdmin) {
     exit 1
 }
 
-# Ta bort eventuell befintlig task
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
 
-# Hitta node.exe
 $NodePath = (Get-Command node).Source
 
-# Skapa task som körs vid systemstart som SYSTEM-användare
 $Action = New-ScheduledTaskAction -Execute $NodePath -Argument "index.js" -WorkingDirectory $AppDir
 $Trigger = New-ScheduledTaskTrigger -AtStartup
 $Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
 $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Days 9999)
 
-Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Principal $Principal -Settings $Settings -Description "Chromecast Bridge - $AppName (startar vid systemstart)" | Out-Null
+Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Principal $Principal -Settings $Settings -Description "Chromecast Bridge - $AppName" | Out-Null
 
-Write-Host "  Scheduled Task skapad (körs vid systemstart)" -ForegroundColor Green
+Write-Host "  Scheduled Task skapad" -ForegroundColor Green
 
-# Starta tjänsten direkt
 Write-Host ""
 Write-Host "Startar bridge..." -ForegroundColor Yellow
 Start-ScheduledTask -TaskName $TaskName
@@ -1569,22 +1520,15 @@ Write-Host "Öppna webbläsaren och gå till:" -ForegroundColor White
 Write-Host ""
 Write-Host "  http://localhost:$Port" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Där kan du välja Chromecast och konfigurera screensaver." -ForegroundColor Gray
-Write-Host ""
 Write-Host "Device ID: $DeviceId" -ForegroundColor Yellow
-Write-Host "Task Name: $TaskName" -ForegroundColor Yellow
-Write-Host ""
-Write-Host "Bridge startar automatiskt vid systemstart (före inloggning)." -ForegroundColor Green
 Write-Host ""
 Write-Host "För att avinstallera, kör: uninstall-windows.ps1" -ForegroundColor Gray
 Write-Host ""
 Read-Host "Tryck Enter för att stänga"`;
 
-const UNINSTALL_WINDOWS_PS1 = `# Chromecast Bridge - Windows Uninstaller (Multi-Instance Support)
-# Högerklicka → "Kör med PowerShell"
+const UNINSTALL_WINDOWS_PS1 = `# Chromecast Bridge - Windows Uninstaller
 
 $ErrorActionPreference = "SilentlyContinue"
-$DefaultAppName = "ChromecastBridge"
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
@@ -1592,7 +1536,6 @@ Write-Host "  Chromecast Bridge Avinstallation" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Lista alla installerade instanser
 Write-Host "Söker efter installerade bridges..." -ForegroundColor Yellow
 Write-Host ""
 
@@ -1625,7 +1568,6 @@ foreach ($task in $Tasks) {
     $index++
 }
 
-# Lägg till eventuella mappar utan task
 foreach ($folder in $Folders) {
     $folderName = $folder.Name
     $existsInTasks = $Installations | Where-Object { $_.TaskName -eq $folderName }
@@ -1700,7 +1642,7 @@ Write-Host ""
 Read-Host "Tryck Enter för att stänga"`;
 
 const INSTALL_LINUX_SH = `#!/bin/bash
-# Chromecast Bridge - Linux/Raspberry Pi Installer (Multi-Instance Support)
+# Chromecast Bridge - Linux/Raspberry Pi Installer
 
 set -e
 
@@ -1713,7 +1655,6 @@ echo "  Chromecast Bridge Installer"
 echo "========================================"
 echo ""
 
-# Fråga om instansnamn
 echo "Om du vill köra flera bridges (t.ex. en per rum), ge varje ett unikt namn."
 echo "Lämna tomt för standardinstallation."
 echo ""
@@ -1745,27 +1686,22 @@ echo "  Port: $PORT"
 echo "  Mapp: $APP_DIR"
 echo ""
 
-# Kontrollera att vi inte kör som root
 if [ "$EUID" -eq 0 ]; then
     echo "❌ Kör inte detta script som root!"
     echo "   Använd: ./install-linux.sh"
     exit 1
 fi
 
-# 1. Kontrollera/installera Node.js
 echo "[1/6] Kontrollerar Node.js..."
 if ! command -v node &> /dev/null; then
     echo "  Node.js hittades inte. Försöker installera..."
     
     if command -v apt-get &> /dev/null; then
-        # Debian/Ubuntu/Raspberry Pi
         curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
         sudo apt-get install -y nodejs
     elif command -v dnf &> /dev/null; then
-        # Fedora
         sudo dnf install -y nodejs
     elif command -v pacman &> /dev/null; then
-        # Arch
         sudo pacman -S nodejs npm
     else
         echo "  ❌ Kunde inte installera Node.js automatiskt."
@@ -1775,17 +1711,14 @@ if ! command -v node &> /dev/null; then
 fi
 echo "  ✓ Node.js $(node --version)"
 
-# 2. Skapa app-mapp
 echo "[2/6] Skapar app-mapp..."
 mkdir -p "$APP_DIR"
 mkdir -p "$APP_DIR/public"
 echo "  ✓ $APP_DIR"
 
-# 3. Kopiera filer
 echo "[3/6] Kopierar filer..."
 SCRIPT_DIR="$(cd "$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
 
-# Kopiera huvudfiler
 for file in index.js package.json package-lock.json; do
     if [ -f "$SCRIPT_DIR/$file" ]; then
         cp "$SCRIPT_DIR/$file" "$APP_DIR/"
@@ -1793,7 +1726,6 @@ for file in index.js package.json package-lock.json; do
     fi
 done
 
-# Kopiera public-mapp
 if [ -d "$SCRIPT_DIR/public" ]; then
     cp -r "$SCRIPT_DIR/public/"* "$APP_DIR/public/"
     echo "  Kopierade public-mapp"
@@ -1801,13 +1733,11 @@ fi
 
 echo "  ✓ Filer kopierade"
 
-# 4. Installera dependencies
 echo "[4/6] Installerar dependencies..."
 cd "$APP_DIR"
 npm install --production
 echo "  ✓ Dependencies installerade"
 
-# 5. Skapa .env-fil
 echo "[5/6] Skapar konfiguration..."
 DEVICE_ID=$(hostname | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]-')
 if [ -n "$CLEAN_NAME" ]; then
@@ -1816,10 +1746,6 @@ fi
 
 cat > "$APP_DIR/.env" << EOF
 # Chromecast Bridge Configuration
-# Genererad $(date +"%Y-%m-%d %H:%M")
-
-SUPABASE_URL=https://umxwaxzmoxwasryjibhe.supabase.co
-SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVteHdheHptb3h3YXNyeWppYmhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0OTc3OTgsImV4cCI6MjA4MDA3Mzc5OH0.R4hVdnkp310Wk-g0jZfy52EwxfV6z3Pfnv6uwhsf0ps
 DEVICE_ID=$DEVICE_ID
 PORT=$PORT
 EOF
@@ -1827,7 +1753,6 @@ EOF
 echo "  ✓ Device ID: $DEVICE_ID"
 echo "  ✓ Port: $PORT"
 
-# 6. Skapa systemd user service
 echo "[6/6] Skapar systemd service..."
 mkdir -p "$HOME/.config/systemd/user"
 
@@ -1849,17 +1774,14 @@ Environment=NODE_ENV=production
 WantedBy=default.target
 EOF
 
-# Aktivera lingering för att köra services utan inloggning
 loginctl enable-linger "$USER" 2>/dev/null || true
 
-# Ladda om och starta service
 systemctl --user daemon-reload
 systemctl --user enable "$SERVICE_NAME"
 systemctl --user start "$SERVICE_NAME"
 
 echo "  ✓ Service skapad och startad"
 
-# Hämta IP-adress
 IP_ADDR=$(hostname -I | awk '{print $1}')
 
 echo ""
@@ -1871,8 +1793,6 @@ echo "Öppna webbläsaren och gå till:"
 echo ""
 echo "  Lokal:  http://localhost:$PORT"
 echo "  LAN:    http://$IP_ADDR:$PORT"
-echo ""
-echo "Där kan du välja Chromecast och konfigurera screensaver."
 echo ""
 echo "Device ID: $DEVICE_ID"
 echo "Service:   $SERVICE_NAME"
@@ -1887,7 +1807,7 @@ echo "För att avinstallera: ./uninstall-linux.sh"
 echo ""`;
 
 const UNINSTALL_LINUX_SH = `#!/bin/bash
-# Chromecast Bridge - Linux Uninstaller (Multi-Instance Support)
+# Chromecast Bridge - Linux Uninstaller
 
 echo ""
 echo "========================================"
@@ -1895,7 +1815,6 @@ echo "  Chromecast Bridge Avinstallation"
 echo "========================================"
 echo ""
 
-# Hitta alla installationer
 echo "Söker efter installerade bridges..."
 echo ""
 
@@ -1906,7 +1825,6 @@ declare -a INSTALLATIONS
 
 index=1
 
-# Lista services
 for service in $SERVICES; do
     folder="$HOME/.local/share/$service"
     echo "  [$index] $service"
@@ -1917,7 +1835,6 @@ for service in $SERVICES; do
     ((index++))
 done
 
-# Lista mappar utan service
 for folder in $FOLDERS; do
     folder_name=$(basename "$folder")
     exists=false
@@ -1993,7 +1910,6 @@ for install in "\${TO_UNINSTALL[@]}"; do
     echo "  ✓ $display_name avinstallerad"
 done
 
-# Ladda om systemd
 systemctl --user daemon-reload
 
 echo ""
@@ -2004,7 +1920,7 @@ echo ""`;
 
 const README = `# Chromecast Bridge
 
-Lokal bridge-tjänst för att styra Chromecast-enheter via webbgränssnitt.
+Lokal bridge-tjänst för att styra Chromecast-skärmsläckare. Körs helt offline utan molnberoenden.
 
 ## Snabbinstallation
 
@@ -2021,12 +1937,19 @@ chmod +x install-linux.sh
 
 ## Efter installation
 
-Öppna http://localhost:3000 i webbläsaren.
+Öppna http://localhost:3000 i webbläsaren för att:
+- Välja vilken Chromecast som ska användas
+- Ange URL för skärmsläckaren
+- Aktivera automatisk skärmsläckare
 
 ## Avinstallation
 
 - **Windows:** Kör \`uninstall-windows.ps1\`
 - **Linux:** Kör \`./uninstall-linux.sh\`
+
+## Konfiguration
+
+All konfiguration lagras lokalt i \`config.json\`. Ingen data skickas till molnet.
 `;
 
 // Collect all files
