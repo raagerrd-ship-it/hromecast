@@ -19,10 +19,28 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.2";
+const VERSION = "1.3.3";
 const RELEASED_AT = "2026-01-24";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.3",
+    date: "2026-01-24",
+    changes: {
+      sv: [
+        "Förbättrad watchdog: Separat timer som aktivt övervakar anslutningen",
+        "Bättre PING/PONG-spårning: Räknar obesvarade PINGs korrekt",
+        "Channel close-lyssnare: Detekterar när kanalerna stängs",
+        "Fixat: Stale connections som inte triggade recovery",
+      ],
+      en: [
+        "Improved watchdog: Separate timer actively monitors connection",
+        "Better PING/PONG tracking: Correctly counts unanswered PINGs",
+        "Channel close listener: Detects when channels are closed",
+        "Fixed: Stale connections that didn't trigger recovery",
+      ],
+    }
+  },
   {
     version: "1.3.2",
     date: "2026-01-24",
