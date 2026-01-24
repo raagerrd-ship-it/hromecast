@@ -125,7 +125,7 @@ const Chromecasts = require('chromecasts');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.0.0';
+const BRIDGE_VERSION = '1.1.0';
 
 // Configuration
 const CONFIG_FILE = path.join(__dirname, 'config.json');

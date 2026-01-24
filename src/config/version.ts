@@ -9,4 +9,4 @@
  * 
  * Keep in sync with bridge/package.json version
  */
-export const BRIDGE_VERSION = "1.0.0";
+export const BRIDGE_VERSION = "1.1.0";
