@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.2';
+const BRIDGE_VERSION = '1.3.3';
 
 // Configuration
 const CONFIG_FILE = path.join(__dirname, 'config.json');
@@ -621,50 +621,90 @@ async function castMedia(chromecastName, url, retryCount = 0) {
       
       connection.send({ type: 'CONNECT' });
       
-      // Keep connection alive with heartbeat - track last PONG to detect stale connections
+      // ============ IMPROVED HEARTBEAT WITH WATCHDOG ============
+      // The previous implementation had a bug where it didn't properly detect stale connections.
+      // This new implementation:
+      // 1. Sends PING every heartbeatMs
+      // 2. Expects PONG within heartbeatMs (tracked per-PING)
+      // 3. Uses a separate watchdog timer to detect completely dead connections
+      
       const config = loadConfig();
       const heartbeatMs = (config.keepAliveInterval || 5) * 1000;
       let lastPongTime = Date.now();
-      let missedPongs = 0;
-      const MAX_MISSED_PONGS = 3; // Allow 3 missed PONGs before considering connection dead
+      let pendingPings = 0; // Track unanswered PINGs
+      const MAX_PENDING_PINGS = 3; // Allow 3 unanswered PINGs
+      let watchdogInterval = null;
       
+      // Cleanup function that also clears watchdog
+      const cleanupConnection = () => {
+        if (heartbeatInterval) {
+          activeHeartbeats.delete(heartbeatInterval);
+          clearInterval(heartbeatInterval);
+          heartbeatInterval = null;
+        }
+        if (watchdogInterval) {
+          clearInterval(watchdogInterval);
+          watchdogInterval = null;
+        }
+        if (client) {
+          try { client.close(); } catch(e) {}
+          client = null;
+        }
+      };
+      
+      // Watchdog: runs every heartbeatMs to check connection health
+      watchdogInterval = setInterval(() => {
+        const timeSinceLastPong = Date.now() - lastPongTime;
+        const maxSilenceMs = heartbeatMs * (MAX_PENDING_PINGS + 1);
+        
+        if (timeSinceLastPong > maxSilenceMs) {
+          log.error(`❌ WATCHDOG: Connection dead - no PONG in ${Math.round(timeSinceLastPong/1000)}s`);
+          cleanupConnection();
+          logScreensaverStop('network_error');
+          return;
+        }
+        
+        // Log warning if we're getting close
+        if (pendingPings >= 2) {
+          log.warn(`⚠️ WATCHDOG: ${pendingPings} unanswered PINGs, last PONG ${Math.round(timeSinceLastPong/1000)}s ago`);
+        }
+      }, heartbeatMs);
+      
+      // Heartbeat: sends PING and tracks pending count
       heartbeatInterval = setInterval(() => {
         try {
-          // Check if we've missed too many PONGs
-          const timeSinceLastPong = Date.now() - lastPongTime;
-          if (timeSinceLastPong > heartbeatMs * MAX_MISSED_PONGS) {
-            missedPongs++;
-            log.warn(`⚠️ Missed ${missedPongs} heartbeat responses (${Math.round(timeSinceLastPong/1000)}s since last PONG)`);
-            
-            if (missedPongs >= MAX_MISSED_PONGS) {
-              log.error('❌ Connection appears dead - no PONG responses');
-              cleanup();
-              if (client) {
-                try { client.close(); } catch(e) {}
-                client = null;
-              }
-              logScreensaverStop('network_error');
-              return;
-            }
+          pendingPings++;
+          
+          if (pendingPings > MAX_PENDING_PINGS) {
+            log.error(`❌ HEARTBEAT: ${pendingPings} unanswered PINGs - connection lost`);
+            cleanupConnection();
+            logScreensaverStop('network_error');
+            return;
           }
           
           heartbeat.send({ type: 'PING' });
         } catch (e) {
-          log.error('Heartbeat send failed:', e.message);
-          cleanup();
-          if (client) {
-            try { client.close(); } catch(e) {}
-            client = null;
-          }
+          log.error(`❌ HEARTBEAT send failed: ${e.message}`);
+          cleanupConnection();
           logScreensaverStop('network_error');
         }
       }, heartbeatMs);
       activeHeartbeats.add(heartbeatInterval);
       
+      // PONG handler: resets pending count and updates last PONG time
       heartbeat.on('message', (data) => {
         if (data.type === 'PONG') {
           lastPongTime = Date.now();
-          missedPongs = 0; // Reset counter on successful PONG
+          pendingPings = 0; // Reset on successful PONG
+        }
+      });
+      
+      // Also listen for connection close at the channel level
+      connection.on('close', () => {
+        log.warn('⚠️ Connection channel closed');
+        cleanupConnection();
+        if (screensaverActive) {
+          logScreensaverStop('network_error');
         }
       });
       
