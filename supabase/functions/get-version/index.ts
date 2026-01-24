@@ -15,15 +15,6 @@ const VERSION_INFO = {
   releasedAt: "2026-01-24",
   changelog: [
     {
-      version: "1.4.0",
-      date: "2025-01-24",
-      changes: [
-        "Omstartsknapp i dashboarden för att starta om bridge-tjänsten",
-        "Visuell indikator när timing-inställningar ändrats",
-        "Max försök utökat till 100",
-      ]
-    },
-    {
       version: "1.2.0",
       date: "2025-01-24",
       changes: [
