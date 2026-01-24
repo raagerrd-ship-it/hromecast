@@ -283,6 +283,25 @@ input:checked + .slider:before {
   background: var(--warning-hover);
 }
 
+.btn.needs-restart {
+  background: var(--danger);
+  color: white;
+  animation: pulse-attention 1.5s ease-in-out infinite;
+}
+
+.btn.needs-restart:hover {
+  background: var(--danger-hover);
+}
+
+@keyframes pulse-attention {
+  0%, 100% { 
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  50% { 
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+  }
+}
+
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
