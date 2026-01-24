@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chromecast Bridge</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>📺 Chromecast Bridge</h1>
+      <div class="status" id="status">
+        <span class="status-dot"></span>
+        <span id="status-text">Ansluter...</span>
+      </div>
+    </header>
+
+    <main>
+      <!-- Device Selection -->
+      <section class="card">
+        <div class="card-header">
+          <h2>Välj Chromecast</h2>
+          <button id="refresh-btn" class="btn btn-secondary" title="Sök efter enheter">
+            🔄 Sök
+          </button>
+        </div>
+        <div class="card-content">
+          <select id="chromecast-select">
+            <option value="">-- Välj enhet --</option>
+          </select>
+          <p class="hint" id="device-count">Söker efter enheter...</p>
+        </div>
+      </section>
+
+      <!-- Screensaver Settings -->
+      <section class="card">
+        <div class="card-header">
+          <h2>Screensaver</h2>
+          <label class="switch">
+            <input type="checkbox" id="enabled-toggle">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="card-content">
+          <div class="form-group">
+            <label for="url-input">URL att visa</label>
+            <input type="url" id="url-input" placeholder="https://example.com/screensaver">
+          </div>
+          <div class="screensaver-status" id="screensaver-status">
+            <span class="status-indicator off"></span>
+            <span>Inaktiv</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Controls -->
+      <section class="card">
+        <div class="card-header">
+          <h2>Kontroller</h2>
+        </div>
+        <div class="card-content controls">
+          <button id="cast-btn" class="btn btn-primary">
+            ▶️ Starta nu
+          </button>
+          <button id="stop-btn" class="btn btn-danger">
+            ⏹️ Stoppa
+          </button>
+        </div>
+      </section>
+
+      <!-- Preview -->
+      <section class="card preview-card">
+        <div class="card-header">
+          <h2>Förhandsvisning</h2>
+        </div>
+        <div class="card-content">
+          <div class="preview-container" id="preview-container">
+            <p class="preview-placeholder">Ange en URL ovan för att se förhandsvisning</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>Device ID: <code id="device-id">-</code></p>
+      <p>Port: <code id="port">-</code></p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

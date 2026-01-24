@@ -1,612 +1,425 @@
+require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
+const http = require('http');
 const { createClient } = require('@supabase/supabase-js');
 const Chromecasts = require('chromecasts');
-const Bonjour = require('bonjour-service');
-require('dotenv').config();
+const Bonjour = require('bonjour-service').Bonjour;
 
 // Configuration
+const CONFIG_FILE = path.join(__dirname, 'config.json');
+const PUBLIC_DIR = path.join(__dirname, 'public');
+const PORT = parseInt(process.env.PORT || '3000');
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const DEVICE_ID = process.env.DEVICE_ID || 'default-bridge';
-const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL || '5000');
-const CUSTOM_APP_ID = 'FE376873'; // Custom receiver that supports HTML via iframe
+const CUSTOM_APP_ID = 'FE376873';
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  console.error('Error: SUPABASE_URL and SUPABASE_ANON_KEY must be set in .env file');
-  process.exit(1);
+// Initialize Supabase client (optional - for device reporting)
+let supabase = null;
+if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+  supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 }
 
-// Initialize Supabase client
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Initialize Bonjour and Chromecasts
+const bonjour = new Bonjour();
+const chromecasts = Chromecasts();
 
-// Chromecast state
-const chromecasts = new Chromecasts();
-const bonjour = Bonjour();
-let discoveredDevices = new Map();
-let chromecastPlayers = new Map(); // Map of host -> chromecasts player
+// State
+let discoveredDevices = [];
 let currentDevice = null;
-let activeSession = null;
-let lastScreensaverCheck = 0;
-const SCREENSAVER_CHECK_INTERVAL = 60000; // Check every minute
-const HEALTH_CHECK_INTERVAL = 300000; // Health check every 5 minutes
-const bridgeStartTime = Date.now();
-const BRIDGE_VERSION = '2.1.0';
+let keepAliveInterval = null;
+let screensaverActive = false;
 
-// Keep session alive
-function keepSessionAlive() {
-  if (activeSession && currentDevice) {
-    try {
-      currentDevice.status((err, status) => {
-        if (err) {
-          console.error('❌ Keep-alive error:', err.message);
-          activeSession = null;
-        } else {
-          console.log('💓 Keep-alive successful');
-        }
-      });
-    } catch (error) {
-      console.error('❌ Keep-alive exception:', error.message);
-      activeSession = null;
-    }
-  }
-}
+// Default config
+const DEFAULT_CONFIG = {
+  enabled: false,
+  url: '',
+  selectedChromecast: null,
+  idleTimeout: 5
+};
 
-// Start keep-alive interval
-setInterval(keepSessionAlive, 5000);
+// ============ Config Management ============
 
-// Report discovered devices to database
-async function reportDiscoveredDevice(name, host, port) {
+function loadConfig() {
   try {
-    const { data, error } = await supabase
-      .from('discovered_chromecasts')
-      .upsert({
-        device_id: DEVICE_ID,
-        chromecast_name: name,
-        chromecast_host: host,
-        chromecast_port: port,
-        last_seen: new Date().toISOString()
-      }, {
-        onConflict: 'device_id,chromecast_host',
-        ignoreDuplicates: false
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error reporting device to database:', error);
-    } else {
-      console.log(`📊 Reported device to database: ${name}`);
+    if (fs.existsSync(CONFIG_FILE)) {
+      const data = fs.readFileSync(CONFIG_FILE, 'utf8');
+      return { ...DEFAULT_CONFIG, ...JSON.parse(data) };
     }
   } catch (error) {
-    console.error('Error reporting device:', error);
+    console.error('Error loading config:', error.message);
   }
+  return { ...DEFAULT_CONFIG };
 }
 
-// Get selected Chromecast from database
-async function getSelectedChromecast() {
+function saveConfig(config) {
   try {
-    const { data, error } = await supabase
-      .from('screensaver_settings')
-      .select('selected_chromecast_id')
-      .eq('device_id', DEVICE_ID)
-      .single();
-
-    if (error || !data?.selected_chromecast_id) {
-      return null;
-    }
-
-    // Fetch the selected chromecast details
-    const { data: chromecast, error: chromecastError } = await supabase
-      .from('discovered_chromecasts')
-      .select('*')
-      .eq('id', data.selected_chromecast_id)
-      .single();
-
-    if (chromecastError || !chromecast) {
-      return null;
-    }
-
-    return {
-      name: chromecast.chromecast_name,
-      host: chromecast.chromecast_host,
-      port: chromecast.chromecast_port
-    };
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
+    return true;
   } catch (error) {
-    console.error('Error getting selected chromecast:', error);
-    return null;
-  }
-}
-
-// Get screensaver settings from database
-async function getScreensaverSettings() {
-  try {
-    const { data, error } = await supabase
-      .from('screensaver_settings')
-      .select('*')
-      .eq('device_id', DEVICE_ID)
-      .single();
-
-    if (error || !data) {
-      return null;
-    }
-
-    return data;
-  } catch (error) {
-    console.error('Error getting screensaver settings:', error);
-    return null;
-  }
-}
-
-// Check if Chromecast is idle (no active sessions)
-async function isChromecastIdle() {
-  // Get the player to check
-  let playerToCheck = null;
-  
-  const selectedDevice = await getSelectedChromecast();
-  if (selectedDevice) {
-    // Find player for selected device
-    for (const [key, device] of discoveredDevices) {
-      if (device.host === selectedDevice.host && device.player) {
-        playerToCheck = device.player;
-        break;
-      }
-    }
-  }
-  
-  if (!playerToCheck) {
-    playerToCheck = currentDevice;
-  }
-  
-  if (!playerToCheck) {
-    console.log('⚠️  No device available for idle check');
+    console.error('Error saving config:', error.message);
     return false;
   }
-  
-  return new Promise((resolve) => {
-    // Set timeout
-    const timeout = setTimeout(() => {
-      console.log('⏱️  Idle check timeout - assuming busy');
-      resolve(false);
-    }, 5000);
-    
-    playerToCheck.status((err, status) => {
-      clearTimeout(timeout);
-      
-      if (err) {
-        console.error('❌ Error checking idle status:', err.message);
-        resolve(false);
-        return;
-      }
-      
-      // Check if player is idle (not playing anything)
-      if (!status || status.playerState === 'IDLE' || !status.playerState) {
-        console.log('✅ Chromecast is idle');
-        resolve(true);
-      } else {
-        console.log(`⏸️  Chromecast is busy (state: ${status.playerState})`);
-        resolve(false);
-      }
-    });
-  });
 }
 
-// Auto-screensaver check - runs every minute
-async function checkAndActivateScreensaver() {
-  const now = Date.now();
-  
-  // Throttle checks to once per minute
-  if (now - lastScreensaverCheck < SCREENSAVER_CHECK_INTERVAL) {
-    return;
-  }
-  
-  lastScreensaverCheck = now;
-  
-  console.log('\n🔍 [AUTO-SCREENSAVER] Checking if screensaver should activate...');
-  
-  // Get screensaver settings
-  const settings = await getScreensaverSettings();
-  
-  if (!settings) {
-    console.log('⚠️  [AUTO-SCREENSAVER] No settings found');
-    return;
-  }
-  
-  if (!settings.enabled) {
-    console.log('⏸️  [AUTO-SCREENSAVER] Screensaver disabled in settings');
-    return;
-  }
-  
-  if (!settings.url) {
-    console.log('⚠️  [AUTO-SCREENSAVER] No URL configured');
-    return;
-  }
-  
-  // Check if Chromecast is idle
-  const isIdle = await isChromecastIdle();
-  
-  if (!isIdle) {
-    console.log('⏭️  [AUTO-SCREENSAVER] Device busy, skipping');
-    return;
-  }
-  
-  // Cast screensaver
-  console.log(`🎬 [AUTO-SCREENSAVER] Activating screensaver: ${settings.url}`);
-  
-  try {
-    await castMedia(settings.url);
-    console.log('✅ [AUTO-SCREENSAVER] Screensaver activated successfully');
-  } catch (error) {
-    console.error('❌ [AUTO-SCREENSAVER] Failed to activate:', error.message);
-  }
-}
+// ============ Chromecast Discovery ============
 
-// Discover Chromecast devices using Bonjour (works!) + chromecasts players
 function discoverDevices() {
   return new Promise((resolve) => {
-    console.log('🔍 Scanning for Chromecast devices on local network (Bonjour)...');
+    console.log('🔍 Scanning for Chromecast devices...');
     
     const browser = bonjour.find({ type: 'googlecast' });
+    const foundDevices = [];
     
-    // Stop discovery after 8 seconds
-    const discoveryTimeout = setTimeout(() => {
-      browser.stop();
-      resolve();
-    }, 8000);
-    
-    browser.on('up', async (service) => {
-      const deviceKey = `${service.referer.address}:${service.port}`;
+    browser.on('up', (service) => {
+      const name = service.name || service.txt?.fn || 'Unknown';
+      const host = service.addresses?.[0] || service.referer?.address || service.host;
+      const port = service.port || 8009;
       
-      if (!discoveredDevices.has(deviceKey)) {
-        console.log(`✅ Found Chromecast via Bonjour: ${service.name} at ${service.referer.address}:${service.port}`);
+      if (host && !foundDevices.find(d => d.host === host)) {
+        const device = { name, host, port };
+        foundDevices.push(device);
+        console.log(`✅ Found: ${name} at ${host}:${port}`);
         
-        // Create chromecasts player for this device
-        console.log(`📡 Connecting chromecasts player to ${service.referer.address}...`);
-        
-        // Connect to this specific device using chromecasts
-        chromecasts.on('update', (player) => {
-          if (player.host === service.referer.address) {
-            console.log(`✅ Chromecasts player connected: ${player.name}`);
-            
-            discoveredDevices.set(deviceKey, {
-              name: service.name,
-              host: service.referer.address,
-              port: service.port,
-              player: player
-            });
-            
-            chromecastPlayers.set(service.referer.address, player);
-            
-            // Use first device as default
-            if (!currentDevice) {
-              currentDevice = player;
-              console.log(`🎯 Using device: ${player.name}`);
-            }
-          }
-        });
-        
-        // Also add basic info without player (as fallback)
-        if (!discoveredDevices.has(deviceKey)) {
-          discoveredDevices.set(deviceKey, {
-            name: service.name,
-            host: service.referer.address,
-            port: service.port,
-            player: null
-          });
+        // Report to Supabase if connected
+        if (supabase) {
+          reportDiscoveredDevice(name, host, port);
         }
-        
-        // Report to database
-        await reportDiscoveredDevice(service.name, service.referer.address, service.port);
       }
     });
     
-    browser.on('error', (error) => {
-      console.error('Bonjour browser error:', error);
+    setTimeout(() => {
+      browser.stop();
+      discoveredDevices = foundDevices;
+      console.log(`📡 Discovery complete: ${foundDevices.length} device(s)`);
+      resolve(foundDevices);
+    }, 8000);
+  });
+}
+
+async function reportDiscoveredDevice(name, host, port) {
+  if (!supabase) return;
+  try {
+    await supabase.from('discovered_chromecasts').upsert({
+      device_id: DEVICE_ID,
+      chromecast_name: name,
+      chromecast_host: host,
+      chromecast_port: port,
+      last_seen: new Date().toISOString()
+    }, { onConflict: 'device_id,chromecast_name' });
+  } catch (error) {
+    console.error('Error reporting device:', error.message);
+  }
+}
+
+// ============ Chromecast Control ============
+
+function keepSessionAlive() {
+  if (keepAliveInterval) clearInterval(keepAliveInterval);
+  keepAliveInterval = setInterval(() => {
+    if (currentDevice) {
+      try {
+        currentDevice.status(() => {});
+      } catch (e) {}
+    }
+  }, 5000);
+}
+
+async function isChromecastIdle(device) {
+  return new Promise((resolve) => {
+    if (!device) { resolve(true); return; }
+    const timeout = setTimeout(() => resolve(true), 5000);
+    try {
+      device.status((err, status) => {
+        clearTimeout(timeout);
+        if (err) { resolve(true); return; }
+        const isIdle = !status?.applications || status.applications.length === 0 ||
+          status.applications.some(app => app.appId === CUSTOM_APP_ID);
+        resolve(isIdle);
+      });
+    } catch (e) { clearTimeout(timeout); resolve(true); }
+  });
+}
+
+function findDevice(name) {
+  const device = discoveredDevices.find(d => d.name === name);
+  if (!device) return null;
+  
+  // Find player in chromecasts
+  const player = chromecasts.players.find(p => p.host === device.host || p.name === device.name);
+  return player || null;
+}
+
+async function castMedia(chromecastName, url) {
+  return new Promise((resolve, reject) => {
+    const player = findDevice(chromecastName);
+    if (!player) {
+      reject(new Error(`Device "${chromecastName}" not found`));
+      return;
+    }
+    
+    currentDevice = player;
+    console.log(`📺 Casting to ${chromecastName}: ${url}`);
+    
+    player.play(url, { type: 'text/html', autoplay: true, appId: CUSTOM_APP_ID }, (err) => {
+      if (err) {
+        console.error('❌ Cast failed:', err.message);
+        reject(err);
+      } else {
+        console.log('✅ Cast successful');
+        screensaverActive = true;
+        keepSessionAlive();
+        resolve({ success: true });
+      }
     });
   });
 }
 
-// Cast URL using chromecasts library (simple API that works!)
-async function castMedia(url) {
-  // Try to get selected device or use first found
-  const selectedDevice = await getSelectedChromecast();
+async function stopCast(chromecastName) {
+  return new Promise((resolve, reject) => {
+    const player = findDevice(chromecastName);
+    if (!player) {
+      reject(new Error(`Device "${chromecastName}" not found`));
+      return;
+    }
+    
+    try {
+      player.stop(() => {
+        screensaverActive = false;
+        if (keepAliveInterval) clearInterval(keepAliveInterval);
+        console.log('⏹️ Cast stopped');
+        resolve({ success: true });
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+// ============ Auto-Screensaver ============
+
+async function checkAndActivateScreensaver() {
+  const config = loadConfig();
+  if (!config.enabled || !config.url || !config.selectedChromecast) return;
   
-  let playerToUse = null;
+  const player = findDevice(config.selectedChromecast);
+  if (!player) return;
   
-  if (selectedDevice) {
-    // Find the matching player from discovered devices
-    for (const [key, device] of discoveredDevices) {
-      if (device.host === selectedDevice.host && device.player) {
-        playerToUse = device.player;
-        console.log(`🎯 Using user-selected device: ${device.name}`);
-        break;
-      }
+  const idle = await isChromecastIdle(player);
+  if (idle && !screensaverActive) {
+    console.log('💤 Device idle, activating screensaver...');
+    try {
+      await castMedia(config.selectedChromecast, config.url);
+    } catch (error) {
+      console.error('Failed to activate screensaver:', error.message);
     }
   }
+}
+
+// ============ HTTP Server ============
+
+const MIME_TYPES = {
+  '.html': 'text/html',
+  '.css': 'text/css',
+  '.js': 'application/javascript',
+  '.json': 'application/json',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.ico': 'image/x-icon'
+};
+
+function serveStatic(filePath, res) {
+  const ext = path.extname(filePath);
+  const contentType = MIME_TYPES[ext] || 'text/plain';
   
-  // Fallback to currentDevice if no match found
-  if (!playerToUse) {
-    playerToUse = currentDevice;
-  }
-  
-  if (!playerToUse) {
-    throw new Error('No Chromecast devices found on network');
-  }
-  
-  console.log(`📺 Casting to ${playerToUse.name}: ${url}`);
-  
+  fs.readFile(filePath, (err, data) => {
+    if (err) {
+      res.writeHead(404);
+      res.end('Not Found');
+    } else {
+      res.writeHead(200, { 'Content-Type': contentType });
+      res.end(data);
+    }
+  });
+}
+
+function parseBody(req) {
   return new Promise((resolve, reject) => {
-    // First, launch the custom receiver app
-    playerToUse.app(CUSTOM_APP_ID, (err, app) => {
-      if (err) {
-        console.error('❌ Failed to launch custom receiver:', err.message);
-        reject(err);
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        resolve(body ? JSON.parse(body) : {});
+      } catch (e) {
+        reject(e);
+      }
+    });
+  });
+}
+
+function sendJson(res, data, status = 200) {
+  res.writeHead(status, { 
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*'
+  });
+  res.end(JSON.stringify(data));
+}
+
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url, `http://localhost:${PORT}`);
+  const pathname = url.pathname;
+  
+  // CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+  
+  // API Routes
+  if (pathname.startsWith('/api/')) {
+    try {
+      // GET /api/settings
+      if (req.method === 'GET' && pathname === '/api/settings') {
+        const config = loadConfig();
+        sendJson(res, { 
+          ...config, 
+          deviceId: DEVICE_ID,
+          screensaverActive 
+        });
         return;
       }
       
-      console.log('✅ Custom receiver launched');
+      // POST /api/settings
+      if (req.method === 'POST' && pathname === '/api/settings') {
+        const body = await parseBody(req);
+        const config = loadConfig();
+        const newConfig = { ...config, ...body };
+        saveConfig(newConfig);
+        sendJson(res, { success: true, config: newConfig });
+        return;
+      }
       
-      // Load the URL via the custom receiver
-      playerToUse.play(url, {
-        title: 'Website Viewer',
-        contentType: 'text/html',
-        autoplay: true
-      }, (err) => {
-        if (err) {
-          console.error('❌ Cast error:', err.message);
-          reject(err);
+      // GET /api/chromecasts
+      if (req.method === 'GET' && pathname === '/api/chromecasts') {
+        sendJson(res, { devices: discoveredDevices });
+        return;
+      }
+      
+      // POST /api/chromecasts/refresh
+      if (req.method === 'POST' && pathname === '/api/chromecasts/refresh') {
+        const devices = await discoverDevices();
+        sendJson(res, { devices });
+        return;
+      }
+      
+      // POST /api/cast
+      if (req.method === 'POST' && pathname === '/api/cast') {
+        const body = await parseBody(req);
+        const config = loadConfig();
+        const chromecastName = body.chromecast || config.selectedChromecast;
+        const url = body.url || config.url;
+        
+        if (!chromecastName || !url) {
+          sendJson(res, { error: 'Missing chromecast or url' }, 400);
           return;
         }
         
-        console.log('✅ Media loaded successfully');
-        activeSession = { url, startTime: Date.now() };
-        resolve({ success: true });
-      });
-    });
-  });
-}
-
-// Process pending commands
-async function processPendingCommands() {
-  try {
-    const { data: commands, error } = await supabase
-      .from('cast_commands')
-      .select('*')
-      .eq('device_id', DEVICE_ID)
-      .eq('status', 'pending')
-      .order('created_at', { ascending: true })
-      .limit(1);
-
-    if (error) {
-      console.error('Error fetching commands:', error.message);
-      return;
-    }
-
-    if (!commands || commands.length === 0) {
-      return;
-    }
-
-    const command = commands[0];
-    console.log(`📋 Processing command ${command.id}: ${command.command_type}`);
-
-    // Update status to processing
-    await supabase
-      .from('cast_commands')
-      .update({ status: 'processing' })
-      .eq('id', command.id);
-
-    try {
-      if (command.command_type === 'cast') {
-        await castMedia(command.url);
+        await castMedia(chromecastName, url);
+        sendJson(res, { success: true });
+        return;
       }
-
-      // Mark as completed
-      await supabase
-        .from('cast_commands')
-        .update({
-          status: 'completed',
-          processed_at: new Date().toISOString()
-        })
-        .eq('id', command.id);
-
-      console.log(`✅ Command ${command.id} completed`);
+      
+      // POST /api/stop
+      if (req.method === 'POST' && pathname === '/api/stop') {
+        const config = loadConfig();
+        if (config.selectedChromecast) {
+          await stopCast(config.selectedChromecast);
+        }
+        sendJson(res, { success: true });
+        return;
+      }
+      
+      // GET /api/status
+      if (req.method === 'GET' && pathname === '/api/status') {
+        const config = loadConfig();
+        sendJson(res, {
+          deviceId: DEVICE_ID,
+          port: PORT,
+          devices: discoveredDevices.length,
+          selectedChromecast: config.selectedChromecast,
+          screensaverActive,
+          uptime: process.uptime()
+        });
+        return;
+      }
+      
+      sendJson(res, { error: 'Not found' }, 404);
     } catch (error) {
-      console.error(`❌ Command failed:`, error.message);
-
-      await supabase
-        .from('cast_commands')
-        .update({
-          status: 'failed',
-          error_message: error.message,
-          processed_at: new Date().toISOString()
-        })
-        .eq('id', command.id);
+      sendJson(res, { error: error.message }, 500);
     }
-  } catch (error) {
-    console.error('Error processing commands:', error.message);
+    return;
   }
-}
-
-// Subscribe to realtime changes
-function subscribeToCommands() {
-  console.log('👂 Subscribing to realtime command updates...');
-
-  const channel = supabase
-    .channel('cast_commands')
-    .on('postgres_changes', 
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'cast_commands',
-        filter: `device_id=eq.${DEVICE_ID}`
-      },
-      (payload) => {
-        console.log('📬 New command received via realtime');
-        processPendingCommands();
-      }
-    )
-    .subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        console.log('✅ Subscribed to realtime updates');
-      }
-    });
-
-  return channel;
-}
-
-// Log bridge status to database for cloud monitoring
-async function logBridgeStatus(message, level = 'info') {
-  try {
-    await supabase
-      .from('cast_commands')
-      .insert({
-        device_id: DEVICE_ID,
-        command_type: 'bridge_log',
-        url: JSON.stringify({ message, level, timestamp: new Date().toISOString() }),
-        status: 'completed',
-        processed_at: new Date().toISOString()
-      });
-  } catch (error) {
-    console.error('Failed to log to database:', error.message);
+  
+  // Serve static files
+  let filePath = pathname === '/' ? '/index.html' : pathname;
+  filePath = path.join(PUBLIC_DIR, filePath);
+  
+  // Security: prevent directory traversal
+  if (!filePath.startsWith(PUBLIC_DIR)) {
+    res.writeHead(403);
+    res.end('Forbidden');
+    return;
   }
-}
+  
+  serveStatic(filePath, res);
+});
 
-// Health check - logs bridge status to database
-async function performHealthCheck() {
-  const uptime = Math.floor((Date.now() - bridgeStartTime) / 1000);
-  const uptimeFormatted = formatUptime(uptime);
-  const memoryUsage = process.memoryUsage();
-  const heapUsedMB = Math.round(memoryUsage.heapUsed / 1024 / 1024);
-  const heapTotalMB = Math.round(memoryUsage.heapTotal / 1024 / 1024);
-  
-  const deviceCount = discoveredDevices.size;
-  const hasActiveSession = !!activeSession;
-  const selectedDevice = await getSelectedChromecast();
-  
-  const healthStatus = {
-    version: BRIDGE_VERSION,
-    uptime: uptimeFormatted,
-    uptimeSeconds: uptime,
-    memory: `${heapUsedMB}/${heapTotalMB} MB`,
-    devices: deviceCount,
-    selectedDevice: selectedDevice?.name || 'None',
-    activeSession: hasActiveSession,
-    sessionUrl: hasActiveSession ? activeSession.url : null,
-    timestamp: new Date().toISOString()
-  };
-  
-  console.log(`💚 Health check: v${BRIDGE_VERSION}, up ${uptimeFormatted}, ${heapUsedMB}MB, ${deviceCount} device(s)`);
-  
-  await logBridgeStatus(`Bridge v${BRIDGE_VERSION} | Up: ${uptimeFormatted} | Mem: ${heapUsedMB}MB | Devices: ${deviceCount} | Active: ${hasActiveSession}`, 'health');
-  
-  return healthStatus;
-}
+// ============ Main ============
 
-// Format uptime in human readable format
-function formatUptime(seconds) {
-  const days = Math.floor(seconds / 86400);
-  const hours = Math.floor((seconds % 86400) / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  
-  if (days > 0) {
-    return `${days}d ${hours}h ${minutes}m`;
-  } else if (hours > 0) {
-    return `${hours}h ${minutes}m`;
-  } else {
-    return `${minutes}m`;
-  }
-}
-
-// Main service
 async function main() {
-  console.log('🚀 Starting Chromecast Bridge Service (Windows) with Custom Receiver');
-  console.log(`📱 Device ID: ${DEVICE_ID}`);
-  console.log(`🎬 Custom App ID: ${CUSTOM_APP_ID}`);
-  console.log(`⏱️  Poll interval: ${POLL_INTERVAL}ms`);
   console.log('');
-
-  // Discover devices (one-time scan at startup)
+  console.log('╔════════════════════════════════════════╗');
+  console.log('║     Chromecast Bridge Service          ║');
+  console.log('╚════════════════════════════════════════╝');
+  console.log('');
+  console.log(`📍 Device ID: ${DEVICE_ID}`);
+  console.log(`🌐 Web UI: http://localhost:${PORT}`);
+  console.log('');
+  
+  // Initial discovery
   await discoverDevices();
-
-  console.log(`\n📊 Discovery complete: Found ${discoveredDevices.size} device(s)`);
   
-  if (discoveredDevices.size === 0) {
-    console.error('❌ No Chromecast devices found. Make sure your device is on the same network.');
-    console.log('💡 Tip: Check Windows Firewall settings - it may be blocking mDNS/Bonjour');
-    console.log('⚠️  Bridge will continue running and monitor for commands...');
-  } else {
-    console.log('✅ All devices reported to database');
-  }
+  // Start chromecasts library discovery
+  chromecasts.on('update', (player) => {
+    console.log(`📡 Chromecasts lib found: ${player.name}`);
+  });
   
-  // Check if user has previously selected a device
-  const settings = await getScreensaverSettings();
-  if (settings && settings.selected_chromecast_id) {
-    // Try to find the previously selected device in current discovery
-    const { data: selectedChromecast } = await supabase
-      .from('discovered_chromecasts')
-      .select('*')
-      .eq('id', settings.selected_chromecast_id)
-      .single();
-    
-    if (selectedChromecast) {
-      // Check if this device is in our discovered devices
-      const deviceKey = `${selectedChromecast.chromecast_host}:${selectedChromecast.chromecast_port}`;
-      if (discoveredDevices.has(deviceKey)) {
-        currentDevice = {
-          name: selectedChromecast.chromecast_name,
-          host: selectedChromecast.chromecast_host,
-          port: selectedChromecast.chromecast_port
-        };
-        console.log(`🎯 Auto-selected previously chosen device: ${currentDevice.name}`);
-      } else {
-        console.log('⚠️  Previously selected device not found in current scan');
-        console.log('⚠️  No device auto-selected - please choose a device via web interface');
-      }
-    }
-  } else {
-    console.log('ℹ️  No previously selected device found');
-    console.log('ℹ️  Please choose a device via web interface');
-  }
-
-  // Subscribe to realtime updates
-  const channel = subscribeToCommands();
-
-  // Also poll for commands as fallback
-  console.log('🔄 Starting command polling...');
-  const pollInterval = setInterval(processPendingCommands, POLL_INTERVAL);
-
-  // Start auto-screensaver monitoring
-  console.log('🎬 Starting auto-screensaver monitoring (checks every 60s)...');
-  const screensaverInterval = setInterval(checkAndActivateScreensaver, SCREENSAVER_CHECK_INTERVAL);
-
-  // Start health check monitoring
-  console.log('💚 Starting health check monitoring (every 5 min)...');
-  const healthInterval = setInterval(performHealthCheck, HEALTH_CHECK_INTERVAL);
-
-  // Initial poll
-  processPendingCommands();
+  // Start HTTP server
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
+    console.log(`   (also accessible at http://<your-ip>:${PORT} from other devices)`);
+  });
   
-  // Initial screensaver check after 10 seconds
-  setTimeout(checkAndActivateScreensaver, 10000);
-
-  // Log startup to database
-  await logBridgeStatus(`Bridge v${BRIDGE_VERSION} started | Device: ${DEVICE_ID} | Found ${discoveredDevices.size} Chromecast(s)`, 'startup');
-
-  // Initial health check after 30 seconds
-  setTimeout(performHealthCheck, 30000);
-
+  // Periodic discovery
+  setInterval(discoverDevices, 30 * 60 * 1000);
+  
+  // Screensaver check every minute
+  setInterval(checkAndActivateScreensaver, 60000);
+  
   console.log('');
-  console.log('✅ Bridge service is running');
-  console.log('Press Ctrl+C to stop');
-
-  // Handle shutdown
-  process.on('SIGINT', async () => {
-    console.log('\n🛑 Shutting down bridge service...');
-    clearInterval(pollInterval);
-    clearInterval(screensaverInterval);
-    clearInterval(healthInterval);
-    await logBridgeStatus(`Bridge v${BRIDGE_VERSION} shutting down`, 'shutdown');
-    await channel.unsubscribe();
-    chromecasts.destroy();
+  console.log('Press Ctrl+C to stop.');
+  
+  process.on('SIGINT', () => {
+    console.log('\n👋 Shutting down...');
+    if (keepAliveInterval) clearInterval(keepAliveInterval);
     bonjour.destroy();
+    server.close();
     process.exit(0);
   });
 }
