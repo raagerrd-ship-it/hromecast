@@ -458,9 +458,34 @@ const Setup = () => {
               <CardContent className="pt-5 pb-5 space-y-5 text-sm">
                 <p className="text-muted-foreground">{t('manualInstallDesc')}</p>
                 
-                {/* Step 1: Install Node.js */}
+                {/* Step 1: Download */}
                 <div className="space-y-2">
-                  <p className="font-medium">1. {t('installNodejs')}</p>
+                  <p className="font-medium">1. {t('downloadBridgePackage')}</p>
+                  <p className="text-xs text-muted-foreground">{t('downloadBridgePackageDesc')}</p>
+                  <Button 
+                    onClick={downloadBridge} 
+                    disabled={isDownloading}
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                  >
+                    {isDownloading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        {t('downloading')}
+                      </>
+                    ) : (
+                      <>
+                        <Download className="h-4 w-4" />
+                        chromecast-bridge.zip
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {/* Step 2: Install Node.js */}
+                <div className="space-y-2">
+                  <p className="font-medium">2. {t('installNodejs')}</p>
                   <p className="text-xs text-muted-foreground">{t('downloadFromNodejs')}</p>
                   <p className="text-xs text-muted-foreground mt-2">{t('verifyNodeInstall')}</p>
                   <div className="flex items-center gap-2">
@@ -476,9 +501,9 @@ const Setup = () => {
                   </div>
                 </div>
 
-                {/* Step 2: Extract and navigate */}
+                {/* Step 3: Extract and navigate */}
                 <div className="space-y-2">
-                  <p className="font-medium">2. {t('extractAndNavigate')}</p>
+                  <p className="font-medium">3. {t('extractAndNavigate')}</p>
                   <div className="flex items-center gap-2">
                     <pre className="flex-1 bg-muted p-3 rounded-lg text-xs font-mono overflow-x-auto">unzip chromecast-bridge.zip && cd chromecast-bridge</pre>
                     <Button
@@ -492,9 +517,9 @@ const Setup = () => {
                   </div>
                 </div>
 
-                {/* Step 3: Install dependencies */}
+                {/* Step 4: Install dependencies */}
                 <div className="space-y-2">
-                  <p className="font-medium">3. {t('installDependencies')}</p>
+                  <p className="font-medium">4. {t('installDependencies')}</p>
                   <div className="flex items-center gap-2">
                     <pre className="flex-1 bg-muted p-3 rounded-lg text-xs font-mono overflow-x-auto">npm install</pre>
                     <Button
@@ -508,9 +533,9 @@ const Setup = () => {
                   </div>
                 </div>
 
-                {/* Step 4: Create .env file */}
+                {/* Step 5: Create .env file */}
                 <div className="space-y-2">
-                  <p className="font-medium">4. {t('createEnvFile')}</p>
+                  <p className="font-medium">5. {t('createEnvFile')}</p>
                   <p className="text-xs text-muted-foreground">{t('envFileDesc')}</p>
                   <pre className="bg-muted p-3 rounded-lg text-xs font-mono">
                     <code>DEVICE_ID=my-home{'\n'}PORT=3000</code>
@@ -521,9 +546,9 @@ const Setup = () => {
                   </ul>
                 </div>
 
-                {/* Step 5: Start */}
+                {/* Step 6: Start */}
                 <div className="space-y-2">
-                  <p className="font-medium">5. {t('start')}</p>
+                  <p className="font-medium">6. {t('start')}</p>
                   <div className="flex items-center gap-2">
                     <pre className="flex-1 bg-muted p-3 rounded-lg text-xs font-mono overflow-x-auto">node index.js</pre>
                     <Button
@@ -549,9 +574,9 @@ const Setup = () => {
                   </div>
                 </div>
 
-                {/* Step 6: Verify */}
+                {/* Step 7: Verify */}
                 <div className="space-y-2">
-                  <p className="font-medium">6. {t('verifyRunning')}</p>
+                  <p className="font-medium">7. {t('verifyRunning')}</p>
                   <div className="flex items-center gap-2">
                     <pre className="flex-1 bg-muted p-3 rounded-lg text-xs font-mono overflow-x-auto">curl http://localhost:3000/api/status</pre>
                     <Button
