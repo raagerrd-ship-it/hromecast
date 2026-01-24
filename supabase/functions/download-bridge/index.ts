@@ -149,6 +149,10 @@ let currentDevice = null;
 let keepAliveInterval = null;
 let screensaverActive = false;
 
+// In-memory log buffer (keep last 100 entries)
+const LOG_BUFFER_SIZE = 100;
+let logBuffer = [];
+
 // Default config
 const DEFAULT_CONFIG = {
   enabled: false,
@@ -159,11 +163,38 @@ const DEFAULT_CONFIG = {
 
 // ============ Structured Logging ============
 
+function addToLogBuffer(level, msg, args) {
+  const entry = {
+    timestamp: new Date().toISOString(),
+    level,
+    message: msg,
+    args: args.length > 0 ? args : undefined
+  };
+  logBuffer.push(entry);
+  if (logBuffer.length > LOG_BUFFER_SIZE) {
+    logBuffer.shift();
+  }
+}
+
 const log = {
-  info: (msg, ...args) => console.log(\`[INFO] \${new Date().toISOString()} - \${msg}\`, ...args),
-  warn: (msg, ...args) => console.warn(\`[WARN] \${new Date().toISOString()} - \${msg}\`, ...args),
-  error: (msg, ...args) => console.error(\`[ERROR] \${new Date().toISOString()} - \${msg}\`, ...args),
-  debug: (msg, ...args) => process.env.DEBUG && console.log(\`[DEBUG] \${new Date().toISOString()} - \${msg}\`, ...args)
+  info: (msg, ...args) => {
+    console.log(\`[INFO] \${new Date().toISOString()} - \${msg}\`, ...args);
+    addToLogBuffer('info', msg, args);
+  },
+  warn: (msg, ...args) => {
+    console.warn(\`[WARN] \${new Date().toISOString()} - \${msg}\`, ...args);
+    addToLogBuffer('warn', msg, args);
+  },
+  error: (msg, ...args) => {
+    console.error(\`[ERROR] \${new Date().toISOString()} - \${msg}\`, ...args);
+    addToLogBuffer('error', msg, args);
+  },
+  debug: (msg, ...args) => {
+    if (process.env.DEBUG) {
+      console.log(\`[DEBUG] \${new Date().toISOString()} - \${msg}\`, ...args);
+      addToLogBuffer('debug', msg, args);
+    }
+  }
 };
 
 // ============ Network Utilities ============
@@ -558,6 +589,19 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       
+      // GET /api/logs
+      if (req.method === 'GET' && pathname === '/api/logs') {
+        sendJson(res, { logs: logBuffer });
+        return;
+      }
+      
+      // DELETE /api/logs (clear logs)
+      if (req.method === 'DELETE' && pathname === '/api/logs') {
+        logBuffer = [];
+        sendJson(res, { success: true });
+        return;
+      }
+      
       sendJson(res, { error: 'Not found' }, 404);
     } catch (error) {
       sendJson(res, { error: error.message }, 500);
@@ -684,7 +728,10 @@ const PUBLIC_INDEX_HTML = `<!DOCTYPE html>
 <body>
   <div class="container">
     <header>
-      <h1>📺 Chromecast Bridge</h1>
+      <div class="header-title">
+        <h1>📺 Chromecast Bridge</h1>
+        <span class="version-badge" id="version-badge">v...</span>
+      </div>
       <div class="status" id="status">
         <span class="status-dot"></span>
         <span id="status-text">Ansluter...</span>
@@ -752,6 +799,19 @@ const PUBLIC_INDEX_HTML = `<!DOCTYPE html>
         <div class="card-content">
           <div class="preview-container" id="preview-container">
             <p class="preview-placeholder">Ange en URL ovan för att se förhandsvisning</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Logs -->
+      <section class="card logs-card">
+        <div class="card-header">
+          <h2>📋 Loggar</h2>
+          <button id="clear-logs-btn" class="btn btn-secondary btn-small">🗑️ Rensa</button>
+        </div>
+        <div class="card-content">
+          <div class="logs-container" id="logs-container">
+            <p class="logs-placeholder">Inga loggar ännu...</p>
           </div>
         </div>
       </section>
@@ -831,6 +891,22 @@ header {
 header h1 {
   font-size: 1.5rem;
   font-weight: 600;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.version-badge {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-family: monospace;
 }
 
 .status {
@@ -1158,6 +1234,79 @@ footer .network-card {
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+/* Logs */
+.logs-container {
+  max-height: 300px;
+  overflow-y: auto;
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 0.5rem;
+  font-family: monospace;
+  font-size: 0.75rem;
+}
+
+.logs-placeholder {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 1rem;
+}
+
+.log-entry {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  margin-bottom: 0.25rem;
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.log-entry:last-child {
+  margin-bottom: 0;
+}
+
+.log-entry.info {
+  background: rgba(59, 130, 246, 0.1);
+  border-left: 2px solid var(--primary);
+}
+
+.log-entry.warn {
+  background: rgba(234, 179, 8, 0.1);
+  border-left: 2px solid #eab308;
+}
+
+.log-entry.error {
+  background: rgba(239, 68, 68, 0.1);
+  border-left: 2px solid var(--danger);
+}
+
+.log-entry.debug {
+  background: rgba(161, 161, 170, 0.1);
+  border-left: 2px solid var(--text-muted);
+}
+
+.log-time {
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.log-level {
+  font-weight: 600;
+  text-transform: uppercase;
+  width: 40px;
+  flex-shrink: 0;
+}
+
+.log-entry.info .log-level { color: var(--primary); }
+.log-entry.warn .log-level { color: #eab308; }
+.log-entry.error .log-level { color: var(--danger); }
+.log-entry.debug .log-level { color: var(--text-muted); }
+
+.log-message {
+  flex: 1;
+  word-break: break-word;
 }`;
 
 const PUBLIC_APP_JS = `// API helpers
@@ -1178,6 +1327,7 @@ async function api(path, options = {}) {
 const elements = {
   status: document.getElementById('status'),
   statusText: document.getElementById('status-text'),
+  versionBadge: document.getElementById('version-badge'),
   chromecastSelect: document.getElementById('chromecast-select'),
   refreshBtn: document.getElementById('refresh-btn'),
   deviceCount: document.getElementById('device-count'),
@@ -1191,7 +1341,9 @@ const elements = {
   port: document.getElementById('port'),
   networkUrl: document.getElementById('network-url'),
   mdnsUrl: document.getElementById('mdns-url'),
-  copyUrlBtn: document.getElementById('copy-url-btn')
+  copyUrlBtn: document.getElementById('copy-url-btn'),
+  logsContainer: document.getElementById('logs-container'),
+  clearLogsBtn: document.getElementById('clear-logs-btn')
 };
 
 // State
@@ -1254,6 +1406,31 @@ function updatePreview(url) {
   container.innerHTML = '<iframe src="' + url + '" sandbox="allow-scripts allow-same-origin"></iframe>';
 }
 
+function formatLogTime(timestamp) {
+  const date = new Date(timestamp);
+  return date.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function updateLogs(logs) {
+  const container = elements.logsContainer;
+  
+  if (!logs || logs.length === 0) {
+    container.innerHTML = '<p class="logs-placeholder">Inga loggar ännu...</p>';
+    return;
+  }
+  
+  // Show newest first
+  const reversedLogs = [...logs].reverse();
+  
+  container.innerHTML = reversedLogs.map(log => 
+    '<div class="log-entry ' + log.level + '">' +
+      '<span class="log-time">' + formatLogTime(log.timestamp) + '</span>' +
+      '<span class="log-level">' + log.level + '</span>' +
+      '<span class="log-message">' + log.message + '</span>' +
+    '</div>'
+  ).join('');
+}
+
 function setLoading(loading) {
   state.isLoading = loading;
   elements.refreshBtn.disabled = loading;
@@ -1307,6 +1484,11 @@ async function loadStatus() {
     elements.port.textContent = data.port || '-';
     updateScreensaverStatus(data.screensaverActive);
     
+    // Update version badge
+    if (data.version && elements.versionBadge) {
+      elements.versionBadge.textContent = 'v' + data.version;
+    }
+    
     // Update network URL display
     if (data.networkUrl && elements.networkUrl) {
       elements.networkUrl.textContent = data.networkUrl;
@@ -1314,6 +1496,10 @@ async function loadStatus() {
     if (data.mdnsUrl && elements.mdnsUrl) {
       elements.mdnsUrl.textContent = data.mdnsUrl;
     }
+    
+    // Also load logs
+    const logsData = await api('/api/logs');
+    updateLogs(logsData.logs || []);
   } catch (error) {
     console.error('Failed to load status:', error);
   }
@@ -1352,6 +1538,20 @@ async function startCast() {
   setLoading(true);
   
   try {
+    // Spara URL:en först om den har ändrats
+    const currentUrl = elements.urlInput.value.trim();
+    if (currentUrl && currentUrl !== state.settings.url) {
+      await saveSettings({ url: currentUrl });
+      updatePreview(currentUrl);
+    }
+    
+    // Kontrollera att vi har en URL att casta
+    if (!currentUrl) {
+      alert('Ange en URL att visa först!');
+      setLoading(false);
+      return;
+    }
+    
     await api('/api/cast', { method: 'POST' });
     updateScreensaverStatus(true);
   } catch (error) {
@@ -1405,6 +1605,17 @@ if (elements.copyUrlBtn) {
           elements.copyUrlBtn.textContent = '📋 Kopiera';
         }, 2000);
       });
+    }
+  });
+}
+
+if (elements.clearLogsBtn) {
+  elements.clearLogsBtn.addEventListener('click', async () => {
+    try {
+      await api('/api/logs', { method: 'DELETE' });
+      updateLogs([]);
+    } catch (error) {
+      console.error('Failed to clear logs:', error);
     }
   });
 }
