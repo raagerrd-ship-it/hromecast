@@ -27,6 +27,10 @@ let currentDevice = null;
 let keepAliveInterval = null;
 let screensaverActive = false;
 
+// In-memory log buffer (keep last 100 entries)
+const LOG_BUFFER_SIZE = 100;
+let logBuffer = [];
+
 // Default config
 const DEFAULT_CONFIG = {
   enabled: false,
@@ -37,11 +41,38 @@ const DEFAULT_CONFIG = {
 
 // ============ Structured Logging ============
 
+function addToLogBuffer(level, msg, args) {
+  const entry = {
+    timestamp: new Date().toISOString(),
+    level,
+    message: msg,
+    args: args.length > 0 ? args : undefined
+  };
+  logBuffer.push(entry);
+  if (logBuffer.length > LOG_BUFFER_SIZE) {
+    logBuffer.shift();
+  }
+}
+
 const log = {
-  info: (msg, ...args) => console.log(`[INFO] ${new Date().toISOString()} - ${msg}`, ...args),
-  warn: (msg, ...args) => console.warn(`[WARN] ${new Date().toISOString()} - ${msg}`, ...args),
-  error: (msg, ...args) => console.error(`[ERROR] ${new Date().toISOString()} - ${msg}`, ...args),
-  debug: (msg, ...args) => process.env.DEBUG && console.log(`[DEBUG] ${new Date().toISOString()} - ${msg}`, ...args)
+  info: (msg, ...args) => {
+    console.log(`[INFO] ${new Date().toISOString()} - ${msg}`, ...args);
+    addToLogBuffer('info', msg, args);
+  },
+  warn: (msg, ...args) => {
+    console.warn(`[WARN] ${new Date().toISOString()} - ${msg}`, ...args);
+    addToLogBuffer('warn', msg, args);
+  },
+  error: (msg, ...args) => {
+    console.error(`[ERROR] ${new Date().toISOString()} - ${msg}`, ...args);
+    addToLogBuffer('error', msg, args);
+  },
+  debug: (msg, ...args) => {
+    if (process.env.DEBUG) {
+      console.log(`[DEBUG] ${new Date().toISOString()} - ${msg}`, ...args);
+      addToLogBuffer('debug', msg, args);
+    }
+  }
 };
 
 // ============ Network Utilities ============
@@ -433,6 +464,19 @@ const server = http.createServer(async (req, res) => {
           screensaverActive,
           uptime: process.uptime()
         });
+        return;
+      }
+      
+      // GET /api/logs
+      if (req.method === 'GET' && pathname === '/api/logs') {
+        sendJson(res, { logs: logBuffer });
+        return;
+      }
+      
+      // DELETE /api/logs (clear logs)
+      if (req.method === 'DELETE' && pathname === '/api/logs') {
+        logBuffer = [];
+        sendJson(res, { success: true });
         return;
       }
       

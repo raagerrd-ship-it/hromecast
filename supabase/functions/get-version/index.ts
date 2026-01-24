@@ -11,9 +11,17 @@ const corsHeaders = {
 // ============================================================================
 
 const VERSION_INFO = {
-  version: "1.2.5",
+  version: "1.2.6",
   releasedAt: "2025-01-24",
   changelog: [
+    {
+      version: "1.2.6",
+      date: "2025-01-24",
+      changes: [
+        "Loggpanel: Ny loggsektion i dashboarden för att se bridge-aktivitet i realtid",
+        "API för loggar: GET /api/logs och DELETE /api/logs endpoints",
+      ]
+    },
     {
       version: "1.2.5",
       date: "2025-01-24",
