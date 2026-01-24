@@ -1,31 +1,55 @@
 # Chromecast Bridge - Windows Installer (Multi-Instance Support)
-# Dubbelklicka för att köra - begär automatiskt admin-rättigheter
+# Högerklicka → "Kör med PowerShell" eller dubbelklicka
 # Körs vid systemstart (före inloggning)
+
+param([switch]$Elevated)
+
+# Funktion för att pausa vid fel
+function Pause-OnError {
+    param([string]$Message)
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Red
+    Write-Host "  FEL UPPSTOD!" -ForegroundColor Red
+    Write-Host "========================================" -ForegroundColor Red
+    Write-Host ""
+    Write-Host $Message -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Tryck valfri tangent för att stänga..." -ForegroundColor Gray
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    exit 1
+}
 
 # Auto-elevate till admin om inte redan admin
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
-    Write-Host "Begär administratörsrättigheter..." -ForegroundColor Yellow
-    $scriptPath = $MyInvocation.MyCommand.Path
-    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`"" -Verb RunAs
-    exit
+    if (-not $Elevated) {
+        Write-Host ""
+        Write-Host "Begär administratörsrättigheter..." -ForegroundColor Yellow
+        Write-Host "Klicka 'Ja' i dialogrutan som visas." -ForegroundColor Gray
+        Start-Sleep -Seconds 1
+        
+        try {
+            $scriptPath = $MyInvocation.MyCommand.Path
+            if (-not $scriptPath) {
+                $scriptPath = $PSCommandPath
+            }
+            Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`" -Elevated" -Verb RunAs -Wait
+        } catch {
+            Pause-OnError "Kunde inte begära admin-rättigheter: $($_.Exception.Message)"
+        }
+        exit
+    } else {
+        Pause-OnError "Scriptet kräver administratörsrättigheter men kunde inte elevera."
+    }
 }
 
 $ErrorActionPreference = "Stop"
 $DefaultAppName = "ChromecastBridge"
 $DefaultPort = 3000
 
-# Global felhantering - pausa alltid vid fel
+# Global felhantering
 trap {
-    Write-Host ""
-    Write-Host "========================================" -ForegroundColor Red
-    Write-Host "  FEL UPPSTOD!" -ForegroundColor Red
-    Write-Host "========================================" -ForegroundColor Red
-    Write-Host ""
-    Write-Host $_.Exception.Message -ForegroundColor Red
-    Write-Host ""
-    Read-Host "Tryck Enter för att stänga"
-    exit 1
+    Pause-OnError $_.Exception.Message
 }
 
 Write-Host ""
@@ -201,4 +225,5 @@ Write-Host ""
 Write-Host "För att avinstallera, kör: uninstall-windows.ps1" -ForegroundColor Gray
 Write-Host ""
 Write-Host ""
-Read-Host "Tryck Enter för att stänga (fönstret stannar öppet)"
+Write-Host "Tryck valfri tangent för att stänga..." -ForegroundColor Gray
+$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
