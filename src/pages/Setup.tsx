@@ -236,11 +236,11 @@ const Setup = () => {
                       </div>
                       <div className="flex items-start gap-3">
                         <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground text-sm font-medium">2</div>
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                           <p className="text-sm mb-2">Kör installationsscriptet:</p>
-                          <div className="relative overflow-hidden">
-                            <pre className="bg-muted p-3 rounded-lg text-xs overflow-x-auto pr-12 font-mono max-w-full">
-                              <code className="whitespace-nowrap">chmod +x install-linux.sh && ./install-linux.sh</code>
+                          <div className="relative">
+                            <pre className="bg-muted p-3 rounded-lg text-xs overflow-x-auto pr-12 font-mono">
+                              <code>chmod +x install-linux.sh && ./install-linux.sh</code>
                             </pre>
                             <Button
                               variant="ghost"
