@@ -1,15 +1,47 @@
-# Chromecast Bridge - Windows Installer
-# Kör som: Högerklicka → "Kör med PowerShell"
+# Chromecast Bridge - Windows Installer (Multi-Instance Support)
+# Högerklicka → "Kör med PowerShell"
 
 $ErrorActionPreference = "Stop"
-$AppName = "ChromecastBridge"
-$AppDir = "$env:APPDATA\$AppName"
-$TaskName = "ChromecastBridge"
+$DefaultAppName = "ChromecastBridge"
+$DefaultPort = 3000
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  Chromecast Bridge Installer" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
+Write-Host ""
+
+# Fråga om instansnamn för multi-instance stöd
+Write-Host "Om du vill köra flera bridges (t.ex. en per rum), ge varje en unik namn." -ForegroundColor Gray
+Write-Host "Lämna tomt för standardinstallation." -ForegroundColor Gray
+Write-Host ""
+$InstanceName = Read-Host "Instansnamn (tryck Enter för standard)"
+
+if ([string]::IsNullOrWhiteSpace($InstanceName)) {
+    $AppName = $DefaultAppName
+    $TaskName = $DefaultAppName
+    $Port = $DefaultPort
+} else {
+    $CleanName = $InstanceName -replace '[^a-zA-Z0-9-]', ''
+    $AppName = "$DefaultAppName-$CleanName"
+    $TaskName = "$DefaultAppName-$CleanName"
+    
+    # Fråga om port för multi-instance
+    $PortInput = Read-Host "Port (standard: $DefaultPort)"
+    if ([string]::IsNullOrWhiteSpace($PortInput)) {
+        $Port = $DefaultPort
+    } else {
+        $Port = [int]$PortInput
+    }
+}
+
+$AppDir = "$env:APPDATA\$AppName"
+
+Write-Host ""
+Write-Host "Installation:" -ForegroundColor Yellow
+Write-Host "  Namn: $AppName" -ForegroundColor Gray
+Write-Host "  Port: $Port" -ForegroundColor Gray
+Write-Host "  Mapp: $AppDir" -ForegroundColor Gray
 Write-Host ""
 
 # 1. Kontrollera/installera Node.js
@@ -23,7 +55,6 @@ if (-not $nodeVersion) {
     Write-Host "  Node.js hittades inte. Installerar via winget..." -ForegroundColor Gray
     try {
         winget install OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements
-        # Uppdatera PATH för aktuell session
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
     } catch {
         Write-Host "  VARNING: Kunde inte installera Node.js automatiskt." -ForegroundColor Red
@@ -43,20 +74,30 @@ if (Test-Path $AppDir) {
     Remove-Item -Path $AppDir -Recurse -Force
 }
 New-Item -ItemType Directory -Path $AppDir -Force | Out-Null
+New-Item -ItemType Directory -Path "$AppDir\public" -Force | Out-Null
 Write-Host "  $AppDir" -ForegroundColor Green
 
 # 3. Kopiera bridge-filer
 Write-Host "[3/6] Kopierar filer..." -ForegroundColor Yellow
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$filesToCopy = @("index.js", "package.json", "package-lock.json")
 
-foreach ($file in $filesToCopy) {
+# Kopiera huvudfiler
+$mainFiles = @("index.js", "package.json", "package-lock.json")
+foreach ($file in $mainFiles) {
     $sourcePath = Join-Path $ScriptDir $file
     if (Test-Path $sourcePath) {
         Copy-Item -Path $sourcePath -Destination $AppDir
         Write-Host "  Kopierade $file" -ForegroundColor Gray
     }
 }
+
+# Kopiera public-mapp
+$publicDir = Join-Path $ScriptDir "public"
+if (Test-Path $publicDir) {
+    Copy-Item -Path "$publicDir\*" -Destination "$AppDir\public" -Recurse
+    Write-Host "  Kopierade public-mapp" -ForegroundColor Gray
+}
+
 Write-Host "  Filer kopierade" -ForegroundColor Green
 
 # 4. Installera dependencies
@@ -68,6 +109,10 @@ Write-Host "  Dependencies installerade" -ForegroundColor Green
 # 5. Skapa .env-fil
 Write-Host "[5/6] Skapar konfiguration..." -ForegroundColor Yellow
 $DeviceId = $env:COMPUTERNAME.ToLower() -replace '[^a-z0-9-]', '-'
+if (-not [string]::IsNullOrWhiteSpace($InstanceName)) {
+    $DeviceId = "$DeviceId-$CleanName"
+}
+
 $EnvContent = @"
 # Chromecast Bridge Configuration
 # Genererad automatiskt $(Get-Date -Format "yyyy-MM-dd HH:mm")
@@ -75,10 +120,11 @@ $EnvContent = @"
 SUPABASE_URL=https://umxwaxzmoxwasryjibhe.supabase.co
 SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVteHdheHptb3h3YXNyeWppYmhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0OTc3OTgsImV4cCI6MjA4MDA3Mzc5OH0.R4hVdnkp310Wk-g0jZfy52EwxfV6z3Pfnv6uwhsf0ps
 DEVICE_ID=$DeviceId
-POLL_INTERVAL=5000
+PORT=$Port
 "@
 $EnvContent | Out-File -FilePath "$AppDir\.env" -Encoding UTF8
 Write-Host "  Device ID: $DeviceId" -ForegroundColor Green
+Write-Host "  Port: $Port" -ForegroundColor Green
 
 # 6. Skapa Scheduled Task
 Write-Host "[6/6] Skapar autostart-tjänst..." -ForegroundColor Yellow
@@ -95,7 +141,7 @@ $Trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $Principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
 $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
 
-Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Principal $Principal -Settings $Settings -Description "Chromecast Bridge - Skickar screensaver till Chromecast" | Out-Null
+Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Principal $Principal -Settings $Settings -Description "Chromecast Bridge - $AppName" | Out-Null
 
 Write-Host "  Scheduled Task skapad" -ForegroundColor Green
 
@@ -103,17 +149,23 @@ Write-Host "  Scheduled Task skapad" -ForegroundColor Green
 Write-Host ""
 Write-Host "Startar bridge..." -ForegroundColor Yellow
 Start-ScheduledTask -TaskName $TaskName
-Start-Sleep -Seconds 2
+Start-Sleep -Seconds 3
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
 Write-Host "  Installation klar!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "Bridge körs nu och startar automatiskt vid inloggning." -ForegroundColor White
+Write-Host "Öppna webbläsaren och gå till:" -ForegroundColor White
 Write-Host ""
-Write-Host "Device ID: $DeviceId" -ForegroundColor Cyan
-Write-Host "Använd detta ID i webbappen för att konfigurera." -ForegroundColor Gray
+Write-Host "  http://localhost:$Port" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Där kan du välja Chromecast och konfigurera screensaver." -ForegroundColor Gray
+Write-Host ""
+Write-Host "Device ID: $DeviceId" -ForegroundColor Yellow
+Write-Host "Task Name: $TaskName" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "Bridge startar automatiskt vid inloggning." -ForegroundColor Gray
 Write-Host ""
 Write-Host "För att avinstallera, kör: uninstall-windows.ps1" -ForegroundColor Gray
 Write-Host ""

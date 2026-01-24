@@ -1,4 +1,4 @@
-import { ArrowLeft, Download, Terminal, CheckCircle, Copy, Check, Loader2 } from "lucide-react";
+import { ArrowLeft, Download, Terminal, CheckCircle, Copy, Check, Loader2, Globe } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,8 +8,6 @@ import { supabase } from "@/integrations/supabase/client";
 const Setup = () => {
   const [copiedLinux, setCopiedLinux] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
-
-  const deviceIdExample = "datornamn";
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -127,8 +125,7 @@ const Setup = () => {
             </div>
 
             <div className="pt-2 border-t">
-              <p className="text-xs text-muted-foreground mb-2">Scriptet installerar Node.js (om det saknas), konfigurerar bridge och skapar autostart.</p>
-              <p className="text-xs text-muted-foreground">Device ID genereras automatiskt från datornamnet (t.ex. <code className="bg-muted px-1 rounded">{deviceIdExample}</code>)</p>
+              <p className="text-xs text-muted-foreground">Scriptet installerar Node.js (om det saknas) och skapar autostart. Du kan installera flera bridges med olika namn.</p>
             </div>
           </CardContent>
         </Card>
@@ -146,7 +143,7 @@ const Setup = () => {
               <div className="flex items-start gap-3">
                 <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground text-sm font-medium">1</div>
                 <div className="flex-1">
-                  <p className="font-medium mb-2">Ladda ner och kör</p>
+                  <p className="font-medium mb-2">Ladda ner, packa upp och kör</p>
                   <div className="relative">
                     <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto pr-12">
                       <code>{`cd chromecast-bridge && chmod +x install-linux.sh && ./install-linux.sh`}</code>
@@ -179,19 +176,59 @@ const Setup = () => {
         </Card>
 
         {/* After Installation */}
-        <Card>
+        <Card className="border-primary/50 bg-primary/5">
           <CardHeader>
-            <CardTitle>Efter installation</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Globe className="h-5 w-5" />
+              Efter installation
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
-              <li>Öppna webbappen och välj din Chromecast i dropdown-menyn</li>
-              <li>Aktivera screensaver och ange URL</li>
-              <li>Klicka "Spara" - klart!</li>
-            </ol>
-            <p className="text-xs text-muted-foreground mt-4">
-              💡 Bridge körs automatiskt i bakgrunden och startar vid varje omstart av datorn.
-            </p>
+            <div className="space-y-4">
+              <div className="bg-background rounded-lg p-4 border">
+                <p className="font-medium mb-2">Öppna konfigurationssidan:</p>
+                <code className="text-lg text-primary">http://localhost:3000</code>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Eller från annan enhet: <code className="bg-muted px-1 rounded">http://&lt;dator-ip&gt;:3000</code>
+                </p>
+              </div>
+              
+              <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
+                <li>Välj din Chromecast i dropdown-menyn</li>
+                <li>Ange URL till screensaver</li>
+                <li>Aktivera screensaver med toggle-knappen</li>
+                <li>Testa genom att klicka "Starta nu"</li>
+              </ol>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Multi-instance info */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Flera bridges (multi-instance)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-sm space-y-3">
+              <p className="text-muted-foreground">
+                Du kan köra flera bridges - t.ex. en per rum eller en per dator. Varje bridge har sin egen konfiguration.
+              </p>
+              <div className="space-y-2">
+                <div className="flex gap-4">
+                  <span className="font-medium min-w-32">Samma dator</span>
+                  <span className="text-muted-foreground">Kör installern igen och ange ett unikt namn + port</span>
+                </div>
+                <div className="flex gap-4">
+                  <span className="font-medium min-w-32">Olika datorer</span>
+                  <span className="text-muted-foreground">Installera på varje dator - fungerar automatiskt</span>
+                </div>
+              </div>
+              <div className="bg-muted/50 rounded-lg p-3 mt-3">
+                <p className="text-xs">
+                  <strong>Exempel:</strong> Vardagsrum på port 3000, Sovrum på port 3001, Kök på port 3002
+                </p>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -204,15 +241,15 @@ const Setup = () => {
             <div className="text-sm space-y-3">
               <div className="flex gap-4">
                 <span className="font-medium min-w-40">Hittar ingen Chromecast</span>
-                <span className="text-muted-foreground">Kontrollera att enheten är på samma nätverk som datorn</span>
+                <span className="text-muted-foreground">Kontrollera att enheten är på samma nätverk. Klicka "Sök" för att söka igen.</span>
               </div>
               <div className="flex gap-4">
-                <span className="font-medium min-w-40">Bridge startar inte</span>
-                <span className="text-muted-foreground">Kör scriptet igen eller kontrollera Activity Log i webbappen</span>
+                <span className="font-medium min-w-40">Sidan laddas inte</span>
+                <span className="text-muted-foreground">Kontrollera att bridge körs. Windows: Task Scheduler → ChromecastBridge. Linux: <code className="bg-muted px-1 rounded">systemctl --user status chromecast-bridge</code></span>
               </div>
               <div className="flex gap-4">
                 <span className="font-medium min-w-40">Avinstallera</span>
-                <span className="text-muted-foreground">Kör <code className="bg-muted px-1 rounded">uninstall-windows.ps1</code> eller <code className="bg-muted px-1 rounded">uninstall-linux.sh</code></span>
+                <span className="text-muted-foreground">Kör <code className="bg-muted px-1 rounded">uninstall-windows.ps1</code> eller <code className="bg-muted px-1 rounded">./uninstall-linux.sh</code></span>
               </div>
             </div>
           </CardContent>
@@ -232,16 +269,14 @@ const Setup = () => {
               <div>
                 <p className="text-sm font-medium mb-2">2. Installera dependencies</p>
                 <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
-                  <code>{`cd bridge && npm install`}</code>
+                  <code>{`cd chromecast-bridge && npm install`}</code>
                 </pre>
               </div>
               <div>
                 <p className="text-sm font-medium mb-2">3. Skapa .env-fil</p>
                 <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
-                  <code>{`SUPABASE_URL=https://umxwaxzmoxwasryjibhe.supabase.co
-SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-DEVICE_ID=mitt-hem
-POLL_INTERVAL=5000`}</code>
+                  <code>{`DEVICE_ID=mitt-hem
+PORT=3000`}</code>
                 </pre>
               </div>
               <div>
