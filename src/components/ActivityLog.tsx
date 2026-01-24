@@ -1,5 +1,5 @@
 import React, { useMemo, memo, useState, useEffect } from "react";
-import { Activity, CheckCircle, XCircle, Clock, Play, StopCircle, RotateCcw, Zap, Timer, RefreshCw } from "lucide-react";
+import { Activity, CheckCircle, XCircle, Clock, Play, StopCircle, RotateCcw, Zap, Timer, RefreshCw, HeartPulse } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -56,6 +56,16 @@ const cleanDeviceName = (name: string): string => {
 
 // Memoized log item component - receives logIndex as prop to avoid O(n) indexOf
 const ActivityLogItem = memo(({ log, allLogs, logIndex }: { log: ActivityLogEntry; allLogs: ActivityLogEntry[]; logIndex: number }) => {
+  const isHealthLog = (entry: ActivityLogEntry): boolean => {
+    if (entry.command_type !== 'bridge_log') return false;
+    try {
+      const data = JSON.parse(entry.url);
+      return data.level === 'health' || data.level === 'startup' || data.level === 'shutdown';
+    } catch {
+      return false;
+    }
+  };
+
   const getIcon = () => {
     if (log.command_type === 'circuit_breaker') {
       return log.status === 'failed'
@@ -63,10 +73,10 @@ const ActivityLogItem = memo(({ log, allLogs, logIndex }: { log: ActivityLogEntr
         : <Zap className="h-4 w-4 text-primary" />;
     }
     if (log.command_type === 'ip_recovery' || log.command_type === 'ip_recovery_backoff') {
-      return <RefreshCw className="h-4 w-4 text-blue-500" />;
+      return <RefreshCw className="h-4 w-4 text-accent-foreground" />;
     }
     if (log.command_type === 'ip_recovery_maintenance') {
-      return <RefreshCw className="h-4 w-4 text-orange-500" />;
+      return <RefreshCw className="h-4 w-4 text-primary" />;
     }
     if (log.command_type === 'screensaver_start') {
       return log.status === 'failed' 
@@ -77,7 +87,7 @@ const ActivityLogItem = memo(({ log, allLogs, logIndex }: { log: ActivityLogEntr
       return <RotateCcw className="h-4 w-4 text-primary" />;
     }
     if (log.command_type === 'screensaver_stop') {
-      return <StopCircle className="h-4 w-4 text-orange-500" />;
+      return <StopCircle className="h-4 w-4 text-primary" />;
     }
     if (log.command_type === 'bridge_start') {
       return <Activity className="h-4 w-4 text-primary" />;
@@ -86,6 +96,9 @@ const ActivityLogItem = memo(({ log, allLogs, logIndex }: { log: ActivityLogEntr
       return <Activity className="h-4 w-4 text-muted-foreground" />;
     }
     if (log.command_type === 'bridge_log') {
+      if (isHealthLog(log)) {
+        return <HeartPulse className="h-4 w-4 text-primary" />;
+      }
       return log.status === 'failed'
         ? <XCircle className="h-4 w-4 text-destructive" />
         : <Activity className="h-4 w-4 text-muted-foreground" />;
@@ -96,7 +109,7 @@ const ActivityLogItem = memo(({ log, allLogs, logIndex }: { log: ActivityLogEntr
     if (log.status === 'failed') {
       return <XCircle className="h-4 w-4 text-destructive" />;
     }
-    return <Clock className="h-4 w-4 text-yellow-500" />;
+    return <Clock className="h-4 w-4 text-muted-foreground" />;
   };
 
   const getLabel = () => {
@@ -337,24 +350,24 @@ export const ActivityLog = memo(({ activityLog, screensaverActive }: ActivityLog
 
       {/* Cooldown indicator */}
       {cooldownInfo && (
-        <div className="rounded-xl bg-orange-500/10 border border-orange-500/20 p-3">
+        <div className="rounded-xl bg-primary/10 border border-primary/20 p-3">
           <div className="flex items-center gap-3">
-            <Timer className="h-4 w-4 text-orange-500 flex-shrink-0" />
+            <Timer className="h-4 w-4 text-primary flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-orange-600 dark:text-orange-400">
+              <p className="text-sm font-medium text-primary">
                 Cooldown active
               </p>
               <p className="text-xs text-muted-foreground">
                 Screensaver resumes in {cooldownInfo.remaining}
               </p>
             </div>
-            <Badge variant="outline" className="text-[10px] border-orange-500/30 text-orange-600 dark:text-orange-400">
+            <Badge variant="outline" className="text-[10px] border-primary/30 text-primary">
               {Math.round(cooldownInfo.progress)}%
             </Badge>
           </div>
-          <div className="mt-2 h-1 bg-orange-500/20 rounded-full overflow-hidden">
+          <div className="mt-2 h-1 bg-primary/20 rounded-full overflow-hidden">
             <div 
-              className="h-full bg-orange-500 transition-all duration-1000 ease-linear"
+              className="h-full bg-primary transition-all duration-1000 ease-linear"
               style={{ width: `${cooldownInfo.progress}%` }}
             />
           </div>
