@@ -347,7 +347,7 @@ if (restartBtn) {
             // Server is back
             updateStatus(true, 'Ansluten');
             restartBtn.disabled = false;
-            restartBtn.textContent = '🔄 Starta om';
+            clearSettingsModified();
             await loadSettings();
             await loadDevices();
             await loadStatus();
@@ -385,12 +385,34 @@ const settingsInputs = [
   { el: elements.castMaxRetriesInput, key: 'castMaxRetries' }
 ];
 
+// Track if settings have been modified
+let settingsModified = false;
+
+function markSettingsModified() {
+  settingsModified = true;
+  const restartBtn = document.getElementById('restart-btn');
+  if (restartBtn) {
+    restartBtn.classList.add('needs-restart');
+    restartBtn.textContent = '🔄 Starta om (krävs)';
+  }
+}
+
+function clearSettingsModified() {
+  settingsModified = false;
+  const restartBtn = document.getElementById('restart-btn');
+  if (restartBtn) {
+    restartBtn.classList.remove('needs-restart');
+    restartBtn.textContent = '🔄 Starta om';
+  }
+}
+
 settingsInputs.forEach(({ el, key }) => {
   if (el) {
     el.addEventListener('change', (e) => {
       const value = parseInt(e.target.value, 10);
       if (!isNaN(value)) {
         saveSettings({ [key]: value });
+        markSettingsModified();
       }
     });
   }
