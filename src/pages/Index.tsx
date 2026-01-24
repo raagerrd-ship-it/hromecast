@@ -19,10 +19,12 @@ const Index = () => {
       <header className="flex-shrink-0 px-4 pt-8 pb-6 sm:px-6 sm:pt-10 bg-gradient-to-b from-primary/10 to-transparent">
         <div className="max-w-lg mx-auto">
           <div className="text-center space-y-4">
-            {/* Logo + Language switcher */}
-            <div className="flex items-center justify-center gap-3">
+            {/* Logo centered, language switcher absolute right */}
+            <div className="relative flex items-center justify-center">
               <img src={logo} alt="Chromecast Screensaver" className="h-16 w-auto" />
-              <LanguageSwitcher />
+              <div className="absolute right-0 top-1/2 -translate-y-1/2">
+                <LanguageSwitcher />
+              </div>
             </div>
             <div className="space-y-2">
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{t('heroTitle')}</h1>
