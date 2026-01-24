@@ -11,9 +11,18 @@ const corsHeaders = {
 // ============================================================================
 
 const VERSION_INFO = {
-  version: "1.3.0",
+  version: "1.4.0",
   releasedAt: "2025-01-24",
   changelog: [
+    {
+      version: "1.4.0",
+      date: "2025-01-24",
+      changes: [
+        "Omstartsknapp: Ny knapp i dashboarden för att starta om bridge-tjänsten",
+        "Visuell indikator: Omstartsknappen markeras när timing-inställningar ändrats",
+        "Max försök utökat: Kan nu ställas in upp till 100 istället för 10",
+      ]
+    },
     {
       version: "1.3.0",
       date: "2025-01-24",

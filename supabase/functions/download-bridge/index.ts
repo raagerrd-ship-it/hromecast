@@ -624,6 +624,18 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       
+      // POST /api/restart
+      if (req.method === 'POST' && pathname === '/api/restart') {
+        log.info('🔄 Restart requested via API');
+        sendJson(res, { success: true, message: 'Restarting...' });
+        // Give time for response to be sent, then exit
+        // The service manager (systemd/Task Scheduler) will restart the process
+        setTimeout(() => {
+          process.exit(0);
+        }, 500);
+        return;
+      }
+      
       sendJson(res, { error: 'Not found' }, 404);
     } catch (error) {
       sendJson(res, { error: error.message }, 500);
@@ -836,7 +848,10 @@ const PUBLIC_INDEX_HTML = `<!DOCTYPE html>
       <section class="card settings-card">
         <div class="card-header">
           <h2>⏱️ Tidsinställningar</h2>
-          <button id="toggle-settings-btn" class="btn btn-secondary btn-small">Visa</button>
+          <div class="header-buttons">
+            <button id="restart-btn" class="btn btn-warning btn-small" title="Starta om bridge för att tillämpa ändringar">🔄 Starta om</button>
+            <button id="toggle-settings-btn" class="btn btn-secondary btn-small">Visa</button>
+          </div>
         </div>
         <div class="card-content settings-content" id="settings-content" style="display: none;">
           <div class="settings-grid">
@@ -867,7 +882,7 @@ const PUBLIC_INDEX_HTML = `<!DOCTYPE html>
             </div>
             <div class="form-group">
               <label for="cast-max-retries-input">Max försök</label>
-              <input type="number" id="cast-max-retries-input" min="1" max="10" step="1" value="3">
+              <input type="number" id="cast-max-retries-input" min="1" max="100" step="1" value="3">
               <span class="hint">Antal försök innan ge upp</span>
             </div>
           </div>
@@ -936,6 +951,8 @@ const PUBLIC_STYLE_CSS = `* {
   --success: #22c55e;
   --border: #27272a;
   --radius: 12px;
+  --warning: #eab308;
+  --warning-hover: #ca8a04;
 }
 
 body {
@@ -1191,9 +1208,43 @@ input:checked + .slider:before {
   background: var(--danger-hover);
 }
 
+.btn-warning {
+  background: var(--warning);
+  color: #000;
+}
+
+.btn-warning:hover {
+  background: var(--warning-hover);
+}
+
+.btn.needs-restart {
+  background: var(--danger);
+  color: white;
+  animation: pulse-attention 1.5s ease-in-out infinite;
+}
+
+.btn.needs-restart:hover {
+  background: var(--danger-hover);
+}
+
+@keyframes pulse-attention {
+  0%, 100% { 
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  50% { 
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+  }
+}
+
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.header-buttons {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
 }
 
 .controls {
@@ -1725,6 +1776,63 @@ elements.refreshBtn.addEventListener('click', refreshDevices);
 elements.castBtn.addEventListener('click', startCast);
 elements.stopBtn.addEventListener('click', stopCast);
 
+// Restart bridge
+const restartBtn = document.getElementById('restart-btn');
+let settingsModified = false;
+
+function markSettingsModified() {
+  settingsModified = true;
+  if (restartBtn) {
+    restartBtn.classList.add('needs-restart');
+    restartBtn.textContent = '🔄 Starta om (krävs)';
+  }
+}
+
+function clearSettingsModified() {
+  settingsModified = false;
+  if (restartBtn) {
+    restartBtn.classList.remove('needs-restart');
+    restartBtn.textContent = '🔄 Starta om';
+  }
+}
+
+if (restartBtn) {
+  restartBtn.addEventListener('click', async () => {
+    if (!confirm('Vill du starta om bridge-tjänsten? Detta krävs för att timing-ändringar ska träda i kraft.')) {
+      return;
+    }
+    
+    restartBtn.disabled = true;
+    restartBtn.textContent = '⏳ Startar om...';
+    
+    try {
+      await api('/api/restart', { method: 'POST' });
+      updateStatus(false, 'Startar om...');
+      
+      const pollReconnect = () => {
+        setTimeout(async () => {
+          try {
+            await api('/api/status');
+            updateStatus(true, 'Ansluten');
+            restartBtn.disabled = false;
+            clearSettingsModified();
+            await loadSettings();
+            await loadDevices();
+            await loadStatus();
+          } catch (e) {
+            pollReconnect();
+          }
+        }, 1000);
+      };
+      pollReconnect();
+    } catch (error) {
+      console.error('Restart failed:', error);
+      restartBtn.disabled = false;
+      restartBtn.textContent = '🔄 Starta om';
+    }
+  });
+}
+
 // Toggle settings visibility
 if (elements.toggleSettingsBtn && elements.settingsContent) {
   elements.toggleSettingsBtn.addEventListener('click', () => {
@@ -1752,6 +1860,7 @@ settingsInputs.forEach(function(item) {
         const update = {};
         update[item.key] = value;
         saveSettings(update);
+        markSettingsModified();
       }
     });
   }
