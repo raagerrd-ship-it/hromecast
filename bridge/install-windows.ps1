@@ -1,10 +1,32 @@
 # Chromecast Bridge - Windows Installer (Multi-Instance Support)
-# Högerklicka → "Kör med PowerShell som administratör"
+# Dubbelklicka för att köra - begär automatiskt admin-rättigheter
 # Körs vid systemstart (före inloggning)
+
+# Auto-elevate till admin om inte redan admin
+$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $isAdmin) {
+    Write-Host "Begär administratörsrättigheter..." -ForegroundColor Yellow
+    $scriptPath = $MyInvocation.MyCommand.Path
+    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`"" -Verb RunAs
+    exit
+}
 
 $ErrorActionPreference = "Stop"
 $DefaultAppName = "ChromecastBridge"
 $DefaultPort = 3000
+
+# Global felhantering - pausa alltid vid fel
+trap {
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Red
+    Write-Host "  FEL UPPSTOD!" -ForegroundColor Red
+    Write-Host "========================================" -ForegroundColor Red
+    Write-Host ""
+    Write-Host $_.Exception.Message -ForegroundColor Red
+    Write-Host ""
+    Read-Host "Tryck Enter för att stänga"
+    exit 1
+}
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
@@ -128,20 +150,6 @@ Write-Host "  Port: $Port" -ForegroundColor Green
 # 6. Skapa Scheduled Task (körs vid systemstart som SYSTEM)
 Write-Host "[6/6] Skapar autostart-tjänst..." -ForegroundColor Yellow
 
-# Kontrollera admin-rättigheter
-$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-if (-not $isAdmin) {
-    Write-Host ""
-    Write-Host "VARNING: Kör scriptet som administratör för att bridge:n" -ForegroundColor Yellow
-    Write-Host "ska kunna starta vid systemstart (före inloggning)." -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "Högerklicka på install-windows.ps1 och välj:" -ForegroundColor Gray
-    Write-Host "'Kör med PowerShell som administratör'" -ForegroundColor Cyan
-    Write-Host ""
-    Read-Host "Tryck Enter för att avsluta"
-    exit 1
-}
-
 # Ta bort eventuell befintlig task
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
 
@@ -156,6 +164,11 @@ $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoi
 
 Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Principal $Principal -Settings $Settings -Description "Chromecast Bridge - $AppName (startar vid systemstart)" | Out-Null
 
+# Verifiera att tasken skapades
+$createdTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+if (-not $createdTask) {
+    throw "Kunde inte skapa scheduled task '$TaskName'. Kontrollera att du har admin-rättigheter."
+}
 Write-Host "  Scheduled Task skapad (körs vid systemstart)" -ForegroundColor Green
 
 # Starta tjänsten direkt
@@ -163,6 +176,10 @@ Write-Host ""
 Write-Host "Startar bridge..." -ForegroundColor Yellow
 Start-ScheduledTask -TaskName $TaskName
 Start-Sleep -Seconds 3
+
+# Verifiera att tasken körs
+$taskInfo = Get-ScheduledTaskInfo -TaskName $TaskName -ErrorAction SilentlyContinue
+$taskState = (Get-ScheduledTask -TaskName $TaskName).State
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
@@ -177,9 +194,11 @@ Write-Host "Där kan du välja Chromecast och konfigurera screensaver." -Foregro
 Write-Host ""
 Write-Host "Device ID: $DeviceId" -ForegroundColor Yellow
 Write-Host "Task Name: $TaskName" -ForegroundColor Yellow
+Write-Host "Task Status: $taskState" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Bridge startar automatiskt vid systemstart (före inloggning)." -ForegroundColor Green
 Write-Host ""
 Write-Host "För att avinstallera, kör: uninstall-windows.ps1" -ForegroundColor Gray
 Write-Host ""
-Read-Host "Tryck Enter för att stänga"
+Write-Host ""
+Read-Host "Tryck Enter för att stänga (fönstret stannar öppet)"
