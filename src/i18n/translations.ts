@@ -85,6 +85,8 @@ export const translations = {
     
     // Changelog
     changelog: 'Ändringslogg',
+    showAllVersions: 'Visa alla versioner',
+    showLess: 'Visa färre',
     
     // Manual install
     manualInstall: 'Manuell installation (avancerat)',
@@ -200,6 +202,8 @@ export const translations = {
     
     // Changelog
     changelog: 'Changelog',
+    showAllVersions: 'Show all versions',
+    showLess: 'Show less',
     
     // Manual install
     manualInstall: 'Manual installation (advanced)',
