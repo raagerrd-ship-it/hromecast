@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
-import { Tv, HelpCircle, Download, Loader2, ChevronRight, Monitor, Check } from "lucide-react";
+import { Tv, HelpCircle, Download, Loader2, ChevronRight, Check } from "lucide-react";
 import { BridgeDiscovery } from "@/components/BridgeDiscovery";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -137,16 +137,10 @@ const Index = () => {
             </CardContent>
           </Card>
 
-          {/* Already installed section */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Monitor className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium text-muted-foreground">Redan installerat?</span>
-            </div>
-            
-            {/* Bridge Discovery */}
+          {/* Bridge Discovery */}
+          <section>
             <BridgeDiscovery />
-          </div>
+          </section>
 
           {/* How it works - compact */}
           <Card className="border-dashed">
