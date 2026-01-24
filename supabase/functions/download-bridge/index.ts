@@ -926,10 +926,7 @@ const PUBLIC_INDEX_HTML = `<!DOCTYPE html>
       <section class="card settings-card">
         <div class="card-header">
           <h2>⏱️ Tidsinställningar</h2>
-          <div class="header-buttons">
-            <button id="restart-btn" class="btn btn-warning btn-small" title="Starta om bridge för att tillämpa ändringar">🔄 Starta om</button>
-            <button id="toggle-settings-btn" class="btn btn-secondary btn-small">Visa</button>
-          </div>
+          <button id="toggle-settings-btn" class="btn btn-secondary btn-small">Visa</button>
         </div>
         <div class="card-content settings-content" id="settings-content" style="display: none;">
           <div class="settings-grid">
@@ -963,6 +960,9 @@ const PUBLIC_INDEX_HTML = `<!DOCTYPE html>
               <input type="number" id="cast-max-retries-input" min="1" max="100" step="1" value="3">
               <span class="hint">Antal försök innan ge upp</span>
             </div>
+          </div>
+          <div class="settings-actions">
+            <button id="restart-btn" class="btn btn-warning" title="Starta om bridge för att tillämpa ändringar">🔄 Starta om bridge</button>
           </div>
           <p class="hint settings-note">⚠️ Ändringar kräver omstart av bridge för full effekt</p>
         </div>
@@ -1152,6 +1152,12 @@ main {
   background: rgba(234, 179, 8, 0.1);
   border-left: 2px solid #eab308;
   border-radius: 4px;
+}
+
+.settings-actions {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: flex-end;
 }
 
 @media (max-width: 480px) {
