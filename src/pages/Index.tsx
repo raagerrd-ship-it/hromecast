@@ -44,28 +44,29 @@ const Index = () => {
 
   return (
     <div className="min-h-screen min-h-[100dvh] flex flex-col safe-top safe-bottom">
-      {/* Header */}
-      <header className="flex-shrink-0 px-4 pt-6 pb-4 sm:px-6 sm:pt-8">
+      {/* Hero Header */}
+      <header className="flex-shrink-0 px-4 pt-8 pb-6 sm:px-6 sm:pt-10 bg-gradient-to-b from-primary/10 to-transparent">
         <div className="max-w-lg mx-auto">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-primary/20 flex items-center justify-center">
-                <Tv className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <h1 className="text-xl font-semibold tracking-tight">Chromecast Screensaver</h1>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  Visar automatiskt en webbsida på din Chromecast när datorn är inaktiv – perfekt som digital skyltning, dashboard eller bildspel
-                </p>
-              </div>
-            </div>
+          <div className="flex justify-end mb-4">
             <Link 
               to="/setup" 
-              className="p-2 rounded-lg hover:bg-muted transition-colors"
+              className="p-2 rounded-lg hover:bg-muted/50 transition-colors"
               title="Fullständig installationsguide"
             >
               <HelpCircle className="h-5 w-5 text-muted-foreground" />
             </Link>
+          </div>
+          
+          <div className="text-center space-y-4">
+            <div className="w-16 h-16 rounded-3xl bg-primary/20 flex items-center justify-center mx-auto shadow-lg shadow-primary/10">
+              <Tv className="h-8 w-8 text-primary" />
+            </div>
+            <div className="space-y-2">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Chromecast Screensaver</h1>
+              <p className="text-sm text-muted-foreground leading-relaxed max-w-sm mx-auto">
+                Visar automatiskt en webbsida på din Chromecast när datorn är inaktiv – perfekt som digital skyltning, dashboard eller bildspel
+              </p>
+            </div>
           </div>
         </div>
       </header>
