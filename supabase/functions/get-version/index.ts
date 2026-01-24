@@ -11,9 +11,16 @@ const corsHeaders = {
 // ============================================================================
 
 const VERSION_INFO = {
-  version: "1.2.3",
+  version: "1.2.4",
   releasedAt: "2025-01-24",
   changelog: [
+    {
+      version: "1.2.4",
+      date: "2025-01-24",
+      changes: [
+        "Fixat npm-varningar: Kör npm via cmd för att undvika PowerShell stderr-fel",
+      ]
+    },
     {
       version: "1.2.3",
       date: "2025-01-24",
