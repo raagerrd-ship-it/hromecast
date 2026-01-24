@@ -2058,7 +2058,7 @@ serve(async (req) => {
       headers: {
         ...corsHeaders,
         "Content-Type": "application/zip",
-        "Content-Disposition": "attachment; filename=chromecast-bridge.zip",
+        "Content-Disposition": `attachment; filename=chromecast-bridge-${currentVersion}.zip`,
         "Content-Length": zipData.length.toString(),
       },
     });
