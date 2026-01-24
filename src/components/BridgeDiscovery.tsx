@@ -192,10 +192,6 @@ export const BridgeDiscovery = memo(() => {
         </div>
       )}
 
-      {/* Info text */}
-      <p className="text-xs text-muted-foreground text-center">
-        Bridges körs lokalt på ditt nätverk. All konfiguration sker via bridge:ens egna gränssnitt.
-      </p>
     </div>
   );
 });

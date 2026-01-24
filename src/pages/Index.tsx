@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
-import { Tv, HelpCircle, Download, Loader2, ChevronRight, Check } from "lucide-react";
+import { Tv, HelpCircle, Download, Loader2, ChevronRight } from "lucide-react";
 import { BridgeDiscovery } from "@/components/BridgeDiscovery";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -142,29 +142,6 @@ const Index = () => {
             <BridgeDiscovery />
           </section>
 
-          {/* How it works - compact */}
-          <Card className="border-dashed">
-            <CardContent className="pt-4 pb-4">
-              <div className="space-y-3">
-                <p className="text-sm font-medium">Så fungerar det</p>
-                <div className="grid gap-2 text-xs text-muted-foreground">
-                  <div className="flex items-start gap-2">
-                    <Check className="h-3.5 w-3.5 text-primary mt-0.5 flex-shrink-0" />
-                    <span>Bridge-tjänsten körs lokalt på din dator</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <Check className="h-3.5 w-3.5 text-primary mt-0.5 flex-shrink-0" />
-                    <span>Hittar Chromecast-enheter på ditt nätverk automatiskt</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <Check className="h-3.5 w-3.5 text-primary mt-0.5 flex-shrink-0" />
-                    <span>Ingen molnanslutning – helt privat</span>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
         </div>
       </main>
 
@@ -172,7 +149,7 @@ const Index = () => {
       <footer className="flex-shrink-0 px-4 py-3 sm:px-6 border-t bg-card/50">
         <div className="max-w-lg mx-auto">
           <p className="text-xs text-muted-foreground text-center">
-            Varje bridge fungerar helt lokalt utan molnanslutning.
+            Körs lokalt • Hittar Chromecasts automatiskt • Ingen molnanslutning
           </p>
         </div>
       </footer>
