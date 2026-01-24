@@ -11,9 +11,16 @@ const corsHeaders = {
 // ============================================================================
 
 const VERSION_INFO = {
-  version: "1.2.6",
+  version: "1.2.7",
   releasedAt: "2025-01-24",
   changelog: [
+    {
+      version: "1.2.7",
+      date: "2025-01-24",
+      changes: [
+        "Versionsvisning: Bridge-version visas nu i dashboardens header",
+      ]
+    },
     {
       version: "1.2.6",
       date: "2025-01-24",

@@ -16,6 +16,7 @@ async function api(path, options = {}) {
 const elements = {
   status: document.getElementById('status'),
   statusText: document.getElementById('status-text'),
+  versionBadge: document.getElementById('version-badge'),
   chromecastSelect: document.getElementById('chromecast-select'),
   refreshBtn: document.getElementById('refresh-btn'),
   deviceCount: document.getElementById('device-count'),
@@ -171,6 +172,11 @@ async function loadStatus() {
     const data = await api('/api/status');
     elements.port.textContent = data.port || '-';
     updateScreensaverStatus(data.screensaverActive);
+    
+    // Update version badge
+    if (data.version && elements.versionBadge) {
+      elements.versionBadge.textContent = 'v' + data.version;
+    }
     
     // Update network URL display
     if (data.networkUrl && elements.networkUrl) {
