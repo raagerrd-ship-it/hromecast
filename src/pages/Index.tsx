@@ -4,11 +4,11 @@ import { BridgeDiscovery } from "@/components/BridgeDiscovery";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useDownloadBridge } from "@/hooks/use-download-bridge";
-import { BRIDGE_VERSION } from "@/config/version";
+import { useLatestVersion } from "@/hooks/use-latest-version";
 
 const Index = () => {
   const { downloadBridge, isDownloading } = useDownloadBridge();
-
+  const { version, isLoading: isLoadingVersion } = useLatestVersion();
   return (
     <div className="min-h-screen min-h-[100dvh] flex flex-col safe-top safe-bottom">
       {/* Hero Header */}
@@ -114,7 +114,9 @@ const Index = () => {
             Körs lokalt • Ingen molnanslutning
           </p>
           <p className="text-xs text-muted-foreground">
-            Senaste version: <span className="font-medium text-foreground">v{BRIDGE_VERSION}</span>
+            Senaste version: <span className="font-medium text-foreground">
+              {isLoadingVersion ? "..." : `v${version}`}
+            </span>
           </p>
         </div>
       </footer>

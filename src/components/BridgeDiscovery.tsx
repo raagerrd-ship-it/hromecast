@@ -15,10 +15,11 @@ import {
   AlertTriangle
 } from "lucide-react";
 import { useLocalBridges, LocalBridge } from "@/hooks/use-local-bridges";
-import { BRIDGE_VERSION } from "@/config/version";
+import { useLatestVersion } from "@/hooks/use-latest-version";
 
 export const BridgeDiscovery = memo(() => {
   const { bridges, isScanning, addBridge, removeBridge, checkAllBridges, scanLocalhost } = useLocalBridges();
+  const { version: latestVersion } = useLatestVersion();
   const [showAddForm, setShowAddForm] = useState(false);
   const [newHost, setNewHost] = useState("");
   const [newPort, setNewPort] = useState("3000");
@@ -163,11 +164,11 @@ export const BridgeDiscovery = memo(() => {
                   <p className="text-sm font-medium truncate">{bridge.name}</p>
                   {bridge.isOnline && bridge.version && (
                     <Badge 
-                      variant={bridge.version === BRIDGE_VERSION ? "secondary" : "destructive"}
+                      variant={bridge.version === latestVersion ? "secondary" : "destructive"}
                       className="text-xs"
                     >
                       v{bridge.version}
-                      {bridge.version !== BRIDGE_VERSION && (
+                      {bridge.version !== latestVersion && (
                         <AlertTriangle className="h-3 w-3 ml-1" />
                       )}
                     </Badge>
@@ -176,13 +177,13 @@ export const BridgeDiscovery = memo(() => {
                 <p className="text-xs text-muted-foreground">
                   {bridge.host}:{bridge.port}
                   {bridge.lastSeen && (
-                    <span className="ml-2">
-                      • Sedd {new Date(bridge.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  )}
-                  {bridge.isOnline && bridge.version && bridge.version !== BRIDGE_VERSION && (
-                    <span className="ml-2 text-destructive">
-                      • Ny version tillgänglig (v{BRIDGE_VERSION})
+                      <span className="ml-2">
+                        • Sedd {new Date(bridge.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    )}
+                    {bridge.isOnline && bridge.version && bridge.version !== latestVersion && (
+                      <span className="ml-2 text-destructive">
+                        • Ny version tillgänglig (v{latestVersion})
                     </span>
                   )}
                 </p>
