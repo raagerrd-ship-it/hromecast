@@ -1,13 +1,17 @@
-import { ArrowLeft, Download, Terminal, CheckCircle, Copy, Check, Loader2, Globe } from "lucide-react";
+import { ArrowLeft, Download, Terminal, CheckCircle, Copy, Check, Loader2, Globe, Wifi, WifiOff } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 const Setup = () => {
   const [copiedLinux, setCopiedLinux] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
+  const [bridgeStatus, setBridgeStatus] = useState<'unknown' | 'online' | 'offline'>('unknown');
+  const { toast } = useToast();
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -53,6 +57,46 @@ const Setup = () => {
       }
     } finally {
       setIsDownloading(false);
+    }
+  };
+
+  const testBridgeConnection = async () => {
+    setIsTesting(true);
+    setBridgeStatus('unknown');
+    
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      const response = await fetch('http://localhost:3000/api/status', {
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        const data = await response.json();
+        setBridgeStatus('online');
+        toast({
+          title: "Bridge är igång! ✓",
+          description: `Device ID: ${data.deviceId || 'okänt'}`,
+        });
+      } else {
+        setBridgeStatus('offline');
+        toast({
+          title: "Bridge svarar inte korrekt",
+          description: "Servern svarade men returnerade ett fel.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      setBridgeStatus('offline');
+      toast({
+        title: "Kunde inte ansluta till bridge",
+        description: "Kontrollera att bridge körs på localhost:3000",
+        variant: "destructive",
+      });
+    } finally {
+      setIsTesting(false);
     }
   };
 
@@ -187,9 +231,41 @@ const Setup = () => {
           <CardContent>
             <div className="space-y-4">
               <div className="bg-background rounded-lg p-4 border">
-                <p className="font-medium mb-2">Öppna konfigurationssidan:</p>
-                <code className="text-lg text-primary">http://localhost:3000</code>
-                <p className="text-xs text-muted-foreground mt-2">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div>
+                    <p className="font-medium mb-1">Öppna konfigurationssidan:</p>
+                    <code className="text-lg text-primary">http://localhost:3000</code>
+                  </div>
+                  <Button 
+                    onClick={testBridgeConnection}
+                    disabled={isTesting}
+                    variant={bridgeStatus === 'online' ? 'default' : bridgeStatus === 'offline' ? 'destructive' : 'outline'}
+                    size="sm"
+                  >
+                    {isTesting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Testar...
+                      </>
+                    ) : bridgeStatus === 'online' ? (
+                      <>
+                        <Wifi className="h-4 w-4 mr-2" />
+                        Online
+                      </>
+                    ) : bridgeStatus === 'offline' ? (
+                      <>
+                        <WifiOff className="h-4 w-4 mr-2" />
+                        Offline - Testa igen
+                      </>
+                    ) : (
+                      <>
+                        <Wifi className="h-4 w-4 mr-2" />
+                        Testa anslutning
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-3">
                   Eller från annan enhet: <code className="bg-muted px-1 rounded">http://&lt;dator-ip&gt;:3000</code>
                 </p>
               </div>
