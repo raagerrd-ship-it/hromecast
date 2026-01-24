@@ -11,9 +11,18 @@ const corsHeaders = {
 // ============================================================================
 
 const VERSION_INFO = {
-  version: "1.4.0",
-  releasedAt: "2025-01-24",
+  version: "1.5.0",
+  releasedAt: "2026-01-24",
   changelog: [
+    {
+      version: "1.5.0",
+      date: "2026-01-24",
+      changes: [
+        "Fixat casting: Använder nu raw castv2 för att kommunicera med Chromecast",
+        "Robust anslutning: Manuella channels för connection, heartbeat och receiver",
+        "Kompatibilitet: Samma beprövade metod som fungerat i produktion i en månad",
+      ]
+    },
     {
       version: "1.4.0",
       date: "2025-01-24",
@@ -21,15 +30,6 @@ const VERSION_INFO = {
         "Omstartsknapp: Ny knapp i dashboarden för att starta om bridge-tjänsten",
         "Visuell indikator: Omstartsknappen markeras när timing-inställningar ändrats",
         "Max försök utökat: Kan nu ställas in upp till 100 istället för 10",
-      ]
-    },
-    {
-      version: "1.3.0",
-      date: "2025-01-24",
-      changes: [
-        "Konfigurerbar timing: Alla tidsintervall kan nu justeras via inställningar",
-        "Ny inställningssektion i dashboarden för tidskonfiguration",
-        "Justerbar screensaver-kontroll, keep-alive, discovery, retry mm",
       ]
     },
     {
