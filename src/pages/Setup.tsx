@@ -1,4 +1,4 @@
-import { ArrowLeft, Download, Terminal, CheckCircle, Copy, Check, Loader2, Wifi, WifiOff, Monitor, Cpu } from "lucide-react";
+import { ArrowLeft, Download, Terminal, CheckCircle, Copy, Check, Loader2, Wifi, WifiOff, Monitor, Cpu, ChevronDown } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,8 +8,67 @@ import { useDownloadBridge } from "@/hooks/use-download-bridge";
 import { useLatestVersion } from "@/hooks/use-latest-version";
 import { useLanguage } from "@/i18n/LanguageContext";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import type { TranslationKey } from "@/i18n/translations";
 
 type Platform = 'windows' | 'linux' | 'raspberry';
+
+type ChangelogEntry = {
+  version: string;
+  date: string;
+  changes: string[];
+};
+
+const ChangelogList = ({ 
+  changelog, 
+  currentVersion, 
+  t 
+}: { 
+  changelog: ChangelogEntry[]; 
+  currentVersion: string; 
+  t: (key: TranslationKey) => string;
+}) => {
+  const [showAll, setShowAll] = useState(false);
+  const displayedChangelog = showAll ? changelog : changelog.slice(0, 5);
+  const hasMore = changelog.length > 5;
+
+  return (
+    <div className="space-y-4 mt-4">
+      {displayedChangelog.map((release) => (
+        <Card key={release.version}>
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="font-semibold">v{release.version}</span>
+              <span className="text-xs text-muted-foreground">{release.date}</span>
+              {release.version === currentVersion && (
+                <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full">{t('latest')}</span>
+              )}
+            </div>
+            <ul className="space-y-1.5">
+              {release.changes.map((change, index) => (
+                <li key={index} className="text-sm text-muted-foreground flex items-start gap-2">
+                  <CheckCircle className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                  {change}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      ))}
+      
+      {hasMore && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowAll(!showAll)}
+          className="w-full text-muted-foreground hover:text-foreground"
+        >
+          <ChevronDown className={`h-4 w-4 mr-2 transition-transform ${showAll ? 'rotate-180' : ''}`} />
+          {showAll ? t('showLess') : t('showAllVersions')}
+        </Button>
+      )}
+    </div>
+  );
+};
 
 const Setup = () => {
   const [copiedCommand, setCopiedCommand] = useState<string | null>(null);
@@ -417,37 +476,22 @@ const Setup = () => {
           </section>
 
           {/* Changelog */}
-          <section className="space-y-4 pt-4 border-t">
-            <h2 className="text-lg font-semibold">{t('changelog')}</h2>
+          <details className="group pt-4 border-t">
+            <summary className="flex items-center justify-between cursor-pointer">
+              <h2 className="text-lg font-semibold">{t('changelog')}</h2>
+              <span className="text-muted-foreground group-open:rotate-180 transition-transform">▼</span>
+            </summary>
             
             {isLoadingVersion ? (
-              <div className="text-sm text-muted-foreground">{t('loading')}</div>
+              <div className="text-sm text-muted-foreground mt-4">{t('loading')}</div>
             ) : (
-              <div className="space-y-4">
-                {changelog.map((release) => (
-                  <Card key={release.version}>
-                    <CardContent className="pt-4 pb-4">
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className="font-semibold">v{release.version}</span>
-                        <span className="text-xs text-muted-foreground">{release.date}</span>
-                        {release.version === version && (
-                          <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full">{t('latest')}</span>
-                        )}
-                      </div>
-                      <ul className="space-y-1.5">
-                        {release.changes.map((change, index) => (
-                          <li key={index} className="text-sm text-muted-foreground flex items-start gap-2">
-                            <CheckCircle className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                            {change}
-                          </li>
-                        ))}
-                      </ul>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+              <ChangelogList 
+                changelog={changelog} 
+                currentVersion={version} 
+                t={t} 
+              />
             )}
-          </section>
+          </details>
 
           {/* Manual install (collapsed) */}
           <details className="group pt-4 border-t">
