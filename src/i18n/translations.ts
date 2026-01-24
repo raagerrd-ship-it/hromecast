@@ -88,11 +88,22 @@ export const translations = {
     
     // Manual install
     manualInstall: 'Manuell installation (avancerat)',
+    manualInstallDesc: 'För dig som vill ha full kontroll eller köra på annan plattform.',
     installNodejs: 'Installera Node.js 18+',
     downloadFromNodejs: 'Ladda ner från nodejs.org',
+    verifyNodeInstall: 'Verifiera installationen:',
+    extractAndNavigate: 'Packa upp och navigera till mappen',
     installDependencies: 'Installera dependencies',
     createEnvFile: 'Skapa .env-fil',
-    start: 'Starta',
+    envFileDesc: 'Skapa en fil som heter .env i bridge-mappen med följande innehåll:',
+    deviceIdExplanation: 'DEVICE_ID är ett unikt namn för din bridge (används för mDNS)',
+    portExplanation: 'PORT är vilken port dashboarden ska köras på',
+    start: 'Starta bridge',
+    startInBackground: 'Kör i bakgrunden (Linux/Mac):',
+    verifyRunning: 'Verifiera att bridge körs:',
+    shouldSeeJson: 'Du bör se ett JSON-svar med status och deviceId.',
+    autostart: 'Autostart (valfritt)',
+    autostartDesc: 'För att bridge ska starta automatiskt vid systemstart, se installationsskripten för inspiration eller skapa en systemd service / scheduled task.',
     
     // Toast messages
     bridgeOnline: 'Bridge är igång! ✓',
@@ -190,11 +201,22 @@ export const translations = {
     
     // Manual install
     manualInstall: 'Manual installation (advanced)',
+    manualInstallDesc: 'For those who want full control or run on another platform.',
     installNodejs: 'Install Node.js 18+',
     downloadFromNodejs: 'Download from nodejs.org',
+    verifyNodeInstall: 'Verify the installation:',
+    extractAndNavigate: 'Extract and navigate to the folder',
     installDependencies: 'Install dependencies',
     createEnvFile: 'Create .env file',
-    start: 'Start',
+    envFileDesc: 'Create a file named .env in the bridge folder with the following content:',
+    deviceIdExplanation: 'DEVICE_ID is a unique name for your bridge (used for mDNS)',
+    portExplanation: 'PORT is which port the dashboard should run on',
+    start: 'Start bridge',
+    startInBackground: 'Run in background (Linux/Mac):',
+    verifyRunning: 'Verify that bridge is running:',
+    shouldSeeJson: 'You should see a JSON response with status and deviceId.',
+    autostart: 'Autostart (optional)',
+    autostartDesc: 'To have the bridge start automatically at system boot, see the installation scripts for inspiration or create a systemd service / scheduled task.',
     
     // Toast messages
     bridgeOnline: 'Bridge is running! ✓',
