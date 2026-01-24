@@ -15,6 +15,7 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const PORT = parseInt(process.env.PORT || '3000');
 const DEVICE_ID = process.env.DEVICE_ID || 'default-bridge';
 const CUSTOM_APP_ID = 'FE376873';
+const BACKDROP_APP_ID = 'E8C28D3C';
 
 // Initialize Bonjour and Chromecasts
 const bonjour = new Bonjour();
@@ -32,6 +33,15 @@ const DEFAULT_CONFIG = {
   url: '',
   selectedChromecast: null,
   idleTimeout: 5
+};
+
+// ============ Structured Logging ============
+
+const log = {
+  info: (msg, ...args) => console.log(`[INFO] ${new Date().toISOString()} - ${msg}`, ...args),
+  warn: (msg, ...args) => console.warn(`[WARN] ${new Date().toISOString()} - ${msg}`, ...args),
+  error: (msg, ...args) => console.error(`[ERROR] ${new Date().toISOString()} - ${msg}`, ...args),
+  debug: (msg, ...args) => process.env.DEBUG && console.log(`[DEBUG] ${new Date().toISOString()} - ${msg}`, ...args)
 };
 
 // ============ Network Utilities ============
@@ -99,10 +109,11 @@ function saveConfig(config) {
 
 function discoverDevices() {
   return new Promise((resolve) => {
-    console.log('🔍 Scanning for Chromecast devices...');
+    log.info('🔍 Scanning for Chromecast devices...');
     
     const browser = bonjour.find({ type: 'googlecast' });
     const foundDevices = [];
+    let resolved = false;
     
     browser.on('up', (service) => {
       const name = service.name || service.txt?.fn || 'Unknown';
@@ -112,15 +123,31 @@ function discoverDevices() {
       if (host && !foundDevices.find(d => d.host === host)) {
         const device = { name, host, port };
         foundDevices.push(device);
-        console.log(`✅ Found: ${name} at ${host}:${port}`);
+        log.info(`✅ Found: ${name} at ${host}:${port}`);
       }
     });
     
+    // Early resolve if devices found after 3 seconds
+    const earlyResolveTimeout = setTimeout(() => {
+      if (foundDevices.length > 0 && !resolved) {
+        resolved = true;
+        browser.stop();
+        discoveredDevices = foundDevices;
+        log.info(`📡 Discovery complete (early): ${foundDevices.length} device(s)`);
+        resolve(foundDevices);
+      }
+    }, 3000);
+    
+    // Max timeout of 8 seconds
     setTimeout(() => {
-      browser.stop();
-      discoveredDevices = foundDevices;
-      console.log(`📡 Discovery complete: ${foundDevices.length} device(s)`);
-      resolve(foundDevices);
+      clearTimeout(earlyResolveTimeout);
+      if (!resolved) {
+        resolved = true;
+        browser.stop();
+        discoveredDevices = foundDevices;
+        log.info(`📡 Discovery complete: ${foundDevices.length} device(s)`);
+        resolve(foundDevices);
+      }
     }, 8000);
   });
 }
@@ -132,8 +159,21 @@ function keepSessionAlive() {
   keepAliveInterval = setInterval(() => {
     if (currentDevice) {
       try {
-        currentDevice.status(() => {});
-      } catch (e) {}
+        currentDevice.status((err, status) => {
+          if (err) {
+            log.warn('⚠️ Keep-alive status check failed:', err.message);
+            // Session may have been lost - flag for reconnect
+            if (screensaverActive) {
+              log.info('🔄 Session lost, will retry on next check');
+              screensaverActive = false;
+            }
+          } else {
+            log.debug('Keep-alive ping successful');
+          }
+        });
+      } catch (e) {
+        log.warn('⚠️ Keep-alive exception:', e.message);
+      }
     }
   }, 5000);
 }
@@ -146,8 +186,13 @@ async function isChromecastIdle(device) {
       device.status((err, status) => {
         clearTimeout(timeout);
         if (err) { resolve(true); return; }
-        const isIdle = !status?.applications || status.applications.length === 0 ||
-          status.applications.some(app => app.appId === CUSTOM_APP_ID);
+        // FIXED: Use every() instead of some() - device is idle only if ALL apps are our custom app or backdrop
+        const isIdle = !status?.applications || 
+          status.applications.length === 0 ||
+          status.applications.every(app => 
+            app.appId === CUSTOM_APP_ID || app.appId === BACKDROP_APP_ID
+          );
+        log.debug(`Idle check: ${isIdle}, apps: ${JSON.stringify(status?.applications?.map(a => a.appId) || [])}`);
         resolve(isIdle);
       });
     } catch (e) { clearTimeout(timeout); resolve(true); }
@@ -172,20 +217,35 @@ async function castMedia(chromecastName, url) {
     }
     
     currentDevice = player;
-    console.log(`📺 Casting to ${chromecastName}: ${url}`);
+    log.info(`📺 Casting to ${chromecastName}: ${url}`);
     
     player.play(url, { type: 'text/html', autoplay: true, appId: CUSTOM_APP_ID }, (err) => {
       if (err) {
-        console.error('❌ Cast failed:', err.message);
+        log.error('❌ Cast failed:', err.message);
         reject(err);
       } else {
-        console.log('✅ Cast successful');
+        log.info('✅ Cast successful');
         screensaverActive = true;
         keepSessionAlive();
         resolve({ success: true });
       }
     });
   });
+}
+
+// Retry wrapper for cast operations with exponential backoff
+async function castMediaWithRetry(chromecastName, url, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await castMedia(chromecastName, url);
+    } catch (error) {
+      log.warn(`⚠️ Cast attempt ${attempt}/${maxRetries} failed: ${error.message}`);
+      if (attempt === maxRetries) throw error;
+      const delay = 2000 * attempt; // Exponential backoff: 2s, 4s, 6s
+      log.info(`🔄 Retrying in ${delay / 1000}s...`);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
 }
 
 async function stopCast(chromecastName) {
@@ -200,7 +260,7 @@ async function stopCast(chromecastName) {
       player.stop(() => {
         screensaverActive = false;
         if (keepAliveInterval) clearInterval(keepAliveInterval);
-        console.log('⏹️ Cast stopped');
+        log.info('⏹️ Cast stopped');
         resolve({ success: true });
       });
     } catch (error) {
@@ -220,11 +280,11 @@ async function checkAndActivateScreensaver() {
   
   const idle = await isChromecastIdle(player);
   if (idle && !screensaverActive) {
-    console.log('💤 Device idle, activating screensaver...');
+    log.info('💤 Device idle, activating screensaver...');
     try {
-      await castMedia(config.selectedChromecast, config.url);
+      await castMediaWithRetry(config.selectedChromecast, config.url);
     } catch (error) {
-      console.error('Failed to activate screensaver:', error.message);
+      log.error('Failed to activate screensaver:', error.message);
     }
   }
 }
@@ -407,7 +467,7 @@ async function main() {
   console.log('║     Chromecast Bridge Service          ║');
   console.log('╚════════════════════════════════════════╝');
   console.log('');
-  console.log(`📍 Device ID: ${DEVICE_ID}`);
+  log.info(`📍 Device ID: ${DEVICE_ID}`);
   console.log('');
   console.log('🌐 Åtkomst:');
   console.log(`   Lokal:    http://localhost:${PORT}`);
@@ -417,7 +477,7 @@ async function main() {
   
   // Write network info to file (for background services)
   writeNetworkInfo();
-  console.log(`📄 Nätverksinfo sparad till: network-info.txt`);
+  log.info(`📄 Nätverksinfo sparad till: network-info.txt`);
   console.log('');
   
   // Initial discovery
@@ -425,12 +485,12 @@ async function main() {
   
   // Start chromecasts library discovery
   chromecasts.on('update', (player) => {
-    console.log(`📡 Chromecasts lib found: ${player.name}`);
+    log.info(`📡 Chromecasts lib found: ${player.name}`);
   });
   
   // Start HTTP server
   server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server running`);
+    log.info(`🚀 Server running`);
     
     // Publish mDNS service
     try {
@@ -440,12 +500,12 @@ async function main() {
         port: PORT,
         txt: { 
           type: 'chromecast-bridge',
-          version: '1.0.0'
+          version: BRIDGE_VERSION
         }
       });
-      console.log(`📡 mDNS publicerad: ${DEVICE_ID}.local`);
+      log.info(`📡 mDNS publicerad: ${DEVICE_ID}.local`);
     } catch (error) {
-      console.error('mDNS publishing failed:', error.message);
+      log.error('mDNS publishing failed:', error.message);
     }
   });
   
@@ -462,7 +522,7 @@ async function main() {
   console.log('Press Ctrl+C to stop.');
   
   process.on('SIGINT', () => {
-    console.log('\n👋 Shutting down...');
+    log.info('👋 Shutting down...');
     if (keepAliveInterval) clearInterval(keepAliveInterval);
     bonjour.destroy();
     server.close();
