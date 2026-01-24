@@ -1,4 +1,4 @@
-import { ScreensaverSettings, ScreensaverConfig } from "@/components/ScreensaverSettings";
+import { ScreensaverSettings } from "@/components/ScreensaverSettings";
 import { Link } from "react-router-dom";
 import { ChromecastSelector } from "@/components/ChromecastSelector";
 import { ActivityLog } from "@/components/ActivityLog";
@@ -6,214 +6,30 @@ import { IPRecoveryStatus } from "@/components/IPRecoveryStatus";
 import { Play, Tv, HelpCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useCallback } from "react";
+import { useActivityLog } from "@/hooks/use-activity-log";
+import { useScreensaverSettings } from "@/hooks/use-screensaver-settings";
+import { useBridgeStatus } from "@/hooks/use-bridge-status";
+import { usePreviewScale } from "@/hooks/use-preview-scale";
 
-const SCREENSAVER_CONFIG_KEY = "chromecast-screensaver-config";
-
-// Memoized device ID - only created once
 const DEVICE_ID = "device-1764517968693-qxx7xr08y";
-
-// Debounce helper
-function useDebouncedValue<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState(value);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedValue(value), delay);
-    return () => clearTimeout(timer);
-  }, [value, delay]);
-
-  return debouncedValue;
-}
 
 const Index = () => {
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(true);
-  const hasInitializedRef = useRef(false); // Prevents saving before first load completes
   
-  const [screensaverConfig, setScreensaverConfig] = useState<ScreensaverConfig>({
-    enabled: false,
-    url: "",
-    idleTimeout: 5,
-    checkInterval: 10,
-  });
-  
-  const [selectedChromecastId, setSelectedChromecastId] = useState<string | null>(null);
-  const [activityLog, setActivityLog] = useState<any[]>([]);
-  const [screensaverActive, setScreensaverActive] = useState(false);
-  const [previewScale, setPreviewScale] = useState(0.35);
-  const [currentTime, setCurrentTime] = useState(Date.now());
-  const previewContainerRef = useRef<HTMLDivElement>(null);
+  // Custom hooks
+  const { activityLog } = useActivityLog(DEVICE_ID);
+  const {
+    screensaverConfig,
+    selectedChromecastId,
+    screensaverActive,
+    handleConfigChange,
+    handleChromecastSelected,
+  } = useScreensaverSettings(DEVICE_ID);
+  const bridgeStatus = useBridgeStatus(activityLog);
+  const [previewScale, previewContainerRef] = usePreviewScale();
 
-  // Debounce settings to reduce DB writes (500ms delay)
-  const debouncedConfig = useDebouncedValue(screensaverConfig, 500);
-  const debouncedChromecastId = useDebouncedValue(selectedChromecastId, 500);
-
-  // Memoized fetch function - also returns latest activity time for bridge status
-  const fetchActivityLog = useCallback(async () => {
-    try {
-      const { data, error } = await supabase
-        .from('cast_commands')
-        .select('*')
-        .eq('device_id', DEVICE_ID)
-        .order('processed_at', { ascending: false, nullsFirst: false })
-        .order('created_at', { ascending: false })
-        .limit(50);
-
-      if (error) throw error;
-      setActivityLog(data || []);
-    } catch (error) {
-      console.error('Error fetching activity log:', error);
-    }
-  }, []);
-
-  // Update current time every 10 seconds for footer status
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentTime(Date.now());
-    }, 10000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Preview scale calculation
-  useEffect(() => {
-    const updateScale = () => {
-      if (previewContainerRef.current) {
-        const containerWidth = previewContainerRef.current.offsetWidth;
-        setPreviewScale(containerWidth / 1920);
-      }
-    };
-    updateScale();
-    window.addEventListener('resize', updateScale);
-    return () => window.removeEventListener('resize', updateScale);
-  }, [screensaverConfig.enabled, screensaverConfig.url]);
-
-  // Initial load and realtime subscriptions
-  useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('screensaver_settings')
-          .select('*')
-          .eq('device_id', DEVICE_ID)
-          .single();
-
-        if (error && error.code !== 'PGRST116') {
-          console.error('Error loading settings:', error);
-          const saved = localStorage.getItem(SCREENSAVER_CONFIG_KEY);
-          if (saved) {
-            try {
-              setScreensaverConfig(JSON.parse(saved));
-            } catch (e) {
-              console.error('Error parsing localStorage settings:', e);
-            }
-          }
-        } else if (data) {
-          setScreensaverConfig({
-            enabled: data.enabled,
-            url: data.url || "",
-            idleTimeout: data.idle_timeout,
-            checkInterval: data.check_interval,
-          });
-          setSelectedChromecastId(data.selected_chromecast_id || null);
-          setScreensaverActive(data.screensaver_active || false);
-        }
-      } catch (error) {
-        console.error('Error loading settings:', error);
-      } finally {
-        setIsLoading(false);
-        // Mark as initialized after a short delay to let state propagate
-        setTimeout(() => {
-          hasInitializedRef.current = true;
-        }, 600); // Slightly longer than debounce delay (500ms)
-      }
-    };
-
-    loadSettings();
-    fetchActivityLog();
-
-    // Combined realtime subscription for both tables
-    const activityChannel = supabase
-      .channel('index_realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'cast_commands'
-          // Removed filter - Supabase Realtime has issues with text filters on UPDATE
-        },
-        (payload) => {
-          // Only process events for our device
-          if (payload.new && (payload.new as any).device_id === DEVICE_ID) {
-            console.log('🔔 Realtime event:', payload.eventType, payload);
-            fetchActivityLog();
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'screensaver_settings'
-        },
-        (payload) => {
-          if (payload.new && (payload.new as any).device_id === DEVICE_ID) {
-            setScreensaverActive((payload.new as any).screensaver_active || false);
-          }
-        }
-      )
-      .subscribe((status) => {
-        console.log('📡 Realtime subscription status:', status);
-      });
-
-    // Backup polling every 15 seconds in case realtime misses updates
-    const pollInterval = setInterval(() => {
-      console.log('⏰ Polling activity log...');
-      fetchActivityLog();
-    }, 15000);
-
-    return () => {
-      supabase.removeChannel(activityChannel);
-      clearInterval(pollInterval);
-    };
-  }, [fetchActivityLog]);
-
-  // Save settings with debounce - only after initial load is complete
-  useEffect(() => {
-    // Don't save until fully initialized (prevents overwriting with empty values on HMR)
-    if (isLoading || !hasInitializedRef.current) return;
-
-    const saveSettings = async () => {
-      try {
-        console.log('💾 Saving settings:', { enabled: debouncedConfig.enabled, url: debouncedConfig.url });
-        const { error } = await supabase
-          .from('screensaver_settings')
-          .upsert({
-            device_id: DEVICE_ID,
-            enabled: debouncedConfig.enabled,
-            url: debouncedConfig.url,
-            idle_timeout: debouncedConfig.idleTimeout,
-            check_interval: debouncedConfig.checkInterval,
-            selected_chromecast_id: debouncedChromecastId,
-          }, {
-            onConflict: 'device_id'
-          });
-
-        if (error) {
-          console.error('Error saving settings:', error);
-        } else {
-          localStorage.setItem(SCREENSAVER_CONFIG_KEY, JSON.stringify(debouncedConfig));
-        }
-      } catch (error) {
-        console.error('Error saving settings:', error);
-      }
-    };
-
-    saveSettings();
-  }, [debouncedConfig, debouncedChromecastId, isLoading]);
-
-  // Memoized handler
+  // Cast handler
   const handleStartScreensaver = useCallback(async (url: string) => {
     try {
       const { data: renderData, error: renderError } = await supabase.functions.invoke('render-website', {
@@ -260,52 +76,6 @@ const Index = () => {
       });
     }
   }, [toast]);
-
-  // Memoized config change handler
-  const handleConfigChange = useCallback((config: ScreensaverConfig) => {
-    setScreensaverConfig(config);
-  }, []);
-
-  // Memoized chromecast selection handler
-  const handleChromecastSelected = useCallback((id: string | null) => {
-    setSelectedChromecastId(id);
-  }, []);
-
-  // Bridge status based on latest cast_commands activity (more reliable than last_idle_check)
-  const bridgeStatus = useMemo(() => {
-    // Find the most recent processed_at from activity log
-    const latestActivity = activityLog.length > 0 && activityLog[0].processed_at 
-      ? new Date(activityLog[0].processed_at) 
-      : null;
-    const isOnline = latestActivity && (currentTime - latestActivity.getTime()) < 300000; // 5 min
-    const timeStr = latestActivity?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    
-    // Extract version from bridge_start log (stored as JSON in url field)
-    let version = '';
-    const bridgeStartLog = activityLog.find(log => {
-      if (log.command_type === 'bridge_log' && log.url) {
-        try {
-          const parsed = JSON.parse(log.url);
-          return parsed.message?.includes('Bridge v');
-        } catch {
-          return log.url.includes('Bridge v');
-        }
-      }
-      return false;
-    });
-    if (bridgeStartLog?.url) {
-      try {
-        const parsed = JSON.parse(bridgeStartLog.url);
-        const match = parsed.message?.match(/Bridge v([\d.]+)/);
-        if (match) version = match[1];
-      } catch {
-        const match = bridgeStartLog.url.match(/Bridge v([\d.]+)/);
-        if (match) version = match[1];
-      }
-    }
-    
-    return { isOnline, timeStr, hasActivity: !!latestActivity, version };
-  }, [activityLog, currentTime]);
 
   return (
     <div className="min-h-screen min-h-[100dvh] flex flex-col safe-top safe-bottom">
