@@ -1,17 +1,9 @@
-import { useState, useEffect, useCallback, memo } from "react";
+import { useCallback, memo } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tv, RefreshCw, Wifi, Search } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-
-interface DiscoveredChromecast {
-  id: string;
-  chromecast_name: string;
-  chromecast_host: string;
-  chromecast_port: number;
-  last_seen: string;
-}
+import { useChromecasts } from "@/hooks/use-chromecasts";
 
 interface ChromecastSelectorProps {
   deviceId: string;
@@ -30,70 +22,7 @@ export const ChromecastSelector = memo(({
   selectedChromecastId,
   onChromecastSelected 
 }: ChromecastSelectorProps) => {
-  const [chromecasts, setChromecasts] = useState<DiscoveredChromecast[]>([]);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
-  const fetchChromecasts = useCallback(async () => {
-    try {
-      const { data, error } = await supabase
-        .from('discovered_chromecasts')
-        .select('*')
-        .eq('device_id', deviceId)
-        .order('last_seen', { ascending: false });
-
-      if (error) throw error;
-      setChromecasts(data || []);
-    } catch (error) {
-      console.error('Error fetching chromecasts:', error);
-    }
-  }, [deviceId]);
-
-  useEffect(() => {
-    fetchChromecasts();
-
-    const channel = supabase
-      .channel('chromecasts_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'discovered_chromecasts',
-          filter: `device_id=eq.${deviceId}`
-        },
-        () => {
-          fetchChromecasts();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [deviceId, fetchChromecasts]);
-
-  const handleRefresh = useCallback(async () => {
-    setIsRefreshing(true);
-    
-    // Send force_discovery command to bridge
-    try {
-      await supabase.from('cast_commands').insert({
-        device_id: deviceId,
-        command_type: 'force_discovery',
-        url: 'discovery',
-        status: 'pending'
-      });
-      console.log('🔍 Force discovery command sent');
-    } catch (error) {
-      console.error('Error sending discovery command:', error);
-    }
-    
-    // Wait for discovery to complete (mDNS takes ~8 seconds), then refresh
-    setTimeout(async () => {
-      await fetchChromecasts();
-      setIsRefreshing(false);
-    }, 10000);
-  }, [fetchChromecasts, deviceId]);
+  const { chromecasts, isRefreshing, handleRefresh } = useChromecasts(deviceId);
 
   const handleValueChange = useCallback((value: string) => {
     onChromecastSelected(value === "auto" ? null : value);
