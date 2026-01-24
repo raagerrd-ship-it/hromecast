@@ -194,6 +194,10 @@ const Setup = () => {
               <CardContent className="pt-5 pb-5 space-y-4">
                 {selectedPlatform === 'windows' && (
                   <>
+                    <h3 className="font-semibold flex items-center gap-2">
+                      <Monitor className="h-4 w-4" />
+                      Windows
+                    </h3>
                     <div className="space-y-3">
                       <div className="flex items-start gap-3">
                         <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground text-sm font-medium">1</div>
@@ -223,6 +227,10 @@ const Setup = () => {
 
                 {selectedPlatform === 'linux' && (
                   <>
+                    <h3 className="font-semibold flex items-center gap-2">
+                      <Terminal className="h-4 w-4" />
+                      Linux
+                    </h3>
                     <div className="space-y-3">
                       <div className="flex items-start gap-3">
                         <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground text-sm font-medium">1</div>
@@ -264,6 +272,10 @@ const Setup = () => {
 
                 {selectedPlatform === 'raspberry' && (
                   <>
+                    <h3 className="font-semibold flex items-center gap-2">
+                      <Cpu className="h-4 w-4" />
+                      Raspberry Pi
+                    </h3>
                     <div className="space-y-3">
                       <div className="flex items-start gap-3">
                         <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground text-sm font-medium">1</div>
