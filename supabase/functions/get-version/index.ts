@@ -11,11 +11,11 @@ const corsHeaders = {
 // ============================================================================
 
 const VERSION_INFO = {
-  version: "1.2.1",
+  version: "1.2.2",
   releasedAt: "2026-01-24",
   changelog: [
     {
-      version: "1.2.1",
+      version: "1.2.2",
       date: "2026-01-24",
       changes: [
         "Fixat: Screensaver försöker inte längre casta om när den redan körs",
