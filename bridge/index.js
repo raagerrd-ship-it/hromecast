@@ -252,9 +252,77 @@ function findDevice(name) {
   const device = discoveredDevices.find(d => d.name === name);
   if (!device) return null;
   
-  // Find player in chromecasts
-  const player = chromecasts.players.find(p => p.host === device.host || p.name === device.name);
-  return player || null;
+  // First check if player already exists in chromecasts
+  let player = chromecasts.players.find(p => p.host === device.host || p.name === device.name);
+  
+  // If not found, manually create a player connection using chromecasts library
+  if (!player) {
+    log.info(`🔌 Creating new player connection to ${device.host}:${device.port}`);
+    // The chromecasts library can connect directly to a host
+    const Client = require('castv2-client').Client;
+    const DefaultMediaReceiver = require('castv2-client').DefaultMediaReceiver;
+    
+    // Return a player-like object that uses castv2-client directly
+    return {
+      host: device.host,
+      name: device.name,
+      play: (url, options, callback) => {
+        const client = new Client();
+        client.connect(device.host, () => {
+          log.info(`🔗 Connected to ${device.host}`);
+          client.launch(DefaultMediaReceiver, { appId: options.appId }, (err, player) => {
+            if (err) {
+              log.error('❌ Launch failed:', err.message);
+              client.close();
+              callback(err);
+              return;
+            }
+            
+            const media = {
+              contentId: url,
+              contentType: options.type || 'text/html',
+              streamType: 'LIVE'
+            };
+            
+            player.load(media, { autoplay: true }, (err) => {
+              if (err) {
+                log.error('❌ Load failed:', err.message);
+                client.close();
+                callback(err);
+              } else {
+                log.info('✅ Media loaded');
+                // Store client for later use
+                currentDevice = { client, player, host: device.host };
+                callback(null);
+              }
+            });
+          });
+        });
+        
+        client.on('error', (err) => {
+          log.error('❌ Client error:', err.message);
+          client.close();
+        });
+      },
+      stop: (callback) => {
+        if (currentDevice?.client) {
+          currentDevice.client.close();
+        }
+        callback();
+      },
+      status: (callback) => {
+        if (currentDevice?.client) {
+          currentDevice.client.getStatus((err, status) => {
+            callback(err, status);
+          });
+        } else {
+          callback(null, {});
+        }
+      }
+    };
+  }
+  
+  return player;
 }
 
 async function castMedia(chromecastName, url) {
