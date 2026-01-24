@@ -137,10 +137,25 @@
       loadingEl.style.display = 'block';
       contentEl.style.display = 'none';
       
+      // Timeout to detect if iframe fails to load (X-Frame-Options, etc.)
+      let loadTimeout = setTimeout(() => {
+        console.warn('Website load timeout - may be blocked by X-Frame-Options');
+        statusEl.textContent = 'Visar: ' + url;
+        statusEl.style.display = 'block';
+        loadingEl.style.display = 'none';
+        contentEl.style.display = 'block';
+        
+        // Hide status after 5 seconds
+        setTimeout(() => {
+          statusEl.style.display = 'none';
+        }, 5000);
+      }, 10000);
+      
       // Load the URL in the iframe
       contentEl.src = url;
       
       contentEl.onload = () => {
+        clearTimeout(loadTimeout);
         console.log('Website loaded successfully');
         statusEl.textContent = 'Connected';
         loadingEl.style.display = 'none';
@@ -153,9 +168,12 @@
       };
       
       contentEl.onerror = () => {
+        clearTimeout(loadTimeout);
         console.error('Failed to load website');
-        statusEl.textContent = 'Error loading website';
+        statusEl.textContent = 'Error loading: ' + url;
         loadingEl.style.display = 'none';
+        // Still show iframe in case it partially loaded
+        contentEl.style.display = 'block';
       };
     }
     
