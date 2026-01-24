@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.0';
+const BRIDGE_VERSION = '1.3.1';
 
 // Configuration
 const CONFIG_FILE = path.join(__dirname, 'config.json');
@@ -603,8 +603,12 @@ async function castMedia(chromecastName, url, retryCount = 0) {
     });
     
     client.on('close', () => {
-      log.debug('Connection closed');
-      // Don't cleanup immediately - heartbeat might still be needed
+      log.warn('⚠️ Connection closed unexpectedly');
+      cleanup();
+      // If we thought screensaver was active, trigger recovery
+      if (screensaverActive) {
+        logScreensaverStop('network_error');
+      }
     });
     
     client.connect(device.host, () => {
@@ -617,21 +621,52 @@ async function castMedia(chromecastName, url, retryCount = 0) {
       
       connection.send({ type: 'CONNECT' });
       
-      // Keep connection alive with heartbeat
+      // Keep connection alive with heartbeat - track last PONG to detect stale connections
       const config = loadConfig();
       const heartbeatMs = (config.keepAliveInterval || 5) * 1000;
+      let lastPongTime = Date.now();
+      let missedPongs = 0;
+      const MAX_MISSED_PONGS = 3; // Allow 3 missed PONGs before considering connection dead
+      
       heartbeatInterval = setInterval(() => {
         try {
+          // Check if we've missed too many PONGs
+          const timeSinceLastPong = Date.now() - lastPongTime;
+          if (timeSinceLastPong > heartbeatMs * MAX_MISSED_PONGS) {
+            missedPongs++;
+            log.warn(`⚠️ Missed ${missedPongs} heartbeat responses (${Math.round(timeSinceLastPong/1000)}s since last PONG)`);
+            
+            if (missedPongs >= MAX_MISSED_PONGS) {
+              log.error('❌ Connection appears dead - no PONG responses');
+              cleanup();
+              if (client) {
+                try { client.close(); } catch(e) {}
+                client = null;
+              }
+              logScreensaverStop('network_error');
+              return;
+            }
+          }
+          
           heartbeat.send({ type: 'PING' });
         } catch (e) {
-          log.error('Heartbeat failed:', e.message);
+          log.error('Heartbeat send failed:', e.message);
           cleanup();
+          if (client) {
+            try { client.close(); } catch(e) {}
+            client = null;
+          }
           logScreensaverStop('network_error');
         }
       }, heartbeatMs);
       activeHeartbeats.add(heartbeatInterval);
       
-      heartbeat.on('message', () => {}); // Silent heartbeat
+      heartbeat.on('message', (data) => {
+        if (data.type === 'PONG') {
+          lastPongTime = Date.now();
+          missedPongs = 0; // Reset counter on successful PONG
+        }
+      });
       
       log.info('📡 Getting receiver status...');
       receiver.send({ type: 'GET_STATUS', requestId: 1 });

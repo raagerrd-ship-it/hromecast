@@ -19,10 +19,26 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.0";
+const VERSION = "1.3.1";
 const RELEASED_AT = "2026-01-24";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.1",
+    date: "2026-01-24",
+    changes: {
+      sv: [
+        "Heartbeat PONG-validering: Upptäcker döda anslutningar",
+        "Connection close-hantering: Startar recovery automatiskt",
+        "Fixat: Session-disconnects efter lång tid",
+      ],
+      en: [
+        "Heartbeat PONG validation: Detects dead connections",
+        "Connection close handling: Triggers recovery automatically",
+        "Fixed: Session disconnects after extended periods",
+      ],
+    }
+  },
   {
     version: "1.3.0",
     date: "2026-01-24",
