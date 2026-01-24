@@ -1,10 +1,7 @@
 project_id = "umxwaxzmoxwasryjibhe"
 
-[functions.cast-website]
-verify_jwt = false
-
-[functions.render-website]
-verify_jwt = false
-
 [functions.get-version]
+verify_jwt = false
+
+[functions.download-bridge]
 verify_jwt = false
