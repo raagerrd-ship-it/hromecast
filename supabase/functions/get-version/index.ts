@@ -20,6 +20,9 @@ const VERSION_INFO = {
       changes: [
         "Loggpanel: Se bridge-aktivitet i realtid",
         "Versionsvisning i dashboardens header",
+        "Omstartsknapp i dashboarden för att starta om bridge-tjänsten",
+        "Raw castv2-protokoll istället för chromecasts-bibliotek",
+        "Duplikat-LOAD-förebyggande med mediaLoaded-flagga",
         "Förbättrad idle-detektering och retry-logik",
         "Strukturerad loggning med tidsstämplar",
         "Snabbare discovery med early-resolve",
