@@ -1,4 +1,4 @@
-import { ArrowLeft, Download, Terminal, CheckCircle, Copy, Check, Loader2, Globe, Wifi, WifiOff, Monitor, Cpu } from "lucide-react";
+import { ArrowLeft, Download, Terminal, CheckCircle, Copy, Check, Loader2, Wifi, WifiOff, Monitor, Cpu } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
