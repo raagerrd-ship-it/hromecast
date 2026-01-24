@@ -1423,12 +1423,59 @@ async function init() {
 
 init();`;
 
-const INSTALL_WINDOWS_PS1 = `# Chromecast Bridge - Windows Installer
-# Högerklicka → "Kör med PowerShell som administratör"
+const INSTALL_WINDOWS_PS1 = `# Chromecast Bridge - Windows Installer (Multi-Instance Support)
+# Högerklicka → "Kör med PowerShell" eller dubbelklicka
+# Körs vid systemstart (före inloggning)
+
+param([switch]$Elevated)
+
+# Funktion för att pausa vid fel
+function Pause-OnError {
+    param([string]$Message)
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Red
+    Write-Host "  FEL UPPSTOD!" -ForegroundColor Red
+    Write-Host "========================================" -ForegroundColor Red
+    Write-Host ""
+    Write-Host $Message -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Tryck valfri tangent för att stänga..." -ForegroundColor Gray
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    exit 1
+}
+
+# Auto-elevate till admin om inte redan admin
+$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $isAdmin) {
+    if (-not $Elevated) {
+        Write-Host ""
+        Write-Host "Begär administratörsrättigheter..." -ForegroundColor Yellow
+        Write-Host "Klicka 'Ja' i dialogrutan som visas." -ForegroundColor Gray
+        Start-Sleep -Seconds 1
+        
+        try {
+            $scriptPath = $MyInvocation.MyCommand.Path
+            if (-not $scriptPath) {
+                $scriptPath = $PSCommandPath
+            }
+            Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File \`"$scriptPath\`" -Elevated" -Verb RunAs -Wait
+        } catch {
+            Pause-OnError "Kunde inte begära admin-rättigheter: $($_.Exception.Message)"
+        }
+        exit
+    } else {
+        Pause-OnError "Scriptet kräver administratörsrättigheter men kunde inte elevera."
+    }
+}
 
 $ErrorActionPreference = "Stop"
 $DefaultAppName = "ChromecastBridge"
 $DefaultPort = 3000
+
+# Global felhantering
+trap {
+    Pause-OnError $_.Exception.Message
+}
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
@@ -1481,11 +1528,7 @@ if (-not $nodeVersion) {
         winget install OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
     } catch {
-        Write-Host "  VARNING: Kunde inte installera Node.js automatiskt." -ForegroundColor Red
-        Write-Host "  Ladda ner manuellt från: https://nodejs.org" -ForegroundColor Red
-        Write-Host ""
-        Read-Host "Tryck Enter för att avsluta"
-        exit 1
+        Pause-OnError "Kunde inte installera Node.js automatiskt. Ladda ner manuellt från: https://nodejs.org"
     }
 }
 $nodeVersion = node --version
@@ -1523,7 +1566,7 @@ if (Test-Path $publicDir) {
 Write-Host "  Filer kopierade" -ForegroundColor Green
 
 # 4. Installera dependencies
-Write-Host "[4/6] Installerar dependencies..." -ForegroundColor Yellow
+Write-Host "[4/6] Installerar dependencies (detta kan ta några minuter)..." -ForegroundColor Yellow
 Set-Location $AppDir
 npm install --production 2>&1 | Out-Null
 Write-Host "  Dependencies installerade" -ForegroundColor Green
@@ -1537,6 +1580,8 @@ if (-not [string]::IsNullOrWhiteSpace($InstanceName)) {
 
 $EnvContent = @"
 # Chromecast Bridge Configuration
+# Genererad automatiskt $(Get-Date -Format "yyyy-MM-dd HH:mm")
+
 DEVICE_ID=$DeviceId
 PORT=$Port
 "@
@@ -1544,21 +1589,8 @@ $EnvContent | Out-File -FilePath "$AppDir\\.env" -Encoding UTF8
 Write-Host "  Device ID: $DeviceId" -ForegroundColor Green
 Write-Host "  Port: $Port" -ForegroundColor Green
 
-# 6. Skapa Scheduled Task
+# 6. Skapa Scheduled Task (körs vid systemstart som SYSTEM)
 Write-Host "[6/6] Skapar autostart-tjänst..." -ForegroundColor Yellow
-
-$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-if (-not $isAdmin) {
-    Write-Host ""
-    Write-Host "VARNING: Kör scriptet som administratör för att bridge:n" -ForegroundColor Yellow
-    Write-Host "ska kunna starta vid systemstart." -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "Högerklicka på install-windows.ps1 och välj:" -ForegroundColor Gray
-    Write-Host "'Kör med PowerShell som administratör'" -ForegroundColor Cyan
-    Write-Host ""
-    Read-Host "Tryck Enter för att avsluta"
-    exit 1
-}
 
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
 
@@ -1569,14 +1601,22 @@ $Trigger = New-ScheduledTaskTrigger -AtStartup
 $Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
 $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Days 9999)
 
-Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Principal $Principal -Settings $Settings -Description "Chromecast Bridge - $AppName" | Out-Null
+Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Principal $Principal -Settings $Settings -Description "Chromecast Bridge - $AppName (startar vid systemstart)" | Out-Null
 
-Write-Host "  Scheduled Task skapad" -ForegroundColor Green
+# Verifiera att tasken skapades
+$createdTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+if (-not $createdTask) {
+    Pause-OnError "Kunde inte skapa scheduled task '$TaskName'. Kontrollera att du har admin-rättigheter."
+}
+Write-Host "  Scheduled Task skapad (körs vid systemstart)" -ForegroundColor Green
 
 Write-Host ""
 Write-Host "Startar bridge..." -ForegroundColor Yellow
 Start-ScheduledTask -TaskName $TaskName
 Start-Sleep -Seconds 3
+
+# Verifiera att tasken körs
+$taskState = (Get-ScheduledTask -TaskName $TaskName).State
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
@@ -1587,11 +1627,19 @@ Write-Host "Öppna webbläsaren och gå till:" -ForegroundColor White
 Write-Host ""
 Write-Host "  http://localhost:$Port" -ForegroundColor Cyan
 Write-Host ""
+Write-Host "Där kan du välja Chromecast och konfigurera screensaver." -ForegroundColor Gray
+Write-Host ""
 Write-Host "Device ID: $DeviceId" -ForegroundColor Yellow
+Write-Host "Task Name: $TaskName" -ForegroundColor Yellow
+Write-Host "Task Status: $taskState" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "Bridge startar automatiskt vid systemstart (före inloggning)." -ForegroundColor Green
 Write-Host ""
 Write-Host "För att avinstallera, kör: uninstall-windows.ps1" -ForegroundColor Gray
 Write-Host ""
-Read-Host "Tryck Enter för att stänga"`;
+Write-Host ""
+Write-Host "Tryck valfri tangent för att stänga..." -ForegroundColor Gray
+$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")`;
 
 const UNINSTALL_WINDOWS_PS1 = `# Chromecast Bridge - Windows Uninstaller
 
