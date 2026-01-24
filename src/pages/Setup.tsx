@@ -84,7 +84,7 @@ POLL_INTERVAL=5000`}</code>
           </CardHeader>
           <CardContent className="space-y-4">
             <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
-              <code>node start-bridge.js</code>
+              <code>node index.js</code>
             </pre>
             <p className="text-sm text-muted-foreground">Du bör se loggar som:</p>
             <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto text-primary">
@@ -122,7 +122,7 @@ POLL_INTERVAL=5000`}</code>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">För att bridge ska starta automatiskt vid omstart, använd NSSM:</p>
             <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
-              <code>{`nssm install ChromecastBridge "C:\\Program Files\\nodejs\\node.exe" "C:\\path\\to\\bridge\\start-bridge.js"
+              <code>{`nssm install ChromecastBridge "C:\\Program Files\\nodejs\\node.exe" "C:\\path\\to\\bridge\\index.js"
 nssm set ChromecastBridge AppDirectory "C:\\path\\to\\bridge"
 nssm start ChromecastBridge`}</code>
             </pre>
