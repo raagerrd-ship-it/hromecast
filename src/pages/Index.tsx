@@ -10,21 +10,20 @@ import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 const Index = () => {
   const { downloadBridge, isDownloading } = useDownloadBridge();
-  const { version, isLoading: isLoadingVersion } = useLatestVersion();
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
+  const { version, isLoading: isLoadingVersion } = useLatestVersion(language);
 
   return (
     <div className="min-h-screen min-h-[100dvh] flex flex-col safe-top safe-bottom">
       {/* Hero Header */}
       <header className="flex-shrink-0 px-4 pt-8 pb-6 sm:px-6 sm:pt-10 bg-gradient-to-b from-primary/10 to-transparent">
         <div className="max-w-lg mx-auto">
-          {/* Language switcher */}
-          <div className="flex justify-end mb-4">
-            <LanguageSwitcher />
-          </div>
-          
           <div className="text-center space-y-4">
-            <img src={logo} alt="Chromecast Screensaver" className="h-16 w-auto mx-auto" />
+            {/* Logo + Language switcher */}
+            <div className="flex items-center justify-center gap-3">
+              <img src={logo} alt="Chromecast Screensaver" className="h-16 w-auto" />
+              <LanguageSwitcher />
+            </div>
             <div className="space-y-2">
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{t('heroTitle')}</h1>
               <p className="text-sm text-muted-foreground leading-relaxed max-w-md mx-auto">

@@ -18,8 +18,8 @@ const Setup = () => {
   const [selectedPlatform, setSelectedPlatform] = useState<Platform>('windows');
   const { toast } = useToast();
   const { downloadBridge, isDownloading } = useDownloadBridge();
-  const { version, changelog, isLoading: isLoadingVersion } = useLatestVersion();
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
+  const { version, changelog, isLoading: isLoadingVersion } = useLatestVersion(language);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
