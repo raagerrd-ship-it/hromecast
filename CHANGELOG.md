@@ -5,6 +5,13 @@ Alla betydande ändringar i Chromecast Bridge dokumenteras här.
 Formatet är baserat på [Keep a Changelog](https://keepachangelog.com/sv/1.0.0/),
 och projektet följer [Semantic Versioning](https://semver.org/lang/sv/).
 
+## [1.2.1] - 2026-01-24
+
+### Fixat
+- **Health check**: Verifierar att screensaver-appen fortfarande körs innan idle-check
+- **Återanslutningsbugg**: Förhindrar att bridge försöker återansluta till redan körande screensaver
+- **Konservativ felhantering**: Antar att appen körs vid timeout/error istället för att störa sessionen
+
 ## [1.1.0] - 2025-01-24
 
 ### Tillagt
