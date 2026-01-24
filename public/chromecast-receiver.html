@@ -63,7 +63,6 @@
     
     // No fallback - wait for explicit content from bridge
     let contentLoaded = false;
-    let mediaSessionActive = false;
     
     // Set iframe to fill screen exactly
     function setupIframe() {
@@ -120,11 +119,7 @@
           
           if (isWebsite) {
             loadWebsite(url);
-            mediaSessionActive = true;
-            
-            // Return null to prevent default media handling
-            // The iframe handles the content instead
-            return null;
+            return null; // Block default media handling
           }
         }
         
@@ -142,25 +137,10 @@
       loadingEl.style.display = 'block';
       contentEl.style.display = 'none';
       
-      // Timeout to detect if iframe fails to load (X-Frame-Options, etc.)
-      let loadTimeout = setTimeout(() => {
-        console.warn('Website load timeout - may be blocked by X-Frame-Options');
-        statusEl.textContent = 'Visar: ' + url;
-        statusEl.style.display = 'block';
-        loadingEl.style.display = 'none';
-        contentEl.style.display = 'block';
-        
-        // Hide status after 5 seconds
-        setTimeout(() => {
-          statusEl.style.display = 'none';
-        }, 5000);
-      }, 10000);
-      
       // Load the URL in the iframe
       contentEl.src = url;
       
       contentEl.onload = () => {
-        clearTimeout(loadTimeout);
         console.log('Website loaded successfully');
         statusEl.textContent = 'Connected';
         loadingEl.style.display = 'none';
@@ -173,12 +153,9 @@
       };
       
       contentEl.onerror = () => {
-        clearTimeout(loadTimeout);
         console.error('Failed to load website');
-        statusEl.textContent = 'Error loading: ' + url;
+        statusEl.textContent = 'Error loading website';
         loadingEl.style.display = 'none';
-        // Still show iframe in case it partially loaded
-        contentEl.style.display = 'block';
       };
     }
     
@@ -193,14 +170,12 @@
       window.location.reload();
     }, 45 * 60 * 1000);
     
-    // Start the receiver with extended options
+    // Start the receiver
     const options = new cast.framework.CastReceiverOptions();
     options.disableIdleTimeout = true;
-    options.maxInactivity = 3600; // 1 hour before auto-shutdown
-    options.supportedCommands = cast.framework.messages.Command.ALL_BASIC_MEDIA;
     
     context.start(options);
-    console.log('Chromecast receiver started with idle timeout disabled');
+    console.log('Chromecast receiver started');
   </script>
 </body>
 </html>

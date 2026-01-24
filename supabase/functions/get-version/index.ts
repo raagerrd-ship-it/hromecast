@@ -11,21 +11,12 @@ const corsHeaders = {
 // ============================================================================
 
 const VERSION_INFO = {
-  version: "1.2.2",
+  version: "1.2.0",
   releasedAt: "2026-01-24",
   changelog: [
     {
-      version: "1.2.2",
-      date: "2026-01-24",
-      changes: [
-        "Fixat: Screensaver försöker inte längre casta om när den redan körs",
-        "Förbättrad receiver-app med idle timeout-skydd",
-        "Bättre felhantering vid iframe-laddning",
-      ]
-    },
-    {
       version: "1.2.0",
-      date: "2026-01-24",
+      date: "2025-01-24",
       changes: [
         "Loggpanel: Se bridge-aktivitet i realtid",
         "Versionsvisning i dashboardens header",
