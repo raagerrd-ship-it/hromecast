@@ -4,54 +4,23 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useDownloadBridge } from "@/hooks/use-download-bridge";
 import { BRIDGE_VERSION } from "@/config/version";
 
 type Platform = 'windows' | 'linux' | 'raspberry';
 
 const Setup = () => {
-  const [copiedCommand, setCopiedCommand] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false);
+  const [copiedCommand, setCopiedCommand] = useState<string | null>(null);
   const [isTesting, setIsTesting] = useState(false);
   const [bridgeStatus, setBridgeStatus] = useState<'unknown' | 'online' | 'offline'>('unknown');
   const [selectedPlatform, setSelectedPlatform] = useState<Platform>('windows');
   const { toast } = useToast();
+  const { downloadBridge, isDownloading } = useDownloadBridge();
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    setCopiedCommand(true);
-    setTimeout(() => setCopiedCommand(false), 2000);
-  };
-
-  const downloadBridge = async () => {
-    setIsDownloading(true);
-    try {
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/download-bridge`);
-      if (!response.ok) throw new Error('Download failed');
-      
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'chromecast-bridge.zip';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      toast({
-        title: "Nedladdning startad",
-        description: "Packa upp filen och följ instruktionerna.",
-      });
-    } catch (error) {
-      console.error('Download failed:', error);
-      toast({
-        title: "Nedladdning misslyckades",
-        description: "Försök igen eller kontrollera anslutningen.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsDownloading(false);
-    }
+    setCopiedCommand(text);
+    setTimeout(() => setCopiedCommand(null), 2000);
   };
 
   const testBridgeConnection = async () => {
@@ -248,7 +217,7 @@ const Setup = () => {
                               className="shrink-0 h-8 w-8 p-0"
                               onClick={() => copyToClipboard('chmod +x install-linux.sh && ./install-linux.sh')}
                             >
-                              {copiedCommand ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                              {copiedCommand === 'chmod +x install-linux.sh && ./install-linux.sh' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                             </Button>
                           </div>
                         </div>
@@ -296,7 +265,7 @@ const Setup = () => {
                               className="absolute right-1 top-1 h-8 w-8 p-0"
                               onClick={() => copyToClipboard('unzip chromecast-bridge.zip && cd chromecast-bridge && chmod +x install-linux.sh && ./install-linux.sh')}
                             >
-                              {copiedCommand ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                              {copiedCommand === 'unzip chromecast-bridge.zip && cd chromecast-bridge && chmod +x install-linux.sh && ./install-linux.sh' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                             </Button>
                           </div>
                         </div>
