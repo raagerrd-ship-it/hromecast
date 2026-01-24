@@ -1,5 +1,6 @@
 # Chromecast Bridge - Windows Installer (Multi-Instance Support)
-# Högerklicka → "Kör med PowerShell"
+# Högerklicka → "Kör med PowerShell som administratör"
+# Körs vid systemstart (före inloggning)
 
 $ErrorActionPreference = "Stop"
 $DefaultAppName = "ChromecastBridge"
@@ -126,8 +127,22 @@ $EnvContent | Out-File -FilePath "$AppDir\.env" -Encoding UTF8
 Write-Host "  Device ID: $DeviceId" -ForegroundColor Green
 Write-Host "  Port: $Port" -ForegroundColor Green
 
-# 6. Skapa Scheduled Task
+# 6. Skapa Scheduled Task (körs vid systemstart som SYSTEM)
 Write-Host "[6/6] Skapar autostart-tjänst..." -ForegroundColor Yellow
+
+# Kontrollera admin-rättigheter
+$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $isAdmin) {
+    Write-Host ""
+    Write-Host "VARNING: Kör scriptet som administratör för att bridge:n" -ForegroundColor Yellow
+    Write-Host "ska kunna starta vid systemstart (före inloggning)." -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Högerklicka på install-windows.ps1 och välj:" -ForegroundColor Gray
+    Write-Host "'Kör med PowerShell som administratör'" -ForegroundColor Cyan
+    Write-Host ""
+    Read-Host "Tryck Enter för att avsluta"
+    exit 1
+}
 
 # Ta bort eventuell befintlig task
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
@@ -135,15 +150,15 @@ Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction Silent
 # Hitta node.exe
 $NodePath = (Get-Command node).Source
 
-# Skapa task som körs vid login
+# Skapa task som körs vid systemstart som SYSTEM-användare
 $Action = New-ScheduledTaskAction -Execute $NodePath -Argument "index.js" -WorkingDirectory $AppDir
-$Trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
-$Principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
-$Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+$Trigger = New-ScheduledTaskTrigger -AtStartup
+$Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+$Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Days 9999)
 
-Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Principal $Principal -Settings $Settings -Description "Chromecast Bridge - $AppName" | Out-Null
+Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Principal $Principal -Settings $Settings -Description "Chromecast Bridge - $AppName (startar vid systemstart)" | Out-Null
 
-Write-Host "  Scheduled Task skapad" -ForegroundColor Green
+Write-Host "  Scheduled Task skapad (körs vid systemstart)" -ForegroundColor Green
 
 # Starta tjänsten direkt
 Write-Host ""
@@ -165,7 +180,7 @@ Write-Host ""
 Write-Host "Device ID: $DeviceId" -ForegroundColor Yellow
 Write-Host "Task Name: $TaskName" -ForegroundColor Yellow
 Write-Host ""
-Write-Host "Bridge startar automatiskt vid inloggning." -ForegroundColor Gray
+Write-Host "Bridge startar automatiskt vid systemstart (före inloggning)." -ForegroundColor Green
 Write-Host ""
 Write-Host "För att avinstallera, kör: uninstall-windows.ps1" -ForegroundColor Gray
 Write-Host ""

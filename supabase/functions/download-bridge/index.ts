@@ -1392,7 +1392,8 @@ async function init() {
 init();
 `,
 
-  "install-windows.ps1": `$ErrorActionPreference = "Stop"
+  "install-windows.ps1": `# Högerklicka -> "Kör med PowerShell som administratör"
+$ErrorActionPreference = "Stop"
 $DefaultAppName = "ChromecastBridge"
 $DefaultPort = 3000
 
@@ -1401,6 +1402,15 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  Chromecast Bridge Installer" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
+
+# Kontrollera admin-rättigheter
+$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $isAdmin) {
+    Write-Host "VARNING: Kör scriptet som administratör för systemstart." -ForegroundColor Yellow
+    Write-Host "Högerklicka -> 'Kör med PowerShell som administratör'" -ForegroundColor Gray
+    Read-Host "Tryck Enter för att avsluta"
+    exit 1
+}
 
 Write-Host "Om du vill köra flera bridges, ge varje ett unikt namn." -ForegroundColor Gray
 Write-Host "Lämna tomt för standardinstallation." -ForegroundColor Gray
@@ -1460,9 +1470,10 @@ PORT=$Port
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
 $NodePath = (Get-Command node).Source
 $Action = New-ScheduledTaskAction -Execute $NodePath -Argument "index.js" -WorkingDirectory $AppDir
-$Trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
-$Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
-Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Settings $Settings | Out-Null
+$Trigger = New-ScheduledTaskTrigger -AtStartup
+$Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+$Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Days 9999)
+Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Principal $Principal -Settings $Settings -Description "Chromecast Bridge (systemstart)" | Out-Null
 
 Start-ScheduledTask -TaskName $TaskName
 Start-Sleep -Seconds 3
@@ -1475,6 +1486,7 @@ Write-Host ""
 Write-Host "Öppna: http://localhost:$Port" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Device ID: $DeviceId" -ForegroundColor Yellow
+Write-Host "Bridge startar automatiskt vid systemstart." -ForegroundColor Green
 Write-Host ""
 Read-Host "Tryck Enter"
 `,
