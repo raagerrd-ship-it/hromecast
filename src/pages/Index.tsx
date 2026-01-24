@@ -47,15 +47,6 @@ const Index = () => {
       {/* Hero Header */}
       <header className="flex-shrink-0 px-4 pt-8 pb-6 sm:px-6 sm:pt-10 bg-gradient-to-b from-primary/10 to-transparent">
         <div className="max-w-lg mx-auto">
-          <div className="flex justify-end mb-4">
-            <Link 
-              to="/setup" 
-              className="p-2 rounded-lg hover:bg-muted/50 transition-colors"
-              title="Fullständig installationsguide"
-            >
-              <HelpCircle className="h-5 w-5 text-muted-foreground" />
-            </Link>
-          </div>
           
           <div className="text-center space-y-4">
             <div className="w-16 h-16 rounded-3xl bg-primary/20 flex items-center justify-center mx-auto shadow-lg shadow-primary/10">
@@ -131,8 +122,9 @@ const Index = () => {
 
                 <Link 
                   to="/setup"
-                  className="flex items-center justify-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
+                  <HelpCircle className="h-3.5 w-3.5" />
                   Detaljerade instruktioner
                   <ChevronRight className="h-3 w-3" />
                 </Link>
