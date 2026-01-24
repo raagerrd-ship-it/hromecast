@@ -372,16 +372,23 @@ async function castMedia(chromecastName, url) {
           if (!mediaLoaded && data.status && data.status.applications && data.status.applications.length > 0) {
             const app = data.status.applications[0];
             
+            log.info(`📱 App launched: ${app.displayName} (${app.appId})`);
+            
             if (app.appId !== CUSTOM_APP_ID) {
-              log.warn('⚠️ Wrong app detected during cast');
+              log.warn(`⚠️ Wrong app detected (${app.appId}), expected ${CUSTOM_APP_ID}. Retrying launch...`);
+              // Wait a moment and try to launch again
+              setTimeout(() => {
+                if (!mediaLoaded) {
+                  log.info(`🔄 Re-launching custom receiver app: ${CUSTOM_APP_ID}`);
+                  receiver.send({ type: 'LAUNCH', appId: CUSTOM_APP_ID, requestId: 3 });
+                }
+              }, 2000);
               return;
             }
             
             // Mark as loaded immediately to prevent duplicates
             mediaLoaded = true;
             clearTimeout(launchTimeout);
-            
-            log.info(`📱 App launched: ${app.displayName} (${app.appId})`);
             
             const sessionId = app.sessionId;
             const transportId = app.transportId;
