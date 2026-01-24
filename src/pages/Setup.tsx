@@ -455,22 +455,121 @@ const Setup = () => {
               {t('manualInstall')}
             </summary>
             <Card className="mt-4">
-              <CardContent className="pt-5 pb-5 space-y-4 text-sm">
-                <div>
-                  <p className="font-medium mb-1">1. {t('installNodejs')}</p>
+              <CardContent className="pt-5 pb-5 space-y-5 text-sm">
+                <p className="text-muted-foreground">{t('manualInstallDesc')}</p>
+                
+                {/* Step 1: Install Node.js */}
+                <div className="space-y-2">
+                  <p className="font-medium">1. {t('installNodejs')}</p>
                   <p className="text-xs text-muted-foreground">{t('downloadFromNodejs')}</p>
+                  <p className="text-xs text-muted-foreground mt-2">{t('verifyNodeInstall')}</p>
+                  <div className="flex items-center gap-2">
+                    <pre className="flex-1 bg-muted p-3 rounded-lg text-xs font-mono overflow-x-auto">node --version</pre>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="shrink-0 h-8 w-8 p-0"
+                      onClick={() => copyToClipboard('node --version')}
+                    >
+                      {copiedCommand === 'node --version' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-medium mb-1">2. {t('installDependencies')}</p>
-                  <pre className="bg-muted p-3 rounded-lg text-xs font-mono">cd chromecast-bridge && npm install</pre>
+
+                {/* Step 2: Extract and navigate */}
+                <div className="space-y-2">
+                  <p className="font-medium">2. {t('extractAndNavigate')}</p>
+                  <div className="flex items-center gap-2">
+                    <pre className="flex-1 bg-muted p-3 rounded-lg text-xs font-mono overflow-x-auto">unzip chromecast-bridge.zip && cd chromecast-bridge</pre>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="shrink-0 h-8 w-8 p-0"
+                      onClick={() => copyToClipboard('unzip chromecast-bridge.zip && cd chromecast-bridge')}
+                    >
+                      {copiedCommand === 'unzip chromecast-bridge.zip && cd chromecast-bridge' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-medium mb-1">3. {t('createEnvFile')}</p>
-                  <pre className="bg-muted p-3 rounded-lg text-xs font-mono">DEVICE_ID=my-home{'\n'}PORT=3000</pre>
+
+                {/* Step 3: Install dependencies */}
+                <div className="space-y-2">
+                  <p className="font-medium">3. {t('installDependencies')}</p>
+                  <div className="flex items-center gap-2">
+                    <pre className="flex-1 bg-muted p-3 rounded-lg text-xs font-mono overflow-x-auto">npm install</pre>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="shrink-0 h-8 w-8 p-0"
+                      onClick={() => copyToClipboard('npm install')}
+                    >
+                      {copiedCommand === 'npm install' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-medium mb-1">4. {t('start')}</p>
-                  <pre className="bg-muted p-3 rounded-lg text-xs font-mono">node index.js</pre>
+
+                {/* Step 4: Create .env file */}
+                <div className="space-y-2">
+                  <p className="font-medium">4. {t('createEnvFile')}</p>
+                  <p className="text-xs text-muted-foreground">{t('envFileDesc')}</p>
+                  <pre className="bg-muted p-3 rounded-lg text-xs font-mono">
+                    <code>DEVICE_ID=my-home{'\n'}PORT=3000</code>
+                  </pre>
+                  <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+                    <li><code className="bg-muted px-1 rounded">DEVICE_ID</code> – {t('deviceIdExplanation')}</li>
+                    <li><code className="bg-muted px-1 rounded">PORT</code> – {t('portExplanation')}</li>
+                  </ul>
+                </div>
+
+                {/* Step 5: Start */}
+                <div className="space-y-2">
+                  <p className="font-medium">5. {t('start')}</p>
+                  <div className="flex items-center gap-2">
+                    <pre className="flex-1 bg-muted p-3 rounded-lg text-xs font-mono overflow-x-auto">node index.js</pre>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="shrink-0 h-8 w-8 p-0"
+                      onClick={() => copyToClipboard('node index.js')}
+                    >
+                      {copiedCommand === 'node index.js' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">{t('startInBackground')}</p>
+                  <div className="flex items-center gap-2">
+                    <pre className="flex-1 bg-muted p-3 rounded-lg text-xs font-mono overflow-x-auto">nohup node index.js &</pre>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="shrink-0 h-8 w-8 p-0"
+                      onClick={() => copyToClipboard('nohup node index.js &')}
+                    >
+                      {copiedCommand === 'nohup node index.js &' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Step 6: Verify */}
+                <div className="space-y-2">
+                  <p className="font-medium">6. {t('verifyRunning')}</p>
+                  <div className="flex items-center gap-2">
+                    <pre className="flex-1 bg-muted p-3 rounded-lg text-xs font-mono overflow-x-auto">curl http://localhost:3000/api/status</pre>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="shrink-0 h-8 w-8 p-0"
+                      onClick={() => copyToClipboard('curl http://localhost:3000/api/status')}
+                    >
+                      {copiedCommand === 'curl http://localhost:3000/api/status' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{t('shouldSeeJson')}</p>
+                </div>
+
+                {/* Autostart tip */}
+                <div className="pt-3 border-t space-y-1">
+                  <p className="font-medium text-xs">{t('autostart')}</p>
+                  <p className="text-xs text-muted-foreground">{t('autostartDesc')}</p>
                 </div>
               </CardContent>
             </Card>
