@@ -110,8 +110,9 @@ const Setup = () => {
               <div className="flex items-start gap-3">
                 <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">2</div>
                 <div>
-                  <p className="font-medium">Packa upp och kör installern</p>
-                  <p className="text-sm text-muted-foreground">Högerklicka på <code className="bg-muted px-1 rounded">install-windows.ps1</code> → "Kör med PowerShell"</p>
+                  <p className="font-medium">Packa upp och kör installern som administratör</p>
+                  <p className="text-sm text-muted-foreground">Högerklicka på <code className="bg-muted px-1 rounded">install-windows.ps1</code> → "Kör med PowerShell som administratör"</p>
+                  <p className="text-xs text-muted-foreground mt-1">💡 Adminrättigheter krävs för att bridge ska starta automatiskt vid systemstart</p>
                 </div>
               </div>
               
