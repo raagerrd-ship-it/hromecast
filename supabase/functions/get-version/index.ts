@@ -19,10 +19,32 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.2.3";
+const VERSION = "1.3.0";
 const RELEASED_AT = "2026-01-24";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.0",
+    date: "2026-01-24",
+    changes: {
+      sv: [
+        "Recovery-logik: Automatisk återhämtning vid nätverksavbrott",
+        "Circuit breaker: Pausar försök efter 5 misslyckanden (5 min)",
+        "IP-recovery: Hittar enhet igen om IP ändras (DHCP)",
+        "Cooldown: 30s paus efter att annan app tar över",
+        "Exponentiell backoff: Intelligenta retry-intervall",
+        "Förbättrad stabilitet för långvariga sessioner",
+      ],
+      en: [
+        "Recovery logic: Automatic recovery on network interruptions",
+        "Circuit breaker: Pauses attempts after 5 failures (5 min)",
+        "IP recovery: Finds device again if IP changes (DHCP)",
+        "Cooldown: 30s pause after another app takes over",
+        "Exponential backoff: Intelligent retry intervals",
+        "Improved stability for long-running sessions",
+      ],
+    }
+  },
   {
     version: "1.2.3",
     date: "2026-01-24",

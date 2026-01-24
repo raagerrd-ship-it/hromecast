@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.2.2';
+const BRIDGE_VERSION = '1.3.0';
 
 // Configuration
 const CONFIG_FILE = path.join(__dirname, 'config.json');
@@ -20,11 +20,52 @@ const BACKDROP_APP_ID = 'E8C28D3C';
 // Initialize Bonjour
 const bonjour = new Bonjour();
 
-// State
+// ============ State ============
+
 let discoveredDevices = [];
 let client = null;
 let keepAliveInterval = null;
 let screensaverActive = false;
+
+// Recovery state
+let lastTakeoverTime = 0;
+let recoveryCheckInterval = null;
+let lastErrorType = 'takeover'; // 'takeover' (needs cooldown) or 'network_error' (skip cooldown)
+
+// Circuit breaker state
+const CIRCUIT_BREAKER_THRESHOLD = 5;
+let circuitBreakerState = {
+  failures: 0,
+  lastFailureTime: 0,
+  isOpen: false,
+  cooldownMs: 5 * 60 * 1000 // 5 minutes in "open" state
+};
+
+// IP recovery backoff state
+const IP_RECOVERY_BACKOFF = {
+  baseInterval: 10000,        // 10 seconds base
+  initialAttempts: 3,         // First 3 attempts at base interval
+  maxInterval: 10 * 60 * 1000, // Max 10 minutes
+  multiplier: 2,              // Double each time after initial attempts
+  maintenanceInterval: 60 * 60 * 1000, // 1 hour in maintenance mode
+  maintenanceThreshold: 12    // Go to maintenance mode after 12 attempts
+};
+let ipRecoveryState = {
+  failedAttempts: 0,
+  lastAttemptTime: 0,
+  currentInterval: IP_RECOVERY_BACKOFF.baseInterval
+};
+
+// Cooldown settings
+const COOLDOWN_AFTER_TAKEOVER = 30 * 1000; // 30 seconds
+const BASE_RECOVERY_CHECK_INTERVAL = 10000; // 10 seconds
+
+// Retry configuration
+const MAX_RETRIES = 3;
+const BASE_DELAY_MS = 1000;
+
+// Track active heartbeats for cleanup
+const activeHeartbeats = new Set();
 
 // In-memory log buffer (keep last 100 entries)
 const LOG_BUFFER_SIZE = 100;
@@ -81,6 +122,207 @@ const log = {
     }
   }
 };
+
+// ============ Utility Functions ============
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Calculate exponential backoff delay: base * 2^attempt (1s, 2s, 4s, 8s...)
+function getBackoffDelay(attempt) {
+  const delay = BASE_DELAY_MS * Math.pow(2, attempt);
+  // Add jitter (±25%) to prevent thundering herd
+  const jitter = delay * 0.25 * (Math.random() - 0.5);
+  return Math.min(delay + jitter, 30000); // Cap at 30 seconds
+}
+
+// ============ Circuit Breaker ============
+
+function checkCircuitBreaker() {
+  if (circuitBreakerState.isOpen) {
+    const elapsed = Date.now() - circuitBreakerState.lastFailureTime;
+    if (elapsed > circuitBreakerState.cooldownMs) {
+      // Half-open: allow one attempt
+      log.info('⚡ [CIRCUIT] Half-open - allowing one attempt');
+      circuitBreakerState.isOpen = false;
+      circuitBreakerState.failures = 0;
+    } else {
+      const remainingSec = Math.ceil((circuitBreakerState.cooldownMs - elapsed) / 1000);
+      log.debug(`⚡ [CIRCUIT] Open - skipping attempt (${remainingSec}s remaining)`);
+      return false; // Circuit is open, skip
+    }
+  }
+  return true; // OK to try
+}
+
+function recordCircuitFailure() {
+  circuitBreakerState.failures++;
+  circuitBreakerState.lastFailureTime = Date.now();
+  if (circuitBreakerState.failures >= CIRCUIT_BREAKER_THRESHOLD) {
+    circuitBreakerState.isOpen = true;
+    log.warn(`⚡ [CIRCUIT] Opened after ${CIRCUIT_BREAKER_THRESHOLD} failures - pausing attempts for 5 min`);
+  }
+}
+
+function recordCircuitSuccess() {
+  const wasOpen = circuitBreakerState.isOpen;
+  circuitBreakerState.failures = 0;
+  circuitBreakerState.isOpen = false;
+  resetIPRecoveryBackoff();
+  
+  if (wasOpen) {
+    log.info('⚡ [CIRCUIT] Closed - connection restored');
+  }
+}
+
+// ============ IP Recovery Backoff ============
+
+function getNextRecoveryInterval() {
+  const { baseInterval, initialAttempts, maxInterval, multiplier, maintenanceInterval, maintenanceThreshold } = IP_RECOVERY_BACKOFF;
+  
+  if (ipRecoveryState.failedAttempts >= maintenanceThreshold) {
+    return maintenanceInterval; // 1 hour in maintenance mode
+  }
+  
+  if (ipRecoveryState.failedAttempts < initialAttempts) {
+    return baseInterval;
+  }
+  
+  const attemptsAfterInitial = ipRecoveryState.failedAttempts - initialAttempts;
+  const interval = baseInterval * Math.pow(multiplier, attemptsAfterInitial + 1);
+  
+  return Math.min(interval, maxInterval);
+}
+
+function recordIPRecoveryFailure() {
+  const wasInMaintenance = ipRecoveryState.failedAttempts >= IP_RECOVERY_BACKOFF.maintenanceThreshold;
+  
+  ipRecoveryState.failedAttempts++;
+  ipRecoveryState.lastAttemptTime = Date.now();
+  ipRecoveryState.currentInterval = getNextRecoveryInterval();
+  
+  const intervalSecs = Math.round(ipRecoveryState.currentInterval / 1000);
+  const intervalDisplay = intervalSecs >= 3600 
+    ? `${Math.round(intervalSecs / 3600)}h` 
+    : intervalSecs >= 60 
+      ? `${Math.round(intervalSecs / 60)}min` 
+      : `${intervalSecs}s`;
+  
+  const isInMaintenance = ipRecoveryState.failedAttempts >= IP_RECOVERY_BACKOFF.maintenanceThreshold;
+  
+  if (isInMaintenance && !wasInMaintenance) {
+    log.warn(`🛠️ [IP-RECOVERY] Entering maintenance mode - checking every hour`);
+  } else {
+    log.info(`⏳ [IP-RECOVERY] Attempt ${ipRecoveryState.failedAttempts} failed, next check in ${intervalDisplay}`);
+  }
+}
+
+function resetIPRecoveryBackoff() {
+  if (ipRecoveryState.failedAttempts > 0) {
+    log.info(`✅ [IP-RECOVERY] Reset backoff (was at ${Math.round(ipRecoveryState.currentInterval/1000)}s after ${ipRecoveryState.failedAttempts} failures)`);
+    ipRecoveryState.failedAttempts = 0;
+    ipRecoveryState.currentInterval = IP_RECOVERY_BACKOFF.baseInterval;
+    ipRecoveryState.lastAttemptTime = 0;
+  }
+}
+
+function canAttemptIPRecovery() {
+  if (ipRecoveryState.lastAttemptTime === 0) return true;
+  const timeSinceLastAttempt = Date.now() - ipRecoveryState.lastAttemptTime;
+  return timeSinceLastAttempt >= ipRecoveryState.currentInterval;
+}
+
+// ============ Recovery Check Loop ============
+
+function startRecoveryCheck() {
+  if (recoveryCheckInterval) return; // Already running
+  
+  log.info('🔄 Starting recovery check with exponential backoff...');
+  
+  recoveryCheckInterval = setInterval(async () => {
+    const timeSinceTakeover = Date.now() - lastTakeoverTime;
+    
+    // Skip cooldown if last error was a network error
+    const skipCooldown = lastErrorType === 'network_error';
+    
+    // Still in cooldown?
+    if (!skipCooldown && timeSinceTakeover < COOLDOWN_AFTER_TAKEOVER) {
+      const remainingSecs = Math.ceil((COOLDOWN_AFTER_TAKEOVER - timeSinceTakeover) / 1000);
+      log.debug(`⏸️ [RECOVERY] Cooldown: ${remainingSecs}s remaining`);
+      return;
+    }
+    
+    // Check if we should attempt based on backoff
+    if (!canAttemptIPRecovery()) {
+      const waitTime = ipRecoveryState.currentInterval - (Date.now() - ipRecoveryState.lastAttemptTime);
+      const waitDisplay = waitTime >= 60000 
+        ? `${Math.ceil(waitTime / 60000)}min`
+        : `${Math.ceil(waitTime / 1000)}s`;
+      log.debug(`⏳ [RECOVERY] Backoff active, next attempt in ${waitDisplay}`);
+      return;
+    }
+    
+    // Cooldown over - check if device is idle
+    log.info('🔍 [RECOVERY] Checking device status...');
+    const config = loadConfig();
+    
+    if (!config.selectedChromecast) {
+      log.warn('⚠️ [RECOVERY] No device selected');
+      return;
+    }
+    
+    const result = await isChromecastIdleWithRecovery(config.selectedChromecast);
+    
+    if (result.status === 'idle') {
+      log.info('✅ [RECOVERY] Device idle, triggering screensaver...');
+      resetIPRecoveryBackoff();
+      stopRecoveryCheck();
+      checkAndActivateScreensaver();
+    } else if (result.status === 'our_app') {
+      log.info('✅ [RECOVERY] Our app already running, stopping recovery check');
+      resetIPRecoveryBackoff();
+      stopRecoveryCheck();
+    } else if (result.status === 'error') {
+      // Device unreachable - trigger rediscovery
+      log.info('🔄 [RECOVERY] Device unreachable, triggering rediscovery...');
+      await discoverDevices();
+      
+      // Check if device was found with new IP
+      const device = findDevice(config.selectedChromecast);
+      if (device) {
+        log.info(`✅ [RECOVERY] Device found at ${device.host}, will retry next check`);
+        resetIPRecoveryBackoff();
+      } else {
+        recordIPRecoveryFailure();
+      }
+    } else {
+      log.debug(`⏭️ [RECOVERY] Device still busy (${result.status}), will check again...`);
+      resetIPRecoveryBackoff();
+    }
+  }, BASE_RECOVERY_CHECK_INTERVAL);
+}
+
+function stopRecoveryCheck() {
+  if (recoveryCheckInterval) {
+    log.info('🛑 Stopping recovery check');
+    clearInterval(recoveryCheckInterval);
+    recoveryCheckInterval = null;
+  }
+}
+
+// Helper to log screensaver stop and start recovery
+function logScreensaverStop(reason = 'takeover') {
+  if (!screensaverActive) return;
+  
+  screensaverActive = false;
+  lastTakeoverTime = Date.now();
+  lastErrorType = reason;
+  
+  const cooldownMsg = reason === 'network_error' ? 'no cooldown (network error)' : 'cooldown started';
+  log.info(`⏹️ Screensaver stopped - ${cooldownMsg}`);
+  startRecoveryCheck();
+}
 
 // ============ Network Utilities ============
 
@@ -201,12 +443,24 @@ function findDevice(name) {
   return discoveredDevices.find(d => d.name === name) || null;
 }
 
-// Check if Chromecast is idle using raw castv2
-async function isChromecastIdle(deviceName) {
+// Check if Chromecast is idle with recovery logic
+async function isChromecastIdleWithRecovery(deviceName, retryCount = 0) {
+  // Check circuit breaker first
+  if (!checkCircuitBreaker()) {
+    return { status: 'circuit_open' };
+  }
+  
   const device = findDevice(deviceName);
   if (!device) {
     log.warn('⚠️ Device not found for idle check:', deviceName);
-    return true; // Assume idle if device not found
+    return { status: 'error' };
+  }
+  
+  // Apply backoff for retries
+  if (retryCount > 0) {
+    const delay = getBackoffDelay(retryCount - 1);
+    log.info(`🔄 Idle check retry ${retryCount}/${MAX_RETRIES} - waiting ${Math.round(delay/1000)}s...`);
+    await sleep(delay);
   }
   
   const config = loadConfig();
@@ -215,17 +469,35 @@ async function isChromecastIdle(deviceName) {
   return new Promise((resolve) => {
     const checkClient = new castv2.Client();
     
-    const timeout = setTimeout(() => {
+    const timeout = setTimeout(async () => {
       log.warn('⏱️ Idle check timeout');
       checkClient.close();
-      resolve(true); // Assume idle on timeout
+      recordCircuitFailure();
+      
+      // Retry with backoff
+      if (retryCount < MAX_RETRIES) {
+        const result = await isChromecastIdleWithRecovery(deviceName, retryCount + 1);
+        resolve(result);
+        return;
+      }
+      
+      resolve({ status: 'error' });
     }, timeoutMs);
     
-    checkClient.on('error', (err) => {
+    checkClient.on('error', async (err) => {
       clearTimeout(timeout);
       log.error(`❌ Idle check error: ${err.message}`);
       checkClient.close();
-      resolve(true); // Assume idle on error
+      recordCircuitFailure();
+      
+      // Retry with backoff on connection errors
+      if (retryCount < MAX_RETRIES && (err.message.includes('ETIMEDOUT') || err.message.includes('ECONNREFUSED'))) {
+        const result = await isChromecastIdleWithRecovery(deviceName, retryCount + 1);
+        resolve(result);
+        return;
+      }
+      
+      resolve({ status: 'error' });
     });
     
     checkClient.connect(device.host, () => {
@@ -240,22 +512,22 @@ async function isChromecastIdle(deviceName) {
           clearTimeout(timeout);
           connection.send({ type: 'CLOSE' });
           checkClient.close();
+          recordCircuitSuccess();
           
           const apps = data.status?.applications || [];
-          // Filter out backdrop and our own app
           const otherApps = apps.filter(app => app.appId !== BACKDROP_APP_ID && app.appId !== CUSTOM_APP_ID);
           const ourAppRunning = apps.some(app => app.appId === CUSTOM_APP_ID);
           
           if (ourAppRunning) {
             log.debug('Our app is running');
             screensaverActive = true;
-            resolve(false); // Not idle - our app is running
+            resolve({ status: 'our_app' });
           } else if (otherApps.length === 0) {
             log.debug('Device is idle');
-            resolve(true);
+            resolve({ status: 'idle' });
           } else {
             log.debug(`Device busy with: ${otherApps.map(a => a.displayName || a.appId).join(', ')}`);
-            resolve(false);
+            resolve({ status: 'busy', apps: otherApps.map(a => a.displayName || a.appId) });
           }
         }
       });
@@ -263,11 +535,31 @@ async function isChromecastIdle(deviceName) {
   });
 }
 
-// Cast media using raw castv2 (same method as the working bridge)
-async function castMedia(chromecastName, url) {
+// Simple idle check (legacy, for quick checks)
+async function isChromecastIdle(deviceName) {
+  const result = await isChromecastIdleWithRecovery(deviceName);
+  return result.status === 'idle';
+}
+
+// Cast media using raw castv2 with retry and circuit breaker
+async function castMedia(chromecastName, url, retryCount = 0) {
+  // Check circuit breaker first
+  if (!checkCircuitBreaker()) {
+    throw new Error('Circuit breaker open - connection attempts paused');
+  }
+  
   const device = findDevice(chromecastName);
   if (!device) {
     throw new Error(`Device "${chromecastName}" not found`);
+  }
+  
+  // Apply backoff for retries
+  if (retryCount > 0) {
+    const config = loadConfig();
+    const baseDelay = (config.castRetryDelay || 2) * 1000;
+    const delay = baseDelay * Math.pow(2, retryCount - 1);
+    log.info(`🔄 Cast retry ${retryCount}/${MAX_RETRIES} - waiting ${Math.round(delay/1000)}s...`);
+    await sleep(delay);
   }
   
   log.info(`📺 Casting to ${chromecastName}: ${url}`);
@@ -279,6 +571,7 @@ async function castMedia(chromecastName, url) {
     
     const cleanup = () => {
       if (heartbeatInterval) {
+        activeHeartbeats.delete(heartbeatInterval);
         clearInterval(heartbeatInterval);
         heartbeatInterval = null;
       }
@@ -288,20 +581,35 @@ async function castMedia(chromecastName, url) {
       }
     };
     
-    client.on('error', (err) => {
+    client.on('error', async (err) => {
       log.error(`❌ Connection error: ${err.message}`);
       cleanup();
-      client.close();
-      reject(err);
+      recordCircuitFailure();
+      
+      // Retry with backoff
+      if (retryCount < MAX_RETRIES) {
+        log.info(`🔄 Will retry (${retryCount + 1}/${MAX_RETRIES})...`);
+        try {
+          const result = await castMedia(chromecastName, url, retryCount + 1);
+          resolve(result);
+        } catch (retryErr) {
+          reject(retryErr);
+        }
+      } else {
+        // Mark as network error for faster recovery
+        logScreensaverStop('network_error');
+        reject(new Error(`Connection failed after ${MAX_RETRIES} retries: ${err.message}`));
+      }
     });
     
     client.on('close', () => {
       log.debug('Connection closed');
-      cleanup();
+      // Don't cleanup immediately - heartbeat might still be needed
     });
     
     client.connect(device.host, () => {
       log.info('✅ Connected to Chromecast');
+      recordCircuitSuccess();
       
       const connection = client.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.tp.connection', 'JSON');
       const heartbeat = client.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.tp.heartbeat', 'JSON');
@@ -310,25 +618,39 @@ async function castMedia(chromecastName, url) {
       connection.send({ type: 'CONNECT' });
       
       // Keep connection alive with heartbeat
+      const config = loadConfig();
+      const heartbeatMs = (config.keepAliveInterval || 5) * 1000;
       heartbeatInterval = setInterval(() => {
         try {
           heartbeat.send({ type: 'PING' });
         } catch (e) {
           log.error('Heartbeat failed:', e.message);
           cleanup();
+          logScreensaverStop('network_error');
         }
-      }, 5000);
+      }, heartbeatMs);
+      activeHeartbeats.add(heartbeatInterval);
       
       heartbeat.on('message', () => {}); // Silent heartbeat
       
       log.info('📡 Getting receiver status...');
       receiver.send({ type: 'GET_STATUS', requestId: 1 });
       
-      launchTimeout = setTimeout(() => {
+      launchTimeout = setTimeout(async () => {
         log.error('⏱️ Timeout waiting for receiver response (120s)');
         cleanup();
-        client.close();
-        reject(new Error('Receiver timeout'));
+        recordCircuitFailure();
+        
+        if (retryCount < MAX_RETRIES) {
+          try {
+            const result = await castMedia(chromecastName, url, retryCount + 1);
+            resolve(result);
+          } catch (retryErr) {
+            reject(retryErr);
+          }
+        } else {
+          reject(new Error('Receiver timeout'));
+        }
       }, 120000);
       
       let appLaunched = false;
@@ -356,6 +678,7 @@ async function castMedia(chromecastName, url) {
                 log.warn(`⚠️ Another app running: ${runningApp.displayName}`);
                 cleanup();
                 client.close();
+                logScreensaverStop('takeover');
                 reject(new Error(`Another app running: ${runningApp.displayName}`));
                 return;
               }
@@ -374,6 +697,7 @@ async function castMedia(chromecastName, url) {
             
             if (app.appId !== CUSTOM_APP_ID) {
               log.warn('⚠️ Wrong app detected during cast');
+              logScreensaverStop('takeover');
               return;
             }
             
@@ -410,10 +734,11 @@ async function castMedia(chromecastName, url) {
               autoplay: true
             });
             
-            log.info('✅ Cast successful');
+            log.info('✅ Cast successful - keeping connection alive indefinitely');
             screensaverActive = true;
+            stopRecoveryCheck(); // Stop recovery since we're active
             
-            // Keep connection alive
+            // Keep connection alive - don't close client
             keepAliveInterval = heartbeatInterval;
             
             resolve({ success: true });
@@ -428,21 +753,17 @@ async function castMedia(chromecastName, url) {
   });
 }
 
-// Retry wrapper for cast operations with exponential backoff
+// Retry wrapper for cast operations
 async function castMediaWithRetry(chromecastName, url) {
   const config = loadConfig();
   const maxRetries = config.castMaxRetries || 3;
-  const baseDelay = (config.castRetryDelay || 2) * 1000;
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      return await castMedia(chromecastName, url);
+      return await castMedia(chromecastName, url, 0);
     } catch (error) {
       log.warn(`⚠️ Cast attempt ${attempt}/${maxRetries} failed: ${error.message}`);
       if (attempt === maxRetries) throw error;
-      const delay = baseDelay * attempt;
-      log.info(`🔄 Retrying in ${delay / 1000}s...`);
-      await new Promise(r => setTimeout(r, delay));
     }
   }
 }
@@ -474,6 +795,7 @@ async function stopCast(chromecastName) {
         stopClient.close();
         screensaverActive = false;
         if (keepAliveInterval) {
+          activeHeartbeats.delete(keepAliveInterval);
           clearInterval(keepAliveInterval);
           keepAliveInterval = null;
         }
@@ -491,21 +813,55 @@ async function checkAndActivateScreensaver() {
   if (!config.enabled || !config.url || !config.selectedChromecast) return;
   
   // If screensaver is already active, skip check entirely
-  // The idle check in isChromecastIdle will detect if our app is running
-  // and return false (not idle), preventing duplicate casts
   if (screensaverActive) {
     log.debug('Screensaver flag active, skipping check');
     return;
   }
   
-  const idle = await isChromecastIdle(config.selectedChromecast);
-  if (idle) {
-    log.info('💤 Device idle, activating screensaver...');
-    try {
-      await castMediaWithRetry(config.selectedChromecast, config.url);
-    } catch (error) {
-      log.error('Failed to activate screensaver:', error.message);
+  // Check cooldown period
+  const timeSinceTakeover = Date.now() - lastTakeoverTime;
+  const skipCooldown = lastErrorType === 'network_error';
+  
+  if (!skipCooldown && lastTakeoverTime > 0 && timeSinceTakeover < COOLDOWN_AFTER_TAKEOVER) {
+    const remainingSecs = Math.ceil((COOLDOWN_AFTER_TAKEOVER - timeSinceTakeover) / 1000);
+    log.debug(`⏸️ Cooldown active, ${remainingSecs}s remaining`);
+    return;
+  }
+  
+  const result = await isChromecastIdleWithRecovery(config.selectedChromecast);
+  
+  if (result.status === 'circuit_open') {
+    log.debug('Circuit breaker open, skipping screensaver check');
+    return;
+  }
+  
+  if (result.status === 'our_app') {
+    log.debug('Our app already running');
+    return;
+  }
+  
+  if (result.status === 'busy') {
+    // Another app took over
+    if (screensaverActive) {
+      logScreensaverStop('takeover');
     }
+    return;
+  }
+  
+  if (result.status === 'error') {
+    // Network error
+    if (screensaverActive) {
+      logScreensaverStop('network_error');
+    }
+    return;
+  }
+  
+  // status === 'idle' - activate screensaver
+  log.info('💤 Device idle, activating screensaver...');
+  try {
+    await castMedia(config.selectedChromecast, config.url);
+  } catch (error) {
+    log.error('Failed to activate screensaver:', error.message);
   }
 }
 
@@ -564,7 +920,7 @@ const server = http.createServer(async (req, res) => {
   
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   
   if (req.method === 'OPTIONS') {
@@ -582,7 +938,9 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, { 
           ...config, 
           deviceId: DEVICE_ID,
-          screensaverActive 
+          screensaverActive,
+          circuitBreakerOpen: circuitBreakerState.isOpen,
+          recoveryActive: recoveryCheckInterval !== null
         });
         return;
       }
@@ -606,6 +964,9 @@ const server = http.createServer(async (req, res) => {
       // POST /api/chromecasts/refresh
       if (req.method === 'POST' && pathname === '/api/chromecasts/refresh') {
         const devices = await discoverDevices();
+        // Reset recovery state on manual refresh
+        resetIPRecoveryBackoff();
+        lastTakeoverTime = 0;
         sendJson(res, { devices });
         return;
       }
@@ -651,7 +1012,17 @@ const server = http.createServer(async (req, res) => {
           devices: discoveredDevices.length,
           selectedChromecast: config.selectedChromecast,
           screensaverActive,
-          uptime: process.uptime()
+          uptime: process.uptime(),
+          // Recovery status
+          circuitBreaker: {
+            isOpen: circuitBreakerState.isOpen,
+            failures: circuitBreakerState.failures
+          },
+          recovery: {
+            active: recoveryCheckInterval !== null,
+            lastErrorType,
+            ipRecoveryAttempts: ipRecoveryState.failedAttempts
+          }
         });
         return;
       }
@@ -677,6 +1048,19 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       
+      // POST /api/reset-recovery (manual reset of recovery state)
+      if (req.method === 'POST' && pathname === '/api/reset-recovery') {
+        log.info('🔄 Manual recovery reset requested');
+        resetIPRecoveryBackoff();
+        circuitBreakerState.failures = 0;
+        circuitBreakerState.isOpen = false;
+        lastTakeoverTime = 0;
+        lastErrorType = 'takeover';
+        stopRecoveryCheck();
+        sendJson(res, { success: true, message: 'Recovery state reset' });
+        return;
+      }
+      
       // 404 for unknown API routes
       sendJson(res, { error: 'Not Found' }, 404);
       
@@ -699,6 +1083,9 @@ const server = http.createServer(async (req, res) => {
 async function main() {
   log.info(`🚀 Chromecast Bridge v${BRIDGE_VERSION} starting...`);
   log.info(`📋 Device ID: ${DEVICE_ID}`);
+  log.info(`🎬 Custom App ID: ${CUSTOM_APP_ID}`);
+  log.info(`⚡ Circuit breaker: ${CIRCUIT_BREAKER_THRESHOLD} failures = 5min pause`);
+  log.info(`🔄 Recovery: 30s cooldown, exponential backoff`);
   
   // Write network info file
   writeNetworkInfo();
@@ -736,6 +1123,8 @@ async function main() {
     log.info('👋 Shutting down...');
     bonjour.unpublishAll();
     server.close();
+    stopRecoveryCheck();
+    activeHeartbeats.forEach(h => clearInterval(h));
     if (client) client.close();
     process.exit(0);
   });
