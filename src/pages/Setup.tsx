@@ -1,23 +1,60 @@
-import { ArrowLeft, Download, Terminal, CheckCircle, Copy, Check } from "lucide-react";
+import { ArrowLeft, Download, Terminal, CheckCircle, Copy, Check, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 const Setup = () => {
-  const [copiedWindows, setCopiedWindows] = useState(false);
   const [copiedLinux, setCopiedLinux] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const deviceIdExample = "datornamn";
 
-  const copyToClipboard = (text: string, type: 'windows' | 'linux') => {
+  const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    if (type === 'windows') {
-      setCopiedWindows(true);
-      setTimeout(() => setCopiedWindows(false), 2000);
-    } else {
-      setCopiedLinux(true);
-      setTimeout(() => setCopiedLinux(false), 2000);
+    setCopiedLinux(true);
+    setTimeout(() => setCopiedLinux(false), 2000);
+  };
+
+  const downloadBridge = async () => {
+    setIsDownloading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('download-bridge', {
+        method: 'GET',
+      });
+      
+      if (error) throw error;
+      
+      // Convert the response to blob and download
+      const blob = new Blob([data], { type: 'application/zip' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'chromecast-bridge.zip';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download failed:', error);
+      // Fallback: direct fetch
+      try {
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/download-bridge`);
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'chromecast-bridge.zip';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (fallbackError) {
+        console.error('Fallback download failed:', fallbackError);
+      }
+    } finally {
+      setIsDownloading(false);
     }
   };
 
@@ -50,15 +87,32 @@ const Setup = () => {
               <div className="flex items-start gap-3">
                 <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">1</div>
                 <div>
-                  <p className="font-medium">Ladda ner bridge-mappen</p>
-                  <p className="text-sm text-muted-foreground">Klona eller ladda ner <code className="bg-muted px-1 rounded">bridge/</code> mappen från projektet</p>
+                  <p className="font-medium">Ladda ner bridge</p>
+                  <Button 
+                    onClick={downloadBridge} 
+                    disabled={isDownloading}
+                    size="sm" 
+                    className="mt-2"
+                  >
+                    {isDownloading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Laddar ner...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="h-4 w-4 mr-2" />
+                        Ladda ner chromecast-bridge.zip
+                      </>
+                    )}
+                  </Button>
                 </div>
               </div>
               
               <div className="flex items-start gap-3">
                 <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">2</div>
                 <div>
-                  <p className="font-medium">Kör installern</p>
+                  <p className="font-medium">Packa upp och kör installern</p>
                   <p className="text-sm text-muted-foreground">Högerklicka på <code className="bg-muted px-1 rounded">install-windows.ps1</code> → "Kör med PowerShell"</p>
                 </div>
               </div>
@@ -95,13 +149,13 @@ const Setup = () => {
                   <p className="font-medium mb-2">Ladda ner och kör</p>
                   <div className="relative">
                     <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto pr-12">
-                      <code>{`cd bridge && chmod +x install-linux.sh && ./install-linux.sh`}</code>
+                      <code>{`cd chromecast-bridge && chmod +x install-linux.sh && ./install-linux.sh`}</code>
                     </pre>
                     <Button
                       variant="ghost"
                       size="sm"
                       className="absolute right-1 top-1 h-8 w-8 p-0"
-                      onClick={() => copyToClipboard('cd bridge && chmod +x install-linux.sh && ./install-linux.sh', 'linux')}
+                      onClick={() => copyToClipboard('cd chromecast-bridge && chmod +x install-linux.sh && ./install-linux.sh')}
                     >
                       {copiedLinux ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                     </Button>
