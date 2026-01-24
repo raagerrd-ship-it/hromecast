@@ -61,11 +61,8 @@
     const loadingEl = document.getElementById('loading');
     const contentEl = document.getElementById('content');
     
-    // Fallback configuration
-    const FALLBACK_URL = 'https://brew-monitor-tv.lovable.app/?tv=true';
-    const FALLBACK_TIMEOUT = 10000; // 10 seconds
+    // No fallback - wait for explicit content from bridge
     let contentLoaded = false;
-    let fallbackTimer = null;
     
     // Set iframe to fill screen exactly
     function setupIframe() {
@@ -83,30 +80,6 @@
     
     setupIframe();
     window.addEventListener('resize', setupIframe);
-    
-    // Start fallback timer
-    function startFallbackTimer() {
-      console.log(`Starting fallback timer (${FALLBACK_TIMEOUT/1000}s)...`);
-      fallbackTimer = setTimeout(() => {
-        if (!contentLoaded) {
-          console.log('No content received, loading fallback URL:', FALLBACK_URL);
-          statusEl.textContent = 'Loading fallback content...';
-          loadWebsite(FALLBACK_URL);
-        }
-      }, FALLBACK_TIMEOUT);
-    }
-    
-    // Cancel fallback timer
-    function cancelFallbackTimer() {
-      if (fallbackTimer) {
-        clearTimeout(fallbackTimer);
-        fallbackTimer = null;
-        console.log('Fallback timer cancelled');
-      }
-    }
-    
-    // Start the fallback timer immediately
-    startFallbackTimer();
     
     // Custom message handler for loading websites
     context.addCustomMessageListener('urn:x-cast:com.website.cast', (customEvent) => {
@@ -157,9 +130,8 @@
     function loadWebsite(url) {
       console.log('Loading website:', url);
       
-      // Mark content as loaded and cancel fallback
+      // Mark content as loaded
       contentLoaded = true;
-      cancelFallbackTimer();
       
       statusEl.textContent = 'Loading: ' + url;
       loadingEl.style.display = 'block';
