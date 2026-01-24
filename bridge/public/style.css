@@ -17,6 +17,8 @@
   --success: #22c55e;
   --border: #27272a;
   --radius: 12px;
+  --warning: #eab308;
+  --warning-hover: #ca8a04;
 }
 
 body {
@@ -272,9 +274,24 @@ input:checked + .slider:before {
   background: var(--danger-hover);
 }
 
+.btn-warning {
+  background: var(--warning);
+  color: #000;
+}
+
+.btn-warning:hover {
+  background: var(--warning-hover);
+}
+
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.header-buttons {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
 }
 
 .controls {
