@@ -323,6 +323,49 @@ elements.refreshBtn.addEventListener('click', refreshDevices);
 elements.castBtn.addEventListener('click', startCast);
 elements.stopBtn.addEventListener('click', stopCast);
 
+// Restart bridge
+const restartBtn = document.getElementById('restart-btn');
+if (restartBtn) {
+  restartBtn.addEventListener('click', async () => {
+    if (!confirm('Vill du starta om bridge-tjänsten? Detta krävs för att timing-ändringar ska träda i kraft.')) {
+      return;
+    }
+    
+    restartBtn.disabled = true;
+    restartBtn.textContent = '⏳ Startar om...';
+    
+    try {
+      await api('/api/restart', { method: 'POST' });
+      // Show message and poll for reconnection
+      updateStatus(false, 'Startar om...');
+      
+      // Poll until server is back
+      const pollReconnect = () => {
+        setTimeout(async () => {
+          try {
+            await api('/api/status');
+            // Server is back
+            updateStatus(true, 'Ansluten');
+            restartBtn.disabled = false;
+            restartBtn.textContent = '🔄 Starta om';
+            await loadSettings();
+            await loadDevices();
+            await loadStatus();
+          } catch (e) {
+            // Still restarting, poll again
+            pollReconnect();
+          }
+        }, 1000);
+      };
+      pollReconnect();
+    } catch (error) {
+      console.error('Restart failed:', error);
+      restartBtn.disabled = false;
+      restartBtn.textContent = '🔄 Starta om';
+    }
+  });
+}
+
 // Toggle settings visibility
 if (elements.toggleSettingsBtn && elements.settingsContent) {
   elements.toggleSettingsBtn.addEventListener('click', () => {

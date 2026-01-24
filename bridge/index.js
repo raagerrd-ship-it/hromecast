@@ -502,6 +502,18 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       
+      // POST /api/restart
+      if (req.method === 'POST' && pathname === '/api/restart') {
+        log.info('🔄 Restart requested via API');
+        sendJson(res, { success: true, message: 'Restarting...' });
+        // Give time for response to be sent, then exit
+        // The service manager (systemd/Task Scheduler) will restart the process
+        setTimeout(() => {
+          process.exit(0);
+        }, 500);
+        return;
+      }
+      
       sendJson(res, { error: 'Not found' }, 404);
     } catch (error) {
       sendJson(res, { error: error.message }, 500);
