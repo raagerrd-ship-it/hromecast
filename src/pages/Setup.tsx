@@ -133,7 +133,7 @@ const Setup = () => {
               <CardContent className="pt-4 pb-4">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div>
-                    <p className="font-medium">chromecast-bridge.zip</p>
+                    <p className="font-medium">chromecast-bridge.zip <span className="text-xs text-muted-foreground font-normal">v1.0.0</span></p>
                     <p className="text-sm text-muted-foreground">Innehåller allt du behöver</p>
                   </div>
                   <Button 
