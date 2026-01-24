@@ -1,6 +1,5 @@
 import { Link } from "react-router-dom";
-import { Tv, HelpCircle, Download, Loader2, ChevronRight } from "lucide-react";
-import { BridgeDiscovery } from "@/components/BridgeDiscovery";
+import { Tv, HelpCircle, Download, Loader2, ChevronRight, ExternalLink } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useDownloadBridge } from "@/hooks/use-download-bridge";
@@ -99,10 +98,26 @@ const Index = () => {
             </CardContent>
           </Card>
 
-          {/* Bridge Discovery */}
-          <section>
-            <BridgeDiscovery />
-          </section>
+          {/* Open Dashboard Card */}
+          <Card className="bg-card/50 border-dashed">
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <h3 className="font-medium text-sm">Redan installerat?</h3>
+                  <p className="text-xs text-muted-foreground">Öppna din lokala dashboard direkt</p>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => window.open('http://localhost:3000', '_blank')}
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  localhost:3000
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
         </div>
       </main>
