@@ -1477,10 +1477,7 @@ $ErrorActionPreference = "Stop"
 $DefaultAppName = "ChromecastBridge"
 $DefaultPort = 3000
 
-# Global felhantering
-trap {
-    Pause-OnError $_.Exception.Message
-}
+try {
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
@@ -1611,7 +1608,7 @@ Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Pr
 # Verifiera att tasken skapades
 $createdTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 if (-not $createdTask) {
-    Pause-OnError "Kunde inte skapa scheduled task '$TaskName'. Kontrollera att du har admin-rattigheter."
+    throw "Kunde inte skapa scheduled task '$TaskName'. Kontrollera att du har admin-rattigheter."
 }
 Write-Host "  Scheduled Task skapad (kors vid systemstart)" -ForegroundColor Green
 
@@ -1641,7 +1638,19 @@ Write-Host ""
 Write-Host "Bridge startar automatiskt vid systemstart (fore inloggning)." -ForegroundColor Green
 Write-Host ""
 Write-Host "For att avinstallera, kor: uninstall-windows.ps1" -ForegroundColor Gray
-Write-Host ""
+
+} catch {
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Red
+    Write-Host "  FEL UPPSTOD!" -ForegroundColor Red
+    Write-Host "========================================" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Felmeddelande: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Stack trace:" -ForegroundColor Gray
+    Write-Host $_.ScriptStackTrace -ForegroundColor Gray
+}
+
 Write-Host ""
 Write-Host "Tryck valfri tangent for att stanga..." -ForegroundColor Gray
 $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")`;
