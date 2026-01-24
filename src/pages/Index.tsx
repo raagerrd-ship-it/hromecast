@@ -55,7 +55,7 @@ const Index = () => {
             <div className="space-y-2">
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Chromecast Screensaver</h1>
               <p className="text-sm text-muted-foreground leading-relaxed max-w-sm mx-auto">
-                Visar automatiskt en webbsida på din Chromecast när datorn är inaktiv – perfekt som digital skyltning, dashboard eller bildspel
+                Visar automatiskt en webbsida på din Chromecast när den är inaktiv – perfekt som digital skyltning, dashboard eller bildspel
               </p>
             </div>
           </div>
