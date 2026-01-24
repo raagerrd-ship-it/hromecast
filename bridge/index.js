@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.1';
+const BRIDGE_VERSION = '1.3.2';
 
 // Configuration
 const CONFIG_FILE = path.join(__dirname, 'config.json');
@@ -1125,6 +1125,12 @@ async function main() {
   // Write network info file
   writeNetworkInfo();
   
+  // Handle HTTP server errors
+  server.on('error', (err) => {
+    log.error(`❌ HTTP server error: ${err.message}`);
+    // Don't exit - try to recover
+  });
+  
   // Start HTTP server
   server.listen(PORT, () => {
     log.info(`🚀 Server running on http://localhost:${PORT}`);
@@ -1162,6 +1168,31 @@ async function main() {
     activeHeartbeats.forEach(h => clearInterval(h));
     if (client) client.close();
     process.exit(0);
+  });
+  
+  // Handle uncaught exceptions - log but keep running
+  process.on('uncaughtException', (err) => {
+    log.error(`❌ Uncaught exception: ${err.message}`);
+    log.error(err.stack || '');
+    // Don't exit - try to keep the server alive
+    // Reset client state in case it's the cause
+    if (client) {
+      try { client.close(); } catch(e) {}
+      client = null;
+    }
+    screensaverActive = false;
+  });
+  
+  // Handle unhandled promise rejections
+  process.on('unhandledRejection', (reason, promise) => {
+    log.error(`❌ Unhandled rejection: ${reason}`);
+    // Don't exit - try to keep the server alive
+    // Reset client state in case it's the cause
+    if (client) {
+      try { client.close(); } catch(e) {}
+      client = null;
+    }
+    screensaverActive = false;
   });
 }
 
