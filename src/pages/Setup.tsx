@@ -112,13 +112,7 @@ const Setup = () => {
             Tillbaka
           </Link>
           
-          <div className="space-y-2">
-            <h1 className="text-2xl font-bold tracking-tight">Installationsguide</h1>
-            <p className="text-sm text-muted-foreground">
-              Visa valfri webbsida på din Chromecast när datorn är inaktiv – perfekt som digital skyltning, dashboard eller screensaver.
-            </p>
-            <p className="text-muted-foreground font-medium">Kom igång på 2 minuter</p>
-          </div>
+          <h1 className="text-2xl font-bold tracking-tight">Installationsguide</h1>
         </div>
       </header>
 
