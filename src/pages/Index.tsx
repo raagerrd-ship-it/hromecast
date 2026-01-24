@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
-import { Tv, HelpCircle, Download, Loader2, ChevronRight, ExternalLink } from "lucide-react";
+import { HelpCircle, Download, Loader2, ChevronRight, ExternalLink } from "lucide-react";
+import logo from "@/assets/logo.png";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useDownloadBridge } from "@/hooks/use-download-bridge";
@@ -15,9 +16,7 @@ const Index = () => {
         <div className="max-w-lg mx-auto">
           
           <div className="text-center space-y-4">
-            <div className="w-16 h-16 rounded-3xl bg-primary/20 flex items-center justify-center mx-auto shadow-lg shadow-primary/10">
-              <Tv className="h-8 w-8 text-primary" />
-            </div>
+            <img src={logo} alt="Chromecast Screensaver" className="h-16 w-auto mx-auto" />
             <div className="space-y-2">
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Chromecast Screensaver</h1>
               <p className="text-sm text-muted-foreground leading-relaxed max-w-sm mx-auto">
