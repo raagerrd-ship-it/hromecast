@@ -153,12 +153,20 @@ let screensaverActive = false;
 const LOG_BUFFER_SIZE = 100;
 let logBuffer = [];
 
-// Default config
+// Default config with timing settings (all in seconds unless noted)
 const DEFAULT_CONFIG = {
   enabled: false,
   url: '',
   selectedChromecast: null,
-  idleTimeout: 5
+  // Timing settings
+  screensaverCheckInterval: 60,      // How often to check if device is idle (seconds)
+  keepAliveInterval: 5,              // Keep-alive ping interval (seconds)
+  discoveryInterval: 30,             // Re-scan for devices interval (minutes)
+  discoveryTimeout: 8,               // Max time to wait for discovery (seconds)
+  discoveryEarlyResolve: 3,          // Early resolve if devices found (seconds)
+  idleStatusTimeout: 5,              // Timeout for idle check (seconds)
+  castRetryDelay: 2,                 // Base delay for retry backoff (seconds)
+  castMaxRetries: 3                  // Max cast retry attempts
 };
 
 // ============ Structured Logging ============
@@ -280,7 +288,12 @@ function discoverDevices() {
       }
     });
     
-    // Early resolve if devices found after 3 seconds
+    // Get timing from config
+    const config = loadConfig();
+    const earlyResolveMs = (config.discoveryEarlyResolve || 3) * 1000;
+    const maxTimeoutMs = (config.discoveryTimeout || 8) * 1000;
+    
+    // Early resolve if devices found
     const earlyResolveTimeout = setTimeout(() => {
       if (foundDevices.length > 0 && !resolved) {
         resolved = true;
@@ -289,9 +302,9 @@ function discoverDevices() {
         log.info(\`📡 Discovery complete (early): \${foundDevices.length} device(s)\`);
         resolve(foundDevices);
       }
-    }, 3000);
+    }, earlyResolveMs);
     
-    // Max timeout of 8 seconds
+    // Max timeout
     setTimeout(() => {
       clearTimeout(earlyResolveTimeout);
       if (!resolved) {
@@ -301,7 +314,7 @@ function discoverDevices() {
         log.info(\`📡 Discovery complete: \${foundDevices.length} device(s)\`);
         resolve(foundDevices);
       }
-    }, 8000);
+    }, maxTimeoutMs);
   });
 }
 
@@ -309,6 +322,9 @@ function discoverDevices() {
 
 function keepSessionAlive() {
   if (keepAliveInterval) clearInterval(keepAliveInterval);
+  const config = loadConfig();
+  const intervalMs = (config.keepAliveInterval || 5) * 1000;
+  
   keepAliveInterval = setInterval(() => {
     if (currentDevice) {
       try {
@@ -328,13 +344,15 @@ function keepSessionAlive() {
         log.warn('⚠️ Keep-alive exception:', e.message);
       }
     }
-  }, 5000);
+  }, intervalMs);
 }
 
 async function isChromecastIdle(device) {
   return new Promise((resolve) => {
     if (!device) { resolve(true); return; }
-    const timeout = setTimeout(() => resolve(true), 5000);
+    const config = loadConfig();
+    const timeoutMs = (config.idleStatusTimeout || 5) * 1000;
+    const timeout = setTimeout(() => resolve(true), timeoutMs);
     try {
       device.status((err, status) => {
         clearTimeout(timeout);
@@ -387,14 +405,18 @@ async function castMedia(chromecastName, url) {
 }
 
 // Retry wrapper for cast operations with exponential backoff
-async function castMediaWithRetry(chromecastName, url, maxRetries = 3) {
+async function castMediaWithRetry(chromecastName, url) {
+  const config = loadConfig();
+  const maxRetries = config.castMaxRetries || 3;
+  const baseDelay = (config.castRetryDelay || 2) * 1000;
+  
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       return await castMedia(chromecastName, url);
     } catch (error) {
       log.warn(\`⚠️ Cast attempt \${attempt}/\${maxRetries} failed: \${error.message}\`);
       if (attempt === maxRetries) throw error;
-      const delay = 2000 * attempt; // Exponential backoff: 2s, 4s, 6s
+      const delay = baseDelay * attempt; // Exponential backoff
       log.info(\`🔄 Retrying in \${delay / 1000}s...\`);
       await new Promise(r => setTimeout(r, delay));
     }
@@ -675,11 +697,18 @@ async function main() {
     }
   });
   
-  // Periodic discovery
-  setInterval(discoverDevices, 30 * 60 * 1000);
+  // Get timing config for intervals
+  const config = loadConfig();
+  const discoveryIntervalMs = (config.discoveryInterval || 30) * 60 * 1000;
+  const screensaverCheckMs = (config.screensaverCheckInterval || 60) * 1000;
   
-  // Screensaver check every minute
-  setInterval(checkAndActivateScreensaver, 60000);
+  log.info(\`⏱️ Timing: screensaver check \${config.screensaverCheckInterval || 60}s, discovery \${config.discoveryInterval || 30}min\`);
+  
+  // Periodic discovery
+  setInterval(discoverDevices, discoveryIntervalMs);
+  
+  // Screensaver check
+  setInterval(checkAndActivateScreensaver, screensaverCheckMs);
   
   // Update network info periodically (in case IP changes)
   setInterval(writeNetworkInfo, 5 * 60 * 1000);
@@ -800,6 +829,49 @@ const PUBLIC_INDEX_HTML = `<!DOCTYPE html>
           <div class="preview-container" id="preview-container">
             <p class="preview-placeholder">Ange en URL ovan för att se förhandsvisning</p>
           </div>
+        </div>
+      </section>
+
+      <!-- Timing Settings -->
+      <section class="card settings-card">
+        <div class="card-header">
+          <h2>⏱️ Tidsinställningar</h2>
+          <button id="toggle-settings-btn" class="btn btn-secondary btn-small">Visa</button>
+        </div>
+        <div class="card-content settings-content" id="settings-content" style="display: none;">
+          <div class="settings-grid">
+            <div class="form-group">
+              <label for="screensaver-check-input">Screensaver-kontroll (sek)</label>
+              <input type="number" id="screensaver-check-input" min="10" max="600" step="5" value="60">
+              <span class="hint">Hur ofta kontrollera om enheten är ledig</span>
+            </div>
+            <div class="form-group">
+              <label for="keep-alive-input">Keep-alive ping (sek)</label>
+              <input type="number" id="keep-alive-input" min="1" max="60" step="1" value="5">
+              <span class="hint">Intervall för session-kontroll</span>
+            </div>
+            <div class="form-group">
+              <label for="discovery-interval-input">Enhetsökning (min)</label>
+              <input type="number" id="discovery-interval-input" min="5" max="120" step="5" value="30">
+              <span class="hint">Hur ofta söka efter nya enheter</span>
+            </div>
+            <div class="form-group">
+              <label for="discovery-timeout-input">Sök-timeout (sek)</label>
+              <input type="number" id="discovery-timeout-input" min="3" max="30" step="1" value="8">
+              <span class="hint">Max tid för enhetssökning</span>
+            </div>
+            <div class="form-group">
+              <label for="cast-retry-input">Retry-fördröjning (sek)</label>
+              <input type="number" id="cast-retry-input" min="1" max="30" step="1" value="2">
+              <span class="hint">Bas-fördröjning vid misslyckad cast</span>
+            </div>
+            <div class="form-group">
+              <label for="cast-max-retries-input">Max försök</label>
+              <input type="number" id="cast-max-retries-input" min="1" max="10" step="1" value="3">
+              <span class="hint">Antal försök innan ge upp</span>
+            </div>
+          </div>
+          <p class="hint settings-note">⚠️ Ändringar kräver omstart av bridge för full effekt</p>
         </div>
       </section>
 
@@ -962,6 +1034,35 @@ main {
 
 .card-content {
   padding: 1rem;
+}
+
+/* Settings grid */
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+.settings-grid .form-group {
+  margin-bottom: 0;
+}
+
+.settings-grid input[type="number"] {
+  width: 100%;
+}
+
+.settings-note {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: rgba(234, 179, 8, 0.1);
+  border-left: 2px solid #eab308;
+  border-radius: 4px;
+}
+
+@media (max-width: 480px) {
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Form elements */
@@ -1343,7 +1444,16 @@ const elements = {
   mdnsUrl: document.getElementById('mdns-url'),
   copyUrlBtn: document.getElementById('copy-url-btn'),
   logsContainer: document.getElementById('logs-container'),
-  clearLogsBtn: document.getElementById('clear-logs-btn')
+  clearLogsBtn: document.getElementById('clear-logs-btn'),
+  // Settings elements
+  toggleSettingsBtn: document.getElementById('toggle-settings-btn'),
+  settingsContent: document.getElementById('settings-content'),
+  screensaverCheckInput: document.getElementById('screensaver-check-input'),
+  keepAliveInput: document.getElementById('keep-alive-input'),
+  discoveryIntervalInput: document.getElementById('discovery-interval-input'),
+  discoveryTimeoutInput: document.getElementById('discovery-timeout-input'),
+  castRetryInput: document.getElementById('cast-retry-input'),
+  castMaxRetriesInput: document.getElementById('cast-max-retries-input')
 };
 
 // State
@@ -1457,6 +1567,26 @@ async function loadSettings() {
     
     if (data.selectedChromecast) {
       elements.chromecastSelect.value = data.selectedChromecast;
+    }
+    
+    // Load timing settings
+    if (elements.screensaverCheckInput) {
+      elements.screensaverCheckInput.value = data.screensaverCheckInterval || 60;
+    }
+    if (elements.keepAliveInput) {
+      elements.keepAliveInput.value = data.keepAliveInterval || 5;
+    }
+    if (elements.discoveryIntervalInput) {
+      elements.discoveryIntervalInput.value = data.discoveryInterval || 30;
+    }
+    if (elements.discoveryTimeoutInput) {
+      elements.discoveryTimeoutInput.value = data.discoveryTimeout || 8;
+    }
+    if (elements.castRetryInput) {
+      elements.castRetryInput.value = data.castRetryDelay || 2;
+    }
+    if (elements.castMaxRetriesInput) {
+      elements.castMaxRetriesInput.value = data.castMaxRetries || 3;
     }
     
     updateScreensaverStatus(data.screensaverActive);
@@ -1594,6 +1724,38 @@ elements.urlInput.addEventListener('change', (e) => {
 elements.refreshBtn.addEventListener('click', refreshDevices);
 elements.castBtn.addEventListener('click', startCast);
 elements.stopBtn.addEventListener('click', stopCast);
+
+// Toggle settings visibility
+if (elements.toggleSettingsBtn && elements.settingsContent) {
+  elements.toggleSettingsBtn.addEventListener('click', () => {
+    const isHidden = elements.settingsContent.style.display === 'none';
+    elements.settingsContent.style.display = isHidden ? 'block' : 'none';
+    elements.toggleSettingsBtn.textContent = isHidden ? 'Dölj' : 'Visa';
+  });
+}
+
+// Settings input handlers
+const settingsInputs = [
+  { el: elements.screensaverCheckInput, key: 'screensaverCheckInterval' },
+  { el: elements.keepAliveInput, key: 'keepAliveInterval' },
+  { el: elements.discoveryIntervalInput, key: 'discoveryInterval' },
+  { el: elements.discoveryTimeoutInput, key: 'discoveryTimeout' },
+  { el: elements.castRetryInput, key: 'castRetryDelay' },
+  { el: elements.castMaxRetriesInput, key: 'castMaxRetries' }
+];
+
+settingsInputs.forEach(function(item) {
+  if (item.el) {
+    item.el.addEventListener('change', function(e) {
+      const value = parseInt(e.target.value, 10);
+      if (!isNaN(value)) {
+        const update = {};
+        update[item.key] = value;
+        saveSettings(update);
+      }
+    });
+  }
+});
 
 if (elements.copyUrlBtn) {
   elements.copyUrlBtn.addEventListener('click', () => {
