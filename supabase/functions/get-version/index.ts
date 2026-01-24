@@ -19,10 +19,26 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.1";
+const VERSION = "1.3.2";
 const RELEASED_AT = "2026-01-24";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.2",
+    date: "2026-01-24",
+    changes: {
+      sv: [
+        "Crash protection: uncaughtException och unhandledRejection handlers",
+        "HTTP server error handling: Servern kraschar inte längre på fel",
+        "Fixat: Webbservern tappar inte anslutningen vid castv2-fel",
+      ],
+      en: [
+        "Crash protection: uncaughtException and unhandledRejection handlers",
+        "HTTP server error handling: Server no longer crashes on errors",
+        "Fixed: Web server no longer drops connection on castv2 errors",
+      ],
+    }
+  },
   {
     version: "1.3.1",
     date: "2026-01-24",
