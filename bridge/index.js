@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.3';
+const BRIDGE_VERSION = '1.3.4';
 
 // Configuration
 const CONFIG_FILE = path.join(__dirname, 'config.json');
@@ -321,7 +321,50 @@ function logScreensaverStop(reason = 'takeover') {
   
   const cooldownMsg = reason === 'network_error' ? 'no cooldown (network error)' : 'cooldown started';
   log.info(`⏹️ Screensaver stopped - ${cooldownMsg}`);
-  startRecoveryCheck();
+  
+  // For network errors, try immediate reconnect before falling back to recovery loop
+  if (reason === 'network_error') {
+    log.info('🔄 Network error detected - attempting immediate reconnect...');
+    immediateReconnect();
+  } else {
+    startRecoveryCheck();
+  }
+}
+
+// Immediate reconnect attempt after network error
+async function immediateReconnect() {
+  const config = loadConfig();
+  if (!config.enabled || !config.url || !config.selectedChromecast) {
+    log.warn('⚠️ Cannot reconnect - missing config');
+    startRecoveryCheck();
+    return;
+  }
+  
+  // Wait a moment for any cleanup to complete
+  await sleep(2000);
+  
+  // First check if device is reachable
+  const result = await isChromecastIdleWithRecovery(config.selectedChromecast);
+  
+  if (result.status === 'idle') {
+    log.info('✅ Device idle - reconnecting now');
+    try {
+      await castMedia(config.selectedChromecast, config.url);
+      log.info('✅ Immediate reconnect successful');
+    } catch (error) {
+      log.error(`❌ Immediate reconnect failed: ${error.message}`);
+      startRecoveryCheck();
+    }
+  } else if (result.status === 'our_app') {
+    log.info('✅ Our app still running - no action needed');
+    screensaverActive = true;
+  } else if (result.status === 'error') {
+    log.warn('⚠️ Device unreachable - starting recovery loop');
+    startRecoveryCheck();
+  } else {
+    log.info(`ℹ️ Device busy (${result.status}) - starting recovery loop`);
+    startRecoveryCheck();
+  }
 }
 
 // ============ Network Utilities ============
