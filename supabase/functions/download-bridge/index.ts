@@ -125,7 +125,7 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const os = require('os');
-const Chromecasts = require('chromecasts');
+const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - automatically set at download time
@@ -139,13 +139,12 @@ const DEVICE_ID = process.env.DEVICE_ID || 'default-bridge';
 const CUSTOM_APP_ID = 'FE376873';
 const BACKDROP_APP_ID = 'E8C28D3C';
 
-// Initialize Bonjour and Chromecasts
+// Initialize Bonjour
 const bonjour = new Bonjour();
-const chromecasts = Chromecasts();
 
 // State
 let discoveredDevices = [];
-let currentDevice = null;
+let client = null;
 let keepAliveInterval = null;
 let screensaverActive = false;
 
@@ -158,15 +157,14 @@ const DEFAULT_CONFIG = {
   enabled: false,
   url: '',
   selectedChromecast: null,
-  // Timing settings
-  screensaverCheckInterval: 60,      // How often to check if device is idle (seconds)
-  keepAliveInterval: 5,              // Keep-alive ping interval (seconds)
-  discoveryInterval: 30,             // Re-scan for devices interval (minutes)
-  discoveryTimeout: 8,               // Max time to wait for discovery (seconds)
-  discoveryEarlyResolve: 3,          // Early resolve if devices found (seconds)
-  idleStatusTimeout: 5,              // Timeout for idle check (seconds)
-  castRetryDelay: 2,                 // Base delay for retry backoff (seconds)
-  castMaxRetries: 3                  // Max cast retry attempts
+  screensaverCheckInterval: 60,
+  keepAliveInterval: 5,
+  discoveryInterval: 30,
+  discoveryTimeout: 8,
+  discoveryEarlyResolve: 3,
+  idleStatusTimeout: 5,
+  castRetryDelay: 2,
+  castMaxRetries: 3
 };
 
 // ============ Structured Logging ============
@@ -288,12 +286,10 @@ function discoverDevices() {
       }
     });
     
-    // Get timing from config
     const config = loadConfig();
     const earlyResolveMs = (config.discoveryEarlyResolve || 3) * 1000;
     const maxTimeoutMs = (config.discoveryTimeout || 8) * 1000;
     
-    // Early resolve if devices found
     const earlyResolveTimeout = setTimeout(() => {
       if (foundDevices.length > 0 && !resolved) {
         resolved = true;
@@ -304,7 +300,6 @@ function discoverDevices() {
       }
     }, earlyResolveMs);
     
-    // Max timeout
     setTimeout(() => {
       clearTimeout(earlyResolveTimeout);
       if (!resolved) {
@@ -318,93 +313,224 @@ function discoverDevices() {
   });
 }
 
-// ============ Chromecast Control ============
-
-function keepSessionAlive() {
-  if (keepAliveInterval) clearInterval(keepAliveInterval);
-  const config = loadConfig();
-  const intervalMs = (config.keepAliveInterval || 5) * 1000;
-  
-  keepAliveInterval = setInterval(() => {
-    if (currentDevice) {
-      try {
-        currentDevice.status((err, status) => {
-          if (err) {
-            log.warn('⚠️ Keep-alive status check failed:', err.message);
-            // Session may have been lost - flag for reconnect
-            if (screensaverActive) {
-              log.info('🔄 Session lost, will retry on next check');
-              screensaverActive = false;
-            }
-          } else {
-            log.debug('Keep-alive ping successful');
-          }
-        });
-      } catch (e) {
-        log.warn('⚠️ Keep-alive exception:', e.message);
-      }
-    }
-  }, intervalMs);
-}
-
-async function isChromecastIdle(device) {
-  return new Promise((resolve) => {
-    if (!device) { resolve(true); return; }
-    const config = loadConfig();
-    const timeoutMs = (config.idleStatusTimeout || 5) * 1000;
-    const timeout = setTimeout(() => resolve(true), timeoutMs);
-    try {
-      device.status((err, status) => {
-        clearTimeout(timeout);
-        if (err) { resolve(true); return; }
-        // FIXED: Use every() instead of some() - device is idle only if ALL apps are our custom app or backdrop
-        const isIdle = !status?.applications || 
-          status.applications.length === 0 ||
-          status.applications.every(app => 
-            app.appId === CUSTOM_APP_ID || app.appId === BACKDROP_APP_ID
-          );
-        log.debug(\`Idle check: \${isIdle}, apps: \${JSON.stringify(status?.applications?.map(a => a.appId) || [])}\`);
-        resolve(isIdle);
-      });
-    } catch (e) { clearTimeout(timeout); resolve(true); }
-  });
-}
+// ============ Chromecast Control using raw castv2 ============
 
 function findDevice(name) {
-  const device = discoveredDevices.find(d => d.name === name);
-  if (!device) return null;
-  
-  // Find player in chromecasts
-  const player = chromecasts.players.find(p => p.host === device.host || p.name === device.name);
-  return player || null;
+  return discoveredDevices.find(d => d.name === name) || null;
 }
 
-async function castMedia(chromecastName, url) {
-  return new Promise((resolve, reject) => {
-    const player = findDevice(chromecastName);
-    if (!player) {
-      reject(new Error(\`Device "\${chromecastName}" not found\`));
-      return;
-    }
+async function isChromecastIdle(deviceName) {
+  const device = findDevice(deviceName);
+  if (!device) {
+    log.warn('⚠️ Device not found for idle check:', deviceName);
+    return true;
+  }
+  
+  const config = loadConfig();
+  const timeoutMs = (config.idleStatusTimeout || 5) * 1000;
+  
+  return new Promise((resolve) => {
+    const checkClient = new castv2.Client();
     
-    currentDevice = player;
-    log.info(\`📺 Casting to \${chromecastName}: \${url}\`);
+    const timeout = setTimeout(() => {
+      log.warn('⏱️ Idle check timeout');
+      checkClient.close();
+      resolve(true);
+    }, timeoutMs);
     
-    player.play(url, { type: 'text/html', autoplay: true, appId: CUSTOM_APP_ID }, (err) => {
-      if (err) {
-        log.error('❌ Cast failed:', err.message);
-        reject(err);
-      } else {
-        log.info('✅ Cast successful');
-        screensaverActive = true;
-        keepSessionAlive();
-        resolve({ success: true });
-      }
+    checkClient.on('error', (err) => {
+      clearTimeout(timeout);
+      log.error(\`❌ Idle check error: \${err.message}\`);
+      checkClient.close();
+      resolve(true);
+    });
+    
+    checkClient.connect(device.host, () => {
+      const connection = checkClient.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.tp.connection', 'JSON');
+      const receiver = checkClient.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.receiver', 'JSON');
+      
+      connection.send({ type: 'CONNECT' });
+      receiver.send({ type: 'GET_STATUS', requestId: 1 });
+      
+      receiver.on('message', (data) => {
+        if (data.type === 'RECEIVER_STATUS') {
+          clearTimeout(timeout);
+          connection.send({ type: 'CLOSE' });
+          checkClient.close();
+          
+          const apps = data.status?.applications || [];
+          const otherApps = apps.filter(app => app.appId !== BACKDROP_APP_ID && app.appId !== CUSTOM_APP_ID);
+          const ourAppRunning = apps.some(app => app.appId === CUSTOM_APP_ID);
+          
+          if (ourAppRunning) {
+            log.debug('Our app is running');
+            screensaverActive = true;
+            resolve(false);
+          } else if (otherApps.length === 0) {
+            log.debug('Device is idle');
+            resolve(true);
+          } else {
+            log.debug(\`Device busy with: \${otherApps.map(a => a.displayName || a.appId).join(', ')}\`);
+            resolve(false);
+          }
+        }
+      });
     });
   });
 }
 
-// Retry wrapper for cast operations with exponential backoff
+async function castMedia(chromecastName, url) {
+  const device = findDevice(chromecastName);
+  if (!device) {
+    throw new Error(\`Device "\${chromecastName}" not found\`);
+  }
+  
+  log.info(\`📺 Casting to \${chromecastName}: \${url}\`);
+  
+  return new Promise((resolve, reject) => {
+    client = new castv2.Client();
+    let heartbeatInterval = null;
+    let launchTimeout = null;
+    
+    const cleanup = () => {
+      if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+      }
+      if (launchTimeout) {
+        clearTimeout(launchTimeout);
+        launchTimeout = null;
+      }
+    };
+    
+    client.on('error', (err) => {
+      log.error(\`❌ Connection error: \${err.message}\`);
+      cleanup();
+      client.close();
+      reject(err);
+    });
+    
+    client.on('close', () => {
+      log.debug('Connection closed');
+      cleanup();
+    });
+    
+    client.connect(device.host, () => {
+      log.info('✅ Connected to Chromecast');
+      
+      const connection = client.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.tp.connection', 'JSON');
+      const heartbeat = client.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.tp.heartbeat', 'JSON');
+      const receiver = client.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.receiver', 'JSON');
+      
+      connection.send({ type: 'CONNECT' });
+      
+      heartbeatInterval = setInterval(() => {
+        try {
+          heartbeat.send({ type: 'PING' });
+        } catch (e) {
+          log.error('Heartbeat failed:', e.message);
+          cleanup();
+        }
+      }, 5000);
+      
+      heartbeat.on('message', () => {});
+      
+      log.info('📡 Getting receiver status...');
+      receiver.send({ type: 'GET_STATUS', requestId: 1 });
+      
+      launchTimeout = setTimeout(() => {
+        log.error('⏱️ Timeout waiting for receiver response (120s)');
+        cleanup();
+        client.close();
+        reject(new Error('Receiver timeout'));
+      }, 120000);
+      
+      let appLaunched = false;
+      
+      receiver.on('message', async (data) => {
+        log.debug('📨 Receiver message:', JSON.stringify(data));
+        
+        if (data.type === 'LAUNCH_ERROR') {
+          cleanup();
+          log.error(\`❌ Failed to launch app: \${data.reason}\`);
+          client.close();
+          reject(new Error(\`Custom receiver not available: \${data.reason}\`));
+          return;
+        }
+        
+        if (data.type === 'RECEIVER_STATUS') {
+          if (!appLaunched) {
+            if (data.status && data.status.applications && data.status.applications.length > 0) {
+              const runningApp = data.status.applications[0];
+              
+              if (runningApp.appId !== CUSTOM_APP_ID && runningApp.appId !== BACKDROP_APP_ID) {
+                log.warn(\`⚠️ Another app running: \${runningApp.displayName}\`);
+                cleanup();
+                client.close();
+                reject(new Error(\`Another app running: \${runningApp.displayName}\`));
+                return;
+              }
+            }
+            
+            log.info(\`🚀 Launching custom receiver app: \${CUSTOM_APP_ID}\`);
+            receiver.send({ type: 'LAUNCH', appId: CUSTOM_APP_ID, requestId: 2 });
+            appLaunched = true;
+            return;
+          }
+          
+          if (data.status && data.status.applications && data.status.applications.length > 0) {
+            const app = data.status.applications[0];
+            log.info(\`📱 App launched: \${app.displayName} (\${app.appId})\`);
+            
+            if (app.appId !== CUSTOM_APP_ID) {
+              log.warn('⚠️ Wrong app detected during cast');
+              return;
+            }
+            
+            clearTimeout(launchTimeout);
+            
+            const sessionId = app.sessionId;
+            const transportId = app.transportId;
+            
+            const appConnection = client.createChannel('sender-0', transportId, 'urn:x-cast:com.google.cast.tp.connection', 'JSON');
+            appConnection.send({ type: 'CONNECT' });
+            
+            const media = client.createChannel('sender-0', transportId, 'urn:x-cast:com.google.cast.media', 'JSON');
+            
+            log.info(\`📺 Loading URL: \${url}\`);
+            media.send({
+              type: 'LOAD',
+              requestId: 5,
+              sessionId: sessionId,
+              media: {
+                contentId: url,
+                contentType: 'text/html',
+                streamType: 'LIVE',
+                metadata: {
+                  type: 0,
+                  metadataType: 0,
+                  title: 'Website Viewer'
+                }
+              },
+              autoplay: true
+            });
+            
+            log.info('✅ Cast successful');
+            screensaverActive = true;
+            keepAliveInterval = heartbeatInterval;
+            
+            resolve({ success: true });
+            
+            media.on('message', (data) => {
+              log.debug('📨 Media message:', JSON.stringify(data));
+            });
+          }
+        }
+      });
+    });
+  });
+}
+
 async function castMediaWithRetry(chromecastName, url) {
   const config = loadConfig();
   const maxRetries = config.castMaxRetries || 3;
@@ -416,7 +542,7 @@ async function castMediaWithRetry(chromecastName, url) {
     } catch (error) {
       log.warn(\`⚠️ Cast attempt \${attempt}/\${maxRetries} failed: \${error.message}\`);
       if (attempt === maxRetries) throw error;
-      const delay = baseDelay * attempt; // Exponential backoff
+      const delay = baseDelay * attempt;
       log.info(\`🔄 Retrying in \${delay / 1000}s...\`);
       await new Promise(r => setTimeout(r, delay));
     }
@@ -424,23 +550,39 @@ async function castMediaWithRetry(chromecastName, url) {
 }
 
 async function stopCast(chromecastName) {
+  const device = findDevice(chromecastName);
+  if (!device) {
+    throw new Error(\`Device "\${chromecastName}" not found\`);
+  }
+  
   return new Promise((resolve, reject) => {
-    const player = findDevice(chromecastName);
-    if (!player) {
-      reject(new Error(\`Device "\${chromecastName}" not found\`));
-      return;
-    }
+    const stopClient = new castv2.Client();
     
-    try {
-      player.stop(() => {
+    stopClient.on('error', (err) => {
+      log.error(\`❌ Stop error: \${err.message}\`);
+      stopClient.close();
+      reject(err);
+    });
+    
+    stopClient.connect(device.host, () => {
+      const connection = stopClient.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.tp.connection', 'JSON');
+      const receiver = stopClient.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.receiver', 'JSON');
+      
+      connection.send({ type: 'CONNECT' });
+      receiver.send({ type: 'STOP', requestId: 1 });
+      
+      setTimeout(() => {
+        connection.send({ type: 'CLOSE' });
+        stopClient.close();
         screensaverActive = false;
-        if (keepAliveInterval) clearInterval(keepAliveInterval);
+        if (keepAliveInterval) {
+          clearInterval(keepAliveInterval);
+          keepAliveInterval = null;
+        }
         log.info('⏹️ Cast stopped');
         resolve({ success: true });
-      });
-    } catch (error) {
-      reject(error);
-    }
+      }, 1000);
+    });
   });
 }
 
@@ -450,10 +592,7 @@ async function checkAndActivateScreensaver() {
   const config = loadConfig();
   if (!config.enabled || !config.url || !config.selectedChromecast) return;
   
-  const player = findDevice(config.selectedChromecast);
-  if (!player) return;
-  
-  const idle = await isChromecastIdle(player);
+  const idle = await isChromecastIdle(config.selectedChromecast);
   if (idle && !screensaverActive) {
     log.info('💤 Device idle, activating screensaver...');
     try {
@@ -517,7 +656,6 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, \`http://localhost:\${PORT}\`);
   const pathname = url.pathname;
   
-  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -528,21 +666,14 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   
-  // API Routes
   if (pathname.startsWith('/api/')) {
     try {
-      // GET /api/settings
       if (req.method === 'GET' && pathname === '/api/settings') {
         const config = loadConfig();
-        sendJson(res, { 
-          ...config, 
-          deviceId: DEVICE_ID,
-          screensaverActive 
-        });
+        sendJson(res, { ...config, deviceId: DEVICE_ID, screensaverActive });
         return;
       }
       
-      // POST /api/settings
       if (req.method === 'POST' && pathname === '/api/settings') {
         const body = await parseBody(req);
         const config = loadConfig();
@@ -552,37 +683,33 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       
-      // GET /api/chromecasts
       if (req.method === 'GET' && pathname === '/api/chromecasts') {
         sendJson(res, { devices: discoveredDevices });
         return;
       }
       
-      // POST /api/chromecasts/refresh
       if (req.method === 'POST' && pathname === '/api/chromecasts/refresh') {
         const devices = await discoverDevices();
         sendJson(res, { devices });
         return;
       }
       
-      // POST /api/cast
       if (req.method === 'POST' && pathname === '/api/cast') {
         const body = await parseBody(req);
         const config = loadConfig();
         const chromecastName = body.chromecast || config.selectedChromecast;
-        const url = body.url || config.url;
+        const castUrl = body.url || config.url;
         
-        if (!chromecastName || !url) {
+        if (!chromecastName || !castUrl) {
           sendJson(res, { error: 'Missing chromecast or url' }, 400);
           return;
         }
         
-        await castMedia(chromecastName, url);
+        await castMedia(chromecastName, castUrl);
         sendJson(res, { success: true });
         return;
       }
       
-      // POST /api/stop
       if (req.method === 'POST' && pathname === '/api/stop') {
         const config = loadConfig();
         if (config.selectedChromecast) {
@@ -592,7 +719,6 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       
-      // GET /api/status
       if (req.method === 'GET' && pathname === '/api/status') {
         const config = loadConfig();
         const networkIP = getNetworkIP();
@@ -611,28 +737,21 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       
-      // GET /api/logs
       if (req.method === 'GET' && pathname === '/api/logs') {
         sendJson(res, { logs: logBuffer });
         return;
       }
       
-      // DELETE /api/logs (clear logs)
       if (req.method === 'DELETE' && pathname === '/api/logs') {
         logBuffer = [];
         sendJson(res, { success: true });
         return;
       }
       
-      // POST /api/restart
       if (req.method === 'POST' && pathname === '/api/restart') {
         log.info('🔄 Restart requested via API');
         sendJson(res, { success: true, message: 'Restarting...' });
-        // Give time for response to be sent, then exit
-        // The service manager (systemd/Task Scheduler) will restart the process
-        setTimeout(() => {
-          process.exit(0);
-        }, 500);
+        setTimeout(() => { process.exit(0); }, 500);
         return;
       }
       
@@ -643,11 +762,9 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   
-  // Serve static files
   let filePath = pathname === '/' ? '/index.html' : pathname;
   filePath = path.join(PUBLIC_DIR, filePath);
   
-  // Security: prevent directory traversal
   if (!filePath.startsWith(PUBLIC_DIR)) {
     res.writeHead(403);
     res.end('Forbidden');
@@ -660,88 +777,49 @@ const server = http.createServer(async (req, res) => {
 // ============ Main ============
 
 async function main() {
-  const networkIP = getNetworkIP();
+  log.info(\`🚀 Chromecast Bridge v\${BRIDGE_VERSION} starting...\`);
+  log.info(\`📋 Device ID: \${DEVICE_ID}\`);
   
-  console.log('');
-  console.log('╔════════════════════════════════════════╗');
-  console.log('║     Chromecast Bridge Service          ║');
-  console.log('╚════════════════════════════════════════╝');
-  console.log('');
-  log.info(\`📍 Device ID: \${DEVICE_ID}\`);
-  console.log('');
-  console.log('🌐 Åtkomst:');
-  console.log(\`   Lokal:    http://localhost:\${PORT}\`);
-  console.log(\`   Nätverk:  http://\${networkIP}:\${PORT}\`);
-  console.log(\`   mDNS:     http://\${DEVICE_ID}.local:\${PORT}\`);
-  console.log('');
-  
-  // Write network info to file (for background services)
   writeNetworkInfo();
-  log.info(\`📄 Nätverksinfo sparad till: network-info.txt\`);
-  console.log('');
   
-  // Initial discovery
+  server.listen(PORT, '0.0.0.0', () => {
+    log.info(\`🚀 Server running on http://localhost:\${PORT}\`);
+  });
+  
+  bonjour.publish({
+    name: \`\${os.hostname()}-\${DEVICE_ID}\`,
+    type: 'http',
+    port: PORT,
+    txt: { path: '/', version: BRIDGE_VERSION }
+  });
+  log.info(\`📡 mDNS published: \${os.hostname()}-\${DEVICE_ID}.local\`);
+  
   await discoverDevices();
   
-  // Start chromecasts library discovery
-  chromecasts.on('update', (player) => {
-    log.info(\`📡 Chromecasts lib found: \${player.name}\`);
-  });
-  
-  // Start HTTP server
-  server.listen(PORT, '0.0.0.0', () => {
-    log.info(\`🚀 Server running\`);
-    
-    // Publish mDNS service
-    try {
-      bonjour.publish({
-        name: DEVICE_ID,
-        type: 'http',
-        port: PORT,
-        txt: { 
-          type: 'chromecast-bridge',
-          version: BRIDGE_VERSION
-        }
-      });
-      log.info(\`📡 mDNS publicerad: \${DEVICE_ID}.local\`);
-    } catch (error) {
-      log.error('mDNS publishing failed:', error.message);
-    }
-  });
-  
-  // Get timing config for intervals
   const config = loadConfig();
-  const discoveryIntervalMs = (config.discoveryInterval || 30) * 60 * 1000;
-  const screensaverCheckMs = (config.screensaverCheckInterval || 60) * 1000;
+  const discoveryMs = (config.discoveryInterval || 30) * 60 * 1000;
+  const screensaverMs = (config.screensaverCheckInterval || 60) * 1000;
   
-  log.info(\`⏱️ Timing: screensaver check \${config.screensaverCheckInterval || 60}s, discovery \${config.discoveryInterval || 30}min\`);
-  
-  // Periodic discovery
-  setInterval(discoverDevices, discoveryIntervalMs);
-  
-  // Screensaver check
-  setInterval(checkAndActivateScreensaver, screensaverCheckMs);
-  
-  // Update network info periodically (in case IP changes)
-  setInterval(writeNetworkInfo, 5 * 60 * 1000);
-  
-  console.log('');
-  console.log('Press Ctrl+C to stop.');
+  setInterval(discoverDevices, discoveryMs);
+  setInterval(checkAndActivateScreensaver, screensaverMs);
   
   process.on('SIGINT', () => {
     log.info('👋 Shutting down...');
-    if (keepAliveInterval) clearInterval(keepAliveInterval);
-    bonjour.destroy();
+    bonjour.unpublishAll();
     server.close();
+    if (client) client.close();
     process.exit(0);
   });
 }
 
-main().catch(console.error);`;
+main().catch((error) => {
+  log.error('Fatal error:', error.message);
+  process.exit(1);
+});`;
 
 const PACKAGE_JSON = `{
   "name": "chromecast-bridge",
-  "version": "1.0.0",
+  "version": "1.4.0",
   "description": "Local service for controlling Chromecast screensaver",
   "main": "index.js",
   "scripts": {
@@ -749,7 +827,7 @@ const PACKAGE_JSON = `{
   },
   "dependencies": {
     "bonjour-service": "^1.3.0",
-    "chromecasts": "^1.10.1",
+    "castv2": "^0.1.10",
     "dotenv": "^16.3.1"
   }
 }`;
