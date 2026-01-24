@@ -46,17 +46,18 @@ och projektet följer [Semantic Versioning](https://semver.org/lang/sv/).
 
 ## Versionshantering
 
-För att uppdatera versionen, kör:
+Versionen hanteras automatiskt via edge-funktionen `get-version`.
 
-```bash
-node scripts/update-version.js patch   # 1.1.0 → 1.1.1
-node scripts/update-version.js minor   # 1.1.0 → 1.2.0
-node scripts/update-version.js major   # 1.1.0 → 2.0.0
-```
+**För att släppa en ny version:**
 
-Skriptet uppdaterar automatiskt:
-- `src/config/version.ts`
-- `bridge/index.js`
-- `supabase/functions/download-bridge/index.ts`
+1. Öppna `supabase/functions/get-version/index.ts`
+2. Uppdatera `VERSION_INFO`:
+   - Ändra `version` till den nya versionen
+   - Uppdatera `releasedAt` till dagens datum
+   - Lägg till ändringar i `changelog`-arrayen
+3. Publicera projektet
 
-Glöm inte att uppdatera denna CHANGELOG när du släpper en ny version!
+Allt synkas automatiskt:
+- Webb-appen visar den nya versionen
+- Nedladdade bridges får den nya versionen inbakad
+- Användare ser varning om de har en äldre version

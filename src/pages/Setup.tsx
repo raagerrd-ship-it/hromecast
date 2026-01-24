@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useDownloadBridge } from "@/hooks/use-download-bridge";
-import { BRIDGE_VERSION } from "@/config/version";
+import { useLatestVersion } from "@/hooks/use-latest-version";
 
 type Platform = 'windows' | 'linux' | 'raspberry';
 
@@ -16,6 +16,7 @@ const Setup = () => {
   const [selectedPlatform, setSelectedPlatform] = useState<Platform>('windows');
   const { toast } = useToast();
   const { downloadBridge, isDownloading } = useDownloadBridge();
+  const { version, isLoading: isLoadingVersion } = useLatestVersion();
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -103,7 +104,7 @@ const Setup = () => {
               <CardContent className="pt-4 pb-4">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div>
-                    <p className="font-medium">chromecast-bridge.zip <span className="text-xs text-muted-foreground font-normal">v{BRIDGE_VERSION}</span></p>
+                    <p className="font-medium">chromecast-bridge.zip <span className="text-xs text-muted-foreground font-normal">{isLoadingVersion ? "" : `v${version}`}</span></p>
                     <p className="text-sm text-muted-foreground">Innehåller allt du behöver</p>
                   </div>
                   <Button 

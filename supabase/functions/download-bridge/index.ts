@@ -113,8 +113,11 @@ function createZip(files: Record<string, string>): Uint8Array {
 
 // ============================================================================
 // BRIDGE FILES - Offline version (no cloud dependencies)
-// Last updated: 2026-01-24
+// Version is injected dynamically from get-version endpoint
 // ============================================================================
+
+// Placeholder that will be replaced with actual version at download time
+const VERSION_PLACEHOLDER = '__BRIDGE_VERSION__';
 
 const INDEX_JS = `require('dotenv').config();
 const fs = require('fs');
@@ -124,8 +127,8 @@ const os = require('os');
 const Chromecasts = require('chromecasts');
 const Bonjour = require('bonjour-service').Bonjour;
 
-// Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.1.0';
+// Version - automatically set at download time
+const BRIDGE_VERSION = '${VERSION_PLACEHOLDER}';
 
 // Configuration
 const CONFIG_FILE = path.join(__dirname, 'config.json');
@@ -1957,19 +1960,7 @@ All konfiguration lagras lokalt i \`config.json\`. Ingen data skickas till molne
 `;
 
 // Collect all files
-const files: Record<string, string> = {
-  "index.js": INDEX_JS,
-  "package.json": PACKAGE_JSON,
-  ".env.example": ENV_EXAMPLE,
-  "public/index.html": PUBLIC_INDEX_HTML,
-  "public/style.css": PUBLIC_STYLE_CSS,
-  "public/app.js": PUBLIC_APP_JS,
-  "install-windows.ps1": INSTALL_WINDOWS_PS1,
-  "uninstall-windows.ps1": UNINSTALL_WINDOWS_PS1,
-  "install-linux.sh": INSTALL_LINUX_SH,
-  "uninstall-linux.sh": UNINSTALL_LINUX_SH,
-  "README.md": README,
-};
+// Files are now created dynamically in the serve function
 
 serve(async (req) => {
   // Handle CORS
@@ -1978,6 +1969,29 @@ serve(async (req) => {
   }
 
   try {
+    // Fetch current version from get-version endpoint
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+    const versionResponse = await fetch(`${supabaseUrl}/functions/v1/get-version`);
+    const versionData = await versionResponse.json();
+    const currentVersion = versionData.version || "1.0.0";
+
+    // Inject version into INDEX_JS
+    const indexJsWithVersion = INDEX_JS.replace(VERSION_PLACEHOLDER, currentVersion);
+
+    const files: Record<string, string> = {
+      "index.js": indexJsWithVersion,
+      "package.json": PACKAGE_JSON,
+      ".env.example": ENV_EXAMPLE,
+      "public/index.html": PUBLIC_INDEX_HTML,
+      "public/style.css": PUBLIC_STYLE_CSS,
+      "public/app.js": PUBLIC_APP_JS,
+      "install-windows.ps1": INSTALL_WINDOWS_PS1,
+      "uninstall-windows.ps1": UNINSTALL_WINDOWS_PS1,
+      "install-linux.sh": INSTALL_LINUX_SH,
+      "uninstall-linux.sh": UNINSTALL_LINUX_SH,
+      "README.md": README,
+    };
+
     const zipData = createZip(files);
 
     return new Response(zipData.buffer as ArrayBuffer, {
