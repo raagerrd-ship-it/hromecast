@@ -497,8 +497,14 @@ async function checkAndActivateScreensaver() {
   const config = loadConfig();
   if (!config.enabled || !config.url || !config.selectedChromecast) return;
   
+  // Check if our app is already running - if so, don't try to cast again
+  if (screensaverActive) {
+    log.debug('🖥️ Screensaver already active, skipping check');
+    return;
+  }
+  
   const idle = await isChromecastIdle(config.selectedChromecast);
-  if (idle && !screensaverActive) {
+  if (idle) {
     log.info('💤 Device idle, activating screensaver...');
     try {
       await castMediaWithRetry(config.selectedChromecast, config.url);
