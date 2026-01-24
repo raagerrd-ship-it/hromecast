@@ -16,7 +16,7 @@ const Setup = () => {
   const [selectedPlatform, setSelectedPlatform] = useState<Platform>('windows');
   const { toast } = useToast();
   const { downloadBridge, isDownloading } = useDownloadBridge();
-  const { version, isLoading: isLoadingVersion } = useLatestVersion();
+  const { version, changelog, isLoading: isLoadingVersion } = useLatestVersion();
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -406,6 +406,39 @@ const Setup = () => {
                 </div>
               </details>
             </div>
+          </section>
+
+          {/* Changelog */}
+          <section className="space-y-4 pt-4 border-t">
+            <h2 className="text-lg font-semibold">Ändringslogg</h2>
+            
+            {isLoadingVersion ? (
+              <div className="text-sm text-muted-foreground">Laddar...</div>
+            ) : (
+              <div className="space-y-4">
+                {changelog.map((release) => (
+                  <Card key={release.version}>
+                    <CardContent className="pt-4 pb-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="font-semibold">v{release.version}</span>
+                        <span className="text-xs text-muted-foreground">{release.date}</span>
+                        {release.version === version && (
+                          <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full">Senaste</span>
+                        )}
+                      </div>
+                      <ul className="space-y-1.5">
+                        {release.changes.map((change, index) => (
+                          <li key={index} className="text-sm text-muted-foreground flex items-start gap-2">
+                            <CheckCircle className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                            {change}
+                          </li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
           </section>
 
           {/* Manual install (collapsed) */}
