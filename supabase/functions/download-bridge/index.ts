@@ -124,6 +124,9 @@ const os = require('os');
 const Chromecasts = require('chromecasts');
 const Bonjour = require('bonjour-service').Bonjour;
 
+// Version - keep in sync with src/config/version.ts
+const BRIDGE_VERSION = '1.0.0';
+
 // Configuration
 const CONFIG_FILE = path.join(__dirname, 'config.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -477,6 +480,7 @@ const server = http.createServer(async (req, res) => {
         const config = loadConfig();
         const networkIP = getNetworkIP();
         sendJson(res, {
+          version: BRIDGE_VERSION,
           deviceId: DEVICE_ID,
           port: PORT,
           networkIP: networkIP,

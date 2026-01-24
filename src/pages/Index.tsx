@@ -4,6 +4,7 @@ import { BridgeDiscovery } from "@/components/BridgeDiscovery";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useDownloadBridge } from "@/hooks/use-download-bridge";
+import { BRIDGE_VERSION } from "@/config/version";
 
 const Index = () => {
   const { downloadBridge, isDownloading } = useDownloadBridge();
@@ -108,9 +109,12 @@ const Index = () => {
 
       {/* Footer */}
       <footer className="flex-shrink-0 px-4 py-3 sm:px-6 border-t bg-card/50">
-        <div className="max-w-lg mx-auto">
-          <p className="text-xs text-muted-foreground text-center">
-            Körs lokalt • Hittar Chromecasts automatiskt • Ingen molnanslutning
+        <div className="max-w-lg mx-auto flex items-center justify-between gap-4">
+          <p className="text-xs text-muted-foreground">
+            Körs lokalt • Ingen molnanslutning
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Senaste version: <span className="font-medium text-foreground">v{BRIDGE_VERSION}</span>
           </p>
         </div>
       </footer>
