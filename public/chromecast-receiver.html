@@ -63,6 +63,7 @@
     
     // No fallback - wait for explicit content from bridge
     let contentLoaded = false;
+    let mediaSessionActive = false;
     
     // Set iframe to fill screen exactly
     function setupIframe() {
@@ -119,7 +120,21 @@
           
           if (isWebsite) {
             loadWebsite(url);
-            return null; // Block default media handling
+            
+            // Create a fake media session to keep the receiver alive
+            mediaSessionActive = true;
+            
+            // Return a modified request that simulates a live stream
+            // This keeps the Cast SDK happy and prevents session timeout
+            loadRequestData.media.streamType = cast.framework.messages.StreamType.LIVE;
+            loadRequestData.media.contentType = 'application/x-mpegurl'; // Fake HLS stream
+            loadRequestData.autoplay = false; // Don't actually try to play
+            
+            // Set up idle timeout prevention
+            playerManager.setIdleTimerDisabled(true);
+            
+            console.log('Returning modified load request to keep session alive');
+            return loadRequestData;
           }
         }
         
@@ -188,12 +203,14 @@
       window.location.reload();
     }, 45 * 60 * 1000);
     
-    // Start the receiver
+    // Start the receiver with extended options
     const options = new cast.framework.CastReceiverOptions();
     options.disableIdleTimeout = true;
+    options.maxInactivity = 3600; // 1 hour before auto-shutdown
+    options.supportedCommands = cast.framework.messages.Command.ALL_BASIC_MEDIA;
     
     context.start(options);
-    console.log('Chromecast receiver started');
+    console.log('Chromecast receiver started with idle timeout disabled');
   </script>
 </body>
 </html>
