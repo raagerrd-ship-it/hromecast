@@ -386,7 +386,9 @@ const Setup = () => {
                 <div className="text-sm text-muted-foreground pb-3 pl-4 space-y-2">
                   <p>Kontrollera att bridge-tjänsten körs:</p>
                   <ul className="list-disc list-inside space-y-1">
-                    <li><strong>Windows:</strong> Öppna Task Scheduler → ChromecastBridge</li>
+                    <li>
+                      <strong>Windows:</strong> Tryck <kbd className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">Windows + R</kbd>, skriv <code className="bg-muted px-1 rounded">taskschd.msc</code> och tryck Enter. Kontrollera att "ChromecastBridge" finns i listan.
+                    </li>
                     <li><strong>Linux:</strong> <code className="bg-muted px-1 rounded">systemctl --user status chromecast-bridge</code></li>
                   </ul>
                 </div>
