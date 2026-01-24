@@ -117,6 +117,7 @@ const files: Record<string, string> = {
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
+const os = require('os');
 const { createClient } = require('@supabase/supabase-js');
 const Chromecasts = require('chromecasts');
 const Bonjour = require('bonjour-service').Bonjour;
@@ -153,6 +154,39 @@ const DEFAULT_CONFIG = {
   selectedChromecast: null,
   idleTimeout: 5
 };
+
+// ============ Network Utilities ============
+
+function getNetworkIP() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return 'localhost';
+}
+
+function writeNetworkInfo() {
+  const ip = getNetworkIP();
+  const info = 'Chromecast Bridge - Nätverksinfo\\n' +
+    '================================\\n' +
+    'Startad: ' + new Date().toLocaleString('sv-SE') + '\\n' +
+    'Device ID: ' + DEVICE_ID + '\\n\\n' +
+    'Åtkomst från denna dator:\\n' +
+    '  http://localhost:' + PORT + '\\n\\n' +
+    'Åtkomst från mobil/annan enhet:\\n' +
+    '  http://' + ip + ':' + PORT + '\\n\\n' +
+    'mDNS (om stöds):\\n' +
+    '  http://' + DEVICE_ID + '.local:' + PORT;
+  try {
+    fs.writeFileSync(path.join(__dirname, 'network-info.txt'), info);
+  } catch (error) {
+    console.error('Could not write network-info.txt:', error.message);
+  }
+}
 
 // ============ Config Management ============
 
@@ -464,9 +498,13 @@ const server = http.createServer(async (req, res) => {
       // GET /api/status
       if (req.method === 'GET' && pathname === '/api/status') {
         const config = loadConfig();
+        const networkIP = getNetworkIP();
         sendJson(res, {
           deviceId: DEVICE_ID,
           port: PORT,
+          networkIP: networkIP,
+          networkUrl: 'http://' + networkIP + ':' + PORT,
+          mdnsUrl: 'http://' + DEVICE_ID + '.local:' + PORT,
           devices: discoveredDevices.length,
           selectedChromecast: config.selectedChromecast,
           screensaverActive: screensaverActive,
@@ -499,13 +537,24 @@ const server = http.createServer(async (req, res) => {
 // ============ Main ============
 
 async function main() {
+  const networkIP = getNetworkIP();
+  
   console.log('');
   console.log('========================================');
   console.log('  Chromecast Bridge Service');
   console.log('========================================');
   console.log('');
   console.log('Device ID:', DEVICE_ID);
-  console.log('Web UI: http://localhost:' + PORT);
+  console.log('');
+  console.log('Åtkomst:');
+  console.log('  Lokal:    http://localhost:' + PORT);
+  console.log('  Nätverk:  http://' + networkIP + ':' + PORT);
+  console.log('  mDNS:     http://' + DEVICE_ID + '.local:' + PORT);
+  console.log('');
+  
+  // Write network info to file
+  writeNetworkInfo();
+  console.log('Nätverksinfo sparad till: network-info.txt');
   console.log('');
   
   // Initial discovery
@@ -518,8 +567,23 @@ async function main() {
   
   // Start HTTP server
   server.listen(PORT, '0.0.0.0', () => {
-    console.log('Server running on http://localhost:' + PORT);
-    console.log('(also accessible at http://<your-ip>:' + PORT + ' from other devices)');
+    console.log('Server running');
+    
+    // Publish mDNS service
+    try {
+      bonjour.publish({
+        name: DEVICE_ID,
+        type: 'http',
+        port: PORT,
+        txt: { 
+          type: 'chromecast-bridge',
+          version: '1.0.0'
+        }
+      });
+      console.log('mDNS publicerad:', DEVICE_ID + '.local');
+    } catch (error) {
+      console.error('mDNS publishing failed:', error.message);
+    }
   });
   
   // Periodic discovery
@@ -527,6 +591,9 @@ async function main() {
   
   // Screensaver check every minute
   setInterval(checkAndActivateScreensaver, 60000);
+  
+  // Update network info periodically
+  setInterval(writeNetworkInfo, 5 * 60 * 1000);
   
   console.log('');
   console.log('Press Ctrl+C to stop.');
@@ -677,8 +744,26 @@ Kör \`uninstall-windows.ps1\` eller \`./uninstall-linux.sh\`
     </main>
 
     <footer>
-      <p>Device ID: <code id="device-id">-</code></p>
-      <p>Port: <code id="port">-</code></p>
+      <section class="card network-card">
+        <div class="card-header">
+          <h2>📱 Anslut från mobil</h2>
+        </div>
+        <div class="card-content">
+          <div class="network-info">
+            <div class="network-row">
+              <span class="network-label">Nätverks-URL:</span>
+              <code id="network-url">-</code>
+              <button id="copy-url-btn" class="btn btn-small">📋 Kopiera</button>
+            </div>
+            <div class="network-row">
+              <span class="network-label">mDNS:</span>
+              <code id="mdns-url">-</code>
+            </div>
+          </div>
+          <p class="hint">Öppna denna adress i din mobil för att konfigurera bridge:n</p>
+        </div>
+      </section>
+      <p class="footer-info">Device ID: <code id="device-id">-</code> | Port: <code id="port">-</code></p>
     </footer>
   </div>
 
@@ -974,13 +1059,54 @@ input:checked + .slider:before {
 
 footer {
   margin-top: 2rem;
-  padding: 1rem;
+}
+
+footer .network-card {
+  text-align: left;
+}
+
+.network-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.network-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.network-label {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  min-width: 100px;
+}
+
+.network-row code {
+  background: var(--bg);
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 0.875rem;
+  flex: 1;
+  word-break: break-all;
+}
+
+.btn-small {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+}
+
+.footer-info {
   text-align: center;
   font-size: 0.75rem;
   color: var(--text-muted);
+  margin-top: 1rem;
 }
 
-footer code {
+.footer-info code {
   background: var(--bg-card);
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
@@ -1029,7 +1155,10 @@ const elements = {
   stopBtn: document.getElementById('stop-btn'),
   previewContainer: document.getElementById('preview-container'),
   deviceId: document.getElementById('device-id'),
-  port: document.getElementById('port')
+  port: document.getElementById('port'),
+  networkUrl: document.getElementById('network-url'),
+  mdnsUrl: document.getElementById('mdns-url'),
+  copyUrlBtn: document.getElementById('copy-url-btn')
 };
 
 // State
@@ -1145,6 +1274,14 @@ async function loadStatus() {
     var data = await api('/api/status');
     elements.port.textContent = data.port || '-';
     updateScreensaverStatus(data.screensaverActive);
+    
+    // Update network URL display
+    if (data.networkUrl && elements.networkUrl) {
+      elements.networkUrl.textContent = data.networkUrl;
+    }
+    if (data.mdnsUrl && elements.mdnsUrl) {
+      elements.mdnsUrl.textContent = data.mdnsUrl;
+    }
   } catch (error) {
     console.error('Failed to load status:', error);
   }
@@ -1225,6 +1362,20 @@ elements.urlInput.addEventListener('change', function(e) {
 elements.refreshBtn.addEventListener('click', refreshDevices);
 elements.castBtn.addEventListener('click', startCast);
 elements.stopBtn.addEventListener('click', stopCast);
+
+if (elements.copyUrlBtn) {
+  elements.copyUrlBtn.addEventListener('click', function() {
+    var url = elements.networkUrl ? elements.networkUrl.textContent : null;
+    if (url && url !== '-') {
+      navigator.clipboard.writeText(url).then(function() {
+        elements.copyUrlBtn.textContent = '✓ Kopierad!';
+        setTimeout(function() {
+          elements.copyUrlBtn.textContent = '📋 Kopiera';
+        }, 2000);
+      });
+    }
+  });
+}
 
 // ============ Init ============
 

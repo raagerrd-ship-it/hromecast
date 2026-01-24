@@ -83,8 +83,26 @@
     </main>
 
     <footer>
-      <p>Device ID: <code id="device-id">-</code></p>
-      <p>Port: <code id="port">-</code></p>
+      <section class="card network-card">
+        <div class="card-header">
+          <h2>📱 Anslut från mobil</h2>
+        </div>
+        <div class="card-content">
+          <div class="network-info">
+            <div class="network-row">
+              <span class="network-label">Nätverks-URL:</span>
+              <code id="network-url">-</code>
+              <button id="copy-url-btn" class="btn btn-small">📋 Kopiera</button>
+            </div>
+            <div class="network-row">
+              <span class="network-label">mDNS:</span>
+              <code id="mdns-url">-</code>
+            </div>
+          </div>
+          <p class="hint">Öppna denna adress i din mobil för att konfigurera bridge:n</p>
+        </div>
+      </section>
+      <p class="footer-info">Device ID: <code id="device-id">-</code> | Port: <code id="port">-</code></p>
     </footer>
   </div>
 

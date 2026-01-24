@@ -26,7 +26,10 @@ const elements = {
   stopBtn: document.getElementById('stop-btn'),
   previewContainer: document.getElementById('preview-container'),
   deviceId: document.getElementById('device-id'),
-  port: document.getElementById('port')
+  port: document.getElementById('port'),
+  networkUrl: document.getElementById('network-url'),
+  mdnsUrl: document.getElementById('mdns-url'),
+  copyUrlBtn: document.getElementById('copy-url-btn')
 };
 
 // State
@@ -141,6 +144,14 @@ async function loadStatus() {
     const data = await api('/api/status');
     elements.port.textContent = data.port || '-';
     updateScreensaverStatus(data.screensaverActive);
+    
+    // Update network URL display
+    if (data.networkUrl && elements.networkUrl) {
+      elements.networkUrl.textContent = data.networkUrl;
+    }
+    if (data.mdnsUrl && elements.mdnsUrl) {
+      elements.mdnsUrl.textContent = data.mdnsUrl;
+    }
   } catch (error) {
     console.error('Failed to load status:', error);
   }
@@ -221,6 +232,20 @@ elements.urlInput.addEventListener('change', (e) => {
 elements.refreshBtn.addEventListener('click', refreshDevices);
 elements.castBtn.addEventListener('click', startCast);
 elements.stopBtn.addEventListener('click', stopCast);
+
+if (elements.copyUrlBtn) {
+  elements.copyUrlBtn.addEventListener('click', () => {
+    const url = elements.networkUrl?.textContent;
+    if (url && url !== '-') {
+      navigator.clipboard.writeText(url).then(() => {
+        elements.copyUrlBtn.textContent = '✓ Kopierad!';
+        setTimeout(() => {
+          elements.copyUrlBtn.textContent = '📋 Kopiera';
+        }, 2000);
+      });
+    }
+  });
+}
 
 // ============ Init ============
 

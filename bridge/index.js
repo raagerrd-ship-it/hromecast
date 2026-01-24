@@ -2,6 +2,7 @@ require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
+const os = require('os');
 const { createClient } = require('@supabase/supabase-js');
 const Chromecasts = require('chromecasts');
 const Bonjour = require('bonjour-service').Bonjour;
@@ -38,6 +39,43 @@ const DEFAULT_CONFIG = {
   selectedChromecast: null,
   idleTimeout: 5
 };
+
+// ============ Network Utilities ============
+
+function getNetworkIP() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return 'localhost';
+}
+
+function writeNetworkInfo() {
+  const ip = getNetworkIP();
+  const info = `Chromecast Bridge - Nätverksinfo
+================================
+Startad: ${new Date().toLocaleString('sv-SE')}
+Device ID: ${DEVICE_ID}
+
+Åtkomst från denna dator:
+  http://localhost:${PORT}
+
+Åtkomst från mobil/annan enhet:
+  http://${ip}:${PORT}
+
+mDNS (om stöds):
+  http://${DEVICE_ID}.local:${PORT}
+`;
+  try {
+    fs.writeFileSync(path.join(__dirname, 'network-info.txt'), info.trim());
+  } catch (error) {
+    console.error('Could not write network-info.txt:', error.message);
+  }
+}
 
 // ============ Config Management ============
 
@@ -348,9 +386,13 @@ const server = http.createServer(async (req, res) => {
       // GET /api/status
       if (req.method === 'GET' && pathname === '/api/status') {
         const config = loadConfig();
+        const networkIP = getNetworkIP();
         sendJson(res, {
           deviceId: DEVICE_ID,
           port: PORT,
+          networkIP: networkIP,
+          networkUrl: `http://${networkIP}:${PORT}`,
+          mdnsUrl: `http://${DEVICE_ID}.local:${PORT}`,
           devices: discoveredDevices.length,
           selectedChromecast: config.selectedChromecast,
           screensaverActive,
@@ -383,13 +425,24 @@ const server = http.createServer(async (req, res) => {
 // ============ Main ============
 
 async function main() {
+  const networkIP = getNetworkIP();
+  
   console.log('');
   console.log('╔════════════════════════════════════════╗');
   console.log('║     Chromecast Bridge Service          ║');
   console.log('╚════════════════════════════════════════╝');
   console.log('');
   console.log(`📍 Device ID: ${DEVICE_ID}`);
-  console.log(`🌐 Web UI: http://localhost:${PORT}`);
+  console.log('');
+  console.log('🌐 Åtkomst:');
+  console.log(`   Lokal:    http://localhost:${PORT}`);
+  console.log(`   Nätverk:  http://${networkIP}:${PORT}`);
+  console.log(`   mDNS:     http://${DEVICE_ID}.local:${PORT}`);
+  console.log('');
+  
+  // Write network info to file (for background services)
+  writeNetworkInfo();
+  console.log(`📄 Nätverksinfo sparad till: network-info.txt`);
   console.log('');
   
   // Initial discovery
@@ -402,8 +455,23 @@ async function main() {
   
   // Start HTTP server
   server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
-    console.log(`   (also accessible at http://<your-ip>:${PORT} from other devices)`);
+    console.log(`🚀 Server running`);
+    
+    // Publish mDNS service
+    try {
+      bonjour.publish({
+        name: DEVICE_ID,
+        type: 'http',
+        port: PORT,
+        txt: { 
+          type: 'chromecast-bridge',
+          version: '1.0.0'
+        }
+      });
+      console.log(`📡 mDNS publicerad: ${DEVICE_ID}.local`);
+    } catch (error) {
+      console.error('mDNS publishing failed:', error.message);
+    }
   });
   
   // Periodic discovery
@@ -411,6 +479,9 @@ async function main() {
   
   // Screensaver check every minute
   setInterval(checkAndActivateScreensaver, 60000);
+  
+  // Update network info periodically (in case IP changes)
+  setInterval(writeNetworkInfo, 5 * 60 * 1000);
   
   console.log('');
   console.log('Press Ctrl+C to stop.');
