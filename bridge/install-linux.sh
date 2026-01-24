@@ -74,8 +74,21 @@ if ! command -v node &> /dev/null; then
 fi
 echo "  ✓ Node.js $(node --version)"
 
-# 2. Skapa app-mapp
-echo "[2/6] Skapar app-mapp..."
+# 2. Skapa app-mapp (hantera uppgradering)
+echo "[2/6] Förbereder app-mapp..."
+
+# Stoppa befintlig tjänst om den finns
+if systemctl --user is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+    echo "  Stoppar befintlig tjänst..."
+    systemctl --user stop "$SERVICE_NAME"
+fi
+
+# Ta bort gammal installation om den finns
+if [ -d "$APP_DIR" ]; then
+    echo "  Tar bort befintlig installation..."
+    rm -rf "$APP_DIR"
+fi
+
 mkdir -p "$APP_DIR"
 mkdir -p "$APP_DIR/public"
 echo "  ✓ $APP_DIR"
