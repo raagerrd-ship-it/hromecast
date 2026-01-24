@@ -11,7 +11,7 @@ const corsHeaders = {
 // ============================================================================
 
 const VERSION_INFO = {
-  version: "1.4.1",
+  version: "1.2.0",
   releasedAt: "2026-01-24",
   changelog: [
     {
