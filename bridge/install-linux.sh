@@ -93,6 +93,13 @@ if systemctl --user is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
     systemctl --user stop "$SERVICE_NAME"
 fi
 
+# Spara befintlig config.json om den finns
+CONFIG_BACKUP=""
+if [ -f "$APP_DIR/config.json" ]; then
+    echo "  Sparar befintlig konfiguration (URL, enhet etc.)..."
+    CONFIG_BACKUP=$(cat "$APP_DIR/config.json")
+fi
+
 # Ta bort gammal installation om den finns
 if [ -d "$APP_DIR" ]; then
     echo "  Tar bort befintlig installation..."
@@ -101,6 +108,13 @@ fi
 
 mkdir -p "$APP_DIR"
 mkdir -p "$APP_DIR/public"
+
+# Återställ config.json om den fanns
+if [ -n "$CONFIG_BACKUP" ]; then
+    echo "$CONFIG_BACKUP" > "$APP_DIR/config.json"
+    echo "  ✓ Konfiguration återställd"
+fi
+
 echo "  ✓ $APP_DIR"
 
 # 3. Kopiera filer
