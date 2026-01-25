@@ -19,23 +19,37 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.8";
+const VERSION = "1.3.9";
 const RELEASED_AT = "2026-01-25";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.9",
+    date: "2026-01-25",
+    changes: {
+      sv: [
+        "KRITISK FIX: Återställd enkel heartbeat-logik från v1.0.19",
+        "Borttagen aggressiv watchdog som orsakade falska disconnects",
+        "Heartbeat skickar nu bara PING utan PONG-validering",
+        "Stabilare långvariga sessioner",
+      ],
+      en: [
+        "CRITICAL FIX: Restored simple heartbeat logic from v1.0.19",
+        "Removed aggressive watchdog that caused false disconnects",
+        "Heartbeat now only sends PING without PONG validation",
+        "More stable long-running sessions",
+      ],
+    }
+  },
   {
     version: "1.3.8",
     date: "2026-01-25",
     changes: {
       sv: [
-        "Bevarar konfiguration vid uppdatering: URL, vald enhet och inställningar sparas",
-        "Förbättrade installationsskript: Säkerhetskopierar config.json före uppdatering",
-        "Fixat: URL som försvann efter versionsuppdatering",
+        "Bevarar konfiguration vid uppdatering: URL och inställningar sparas",
       ],
       en: [
-        "Preserves configuration on update: URL, selected device and settings are saved",
-        "Improved install scripts: Backs up config.json before update",
-        "Fixed: URL disappearing after version update",
+        "Preserves configuration on update: URL and settings are saved",
       ],
     }
   },
