@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.5';
+const BRIDGE_VERSION = '1.3.7';
 
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
@@ -246,8 +246,8 @@ function startRecoveryCheck() {
   recoveryCheckInterval = setInterval(async () => {
     const timeSinceTakeover = Date.now() - lastTakeoverTime;
     
-    // Skip cooldown if last error was a network error
-    const skipCooldown = lastErrorType === 'network_error';
+    // Skip cooldown if last error was a network error or silent disconnect
+    const skipCooldown = lastErrorType === 'network_error' || lastErrorType === 'silent_disconnect';
     
     // Still in cooldown?
     if (!skipCooldown && timeSinceTakeover < COOLDOWN_AFTER_TAKEOVER) {
@@ -322,11 +322,13 @@ function logScreensaverStop(reason = 'takeover') {
   lastTakeoverTime = Date.now();
   lastErrorType = reason;
   
-  const cooldownMsg = reason === 'network_error' ? 'no cooldown (network error)' : 'cooldown started';
-  log.info(`⏹️ Screensaver stopped - ${cooldownMsg}`);
+  const cooldownMsg = reason === 'network_error' || reason === 'silent_disconnect' 
+    ? 'no cooldown (network error)' 
+    : 'cooldown started';
+  log.info(`⏹️ Screensaver stopped (${reason}) - ${cooldownMsg}`);
   
-  // For network errors, try immediate reconnect before falling back to recovery loop
-  if (reason === 'network_error') {
+  // For network errors and silent disconnects, try immediate reconnect
+  if (reason === 'network_error' || reason === 'silent_disconnect') {
     log.info('🔄 Network error detected - attempting immediate reconnect...');
     immediateReconnect();
   } else {
@@ -566,7 +568,7 @@ async function isChromecastIdleWithRecovery(deviceName, retryCount = 0) {
           
           if (ourAppRunning) {
             log.debug('Our app is running');
-            screensaverActive = true;
+            screensaverActive = true; // Sync local state with device state
             resolve({ status: 'our_app' });
           } else if (otherApps.length === 0) {
             log.debug('Device is idle');
@@ -928,6 +930,9 @@ async function stopCast(chromecastName) {
 }
 
 // ============ Auto-Screensaver ============
+// CRITICAL FIX (v1.3.7): Always check device status every cycle, like the old working version (v1.0.19).
+// The previous optimization of skipping checks when screensaverActive=true caused silent disconnects
+// to go undetected for up to 3 minutes.
 
 async function checkAndActivateScreensaver() {
   const config = loadConfig();
@@ -935,55 +940,68 @@ async function checkAndActivateScreensaver() {
   
   // If update is in progress, skip activation
   if (updateInProgress) {
-    log.debug('Update in progress, skipping screensaver check');
+    log.info('⏸️ Update in progress, skipping screensaver check');
     return;
   }
   
-  // If screensaver is already active, skip check entirely
-  if (screensaverActive) {
-    log.debug('Screensaver flag active, skipping check');
-    return;
-  }
+  // Capture state before checking (isChromecastIdleWithRecovery syncs screensaverActive)
+  const wasScreensaverActive = screensaverActive;
   
-  // Check cooldown period
-  const timeSinceTakeover = Date.now() - lastTakeoverTime;
-  const skipCooldown = lastErrorType === 'network_error';
-  
-  if (!skipCooldown && lastTakeoverTime > 0 && timeSinceTakeover < COOLDOWN_AFTER_TAKEOVER) {
-    const remainingSecs = Math.ceil((COOLDOWN_AFTER_TAKEOVER - timeSinceTakeover) / 1000);
-    log.debug(`⏸️ Cooldown active, ${remainingSecs}s remaining`);
-    return;
-  }
-  
+  // ALWAYS check device status - don't skip based on local flag
+  // The old working version (v1.0.19) did this and never had silent disconnect issues
+  log.info(`🔍 Checking device status... (flag: ${wasScreensaverActive ? 'active' : 'inactive'})`);
   const result = await isChromecastIdleWithRecovery(config.selectedChromecast);
   
   if (result.status === 'circuit_open') {
-    log.debug('Circuit breaker open, skipping screensaver check');
+    log.info('⚡ Circuit breaker open, skipping');
     return;
   }
   
+  // Handle different states
   if (result.status === 'our_app') {
-    log.debug('Our app already running');
+    // isChromecastIdleWithRecovery already synced screensaverActive = true
+    if (!wasScreensaverActive) {
+      log.info('✅ Screensaver resumed (was already running on device)');
+    }
     return;
   }
   
   if (result.status === 'busy') {
-    // Another app took over
-    if (screensaverActive) {
+    log.info(`📺 Device busy with: ${result.apps?.join(', ') || 'unknown app'}`);
+    if (wasScreensaverActive) {
       logScreensaverStop('takeover');
     }
     return;
   }
   
   if (result.status === 'error') {
-    // Network error
-    if (screensaverActive) {
+    log.warn('⚠️ Device unreachable');
+    if (wasScreensaverActive) {
       logScreensaverStop('network_error');
     }
     return;
   }
   
-  // status === 'idle' - activate screensaver
+  // status === 'idle' - device is idle and our app is NOT running
+  
+  // If we thought we were active but device says idle, this is a silent disconnect
+  if (wasScreensaverActive) {
+    log.warn('⚠️ Silent disconnect detected! Device idle but flag was active');
+    logScreensaverStop('silent_disconnect');
+    // Continue to re-activate below (skip cooldown for silent_disconnect)
+  }
+  
+  // Check cooldown period (skip for network_error and silent_disconnect)
+  const timeSinceTakeover = Date.now() - lastTakeoverTime;
+  const skipCooldown = lastErrorType === 'network_error' || lastErrorType === 'silent_disconnect';
+  
+  if (!skipCooldown && lastTakeoverTime > 0 && timeSinceTakeover < COOLDOWN_AFTER_TAKEOVER) {
+    const remainingSecs = Math.ceil((COOLDOWN_AFTER_TAKEOVER - timeSinceTakeover) / 1000);
+    log.info(`⏸️ Cooldown active, ${remainingSecs}s remaining`);
+    return;
+  }
+  
+  // Activate screensaver
   log.info('💤 Device idle, activating screensaver...');
   try {
     await castMedia(config.selectedChromecast, config.url);
@@ -1039,6 +1057,19 @@ function sendJson(res, data, status = 200) {
     'Access-Control-Allow-Origin': '*'
   });
   res.end(JSON.stringify(data));
+}
+
+// Connection cleanup helper
+function cleanupConnection() {
+  if (keepAliveInterval) {
+    activeHeartbeats.delete(keepAliveInterval);
+    clearInterval(keepAliveInterval);
+    keepAliveInterval = null;
+  }
+  if (client) {
+    try { client.close(); } catch(e) {}
+    client = null;
+  }
 }
 
 const server = http.createServer(async (req, res) => {

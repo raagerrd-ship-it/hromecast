@@ -19,10 +19,28 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.5";
+const VERSION = "1.3.7";
 const RELEASED_AT = "2026-01-25";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.7",
+    date: "2026-01-25",
+    changes: {
+      sv: [
+        "KRITISK FIX: Återställd idle-kontroll som i v1.0.19",
+        "Kontrollerar alltid enhetsstatus varje cykel (60s)",
+        "Fixat: 'Silent disconnect' som inte upptäcktes i upp till 3 minuter",
+        "Förenklad logik: Ingen optimering som hoppar över kontroller",
+      ],
+      en: [
+        "CRITICAL FIX: Restored idle check behavior from v1.0.19",
+        "Always checks device status every cycle (60s)",
+        "Fixed: 'Silent disconnect' not detected for up to 3 minutes",
+        "Simplified logic: No optimization that skips checks",
+      ],
+    }
+  },
   {
     version: "1.3.5",
     date: "2026-01-25",
