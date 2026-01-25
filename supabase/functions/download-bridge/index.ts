@@ -147,6 +147,7 @@ let discoveredDevices = [];
 let client = null;
 let keepAliveInterval = null;
 let screensaverActive = false;
+let updateInProgress = false;
 
 // In-memory log buffer (keep last 100 entries)
 const LOG_BUFFER_SIZE = 100;
@@ -596,6 +597,12 @@ async function checkAndActivateScreensaver() {
   const config = loadConfig();
   if (!config.enabled || !config.url || !config.selectedChromecast) return;
   
+  // Skip if update is in progress
+  if (updateInProgress) {
+    log.debug('Update in progress, skipping screensaver check');
+    return;
+  }
+  
   const idle = await isChromecastIdle(config.selectedChromecast);
   if (idle && !screensaverActive) {
     log.info('💤 Device idle, activating screensaver...');
@@ -756,6 +763,41 @@ const server = http.createServer(async (req, res) => {
         log.info('🔄 Restart requested via API');
         sendJson(res, { success: true, message: 'Restarting...' });
         setTimeout(() => { process.exit(0); }, 500);
+        return;
+      }
+      
+      if (req.method === 'POST' && pathname === '/api/prepare-update') {
+        log.info('🔄 Preparing for update - pausing all activity...');
+        
+        // Set update flag to prevent new screensaver activations
+        updateInProgress = true;
+        
+        // Stop active cast if running
+        const config = loadConfig();
+        if (screensaverActive && config.selectedChromecast) {
+          try {
+            log.info('⏹️ Stopping active screensaver for update...');
+            await stopCast(config.selectedChromecast);
+          } catch (error) {
+            log.warn(\`⚠️ Could not stop cast: \${error.message}\`);
+          }
+        }
+        
+        // Clean up client connection
+        if (client) {
+          try { client.close(); } catch(e) {}
+          client = null;
+        }
+        
+        // Give Chromecast time to return to backdrop
+        await new Promise(r => setTimeout(r, 2000));
+        
+        log.info('✅ Ready for update - all activity paused');
+        sendJson(res, { 
+          success: true, 
+          message: 'Bridge paused for update',
+          wasActive: screensaverActive 
+        });
         return;
       }
       
@@ -2088,7 +2130,7 @@ Write-Host "  Mapp: $AppDir" -ForegroundColor Gray
 Write-Host ""
 
 # 1. Kontrollera/installera Node.js
-Write-Host "[1/6] Kontrollerar Node.js..." -ForegroundColor Yellow
+Write-Host "[1/7] Kontrollerar Node.js..." -ForegroundColor Yellow
 $nodeVersion = $null
 try {
     $nodeVersion = node --version 2>$null
@@ -2106,8 +2148,27 @@ if (-not $nodeVersion) {
 $nodeVersion = node --version
 Write-Host "  Node.js $nodeVersion OK" -ForegroundColor Green
 
-# 2. Skapa app-mapp
-Write-Host "[2/6] Skapar app-mapp..." -ForegroundColor Yellow
+# 2. Forbereda uppdatering - pausa aktiv bridge
+Write-Host "[2/7] Forbereder uppdatering..." -ForegroundColor Yellow
+
+$existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+if ($existingTask -and $existingTask.State -eq "Running") {
+    Write-Host "  Pausar befintlig bridge..." -ForegroundColor Gray
+    
+    try {
+        $response = Invoke-RestMethod -Uri "http://localhost:$Port/api/prepare-update" -Method Post -TimeoutSec 5 -ErrorAction Stop
+        Write-Host "  Bridge pausad gracefully" -ForegroundColor Green
+        Start-Sleep -Seconds 2
+    } catch {
+        Write-Host "  Kunde inte pausa gracefully, fortsatter anda..." -ForegroundColor Yellow
+    }
+    
+    Write-Host "  Stoppar befintlig task..." -ForegroundColor Gray
+    Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+}
+
+# 3. Skapa app-mapp
+Write-Host "[3/7] Skapar app-mapp..." -ForegroundColor Yellow
 if (Test-Path $AppDir) {
     Write-Host "  Tar bort befintlig installation..." -ForegroundColor Gray
     Remove-Item -Path $AppDir -Recurse -Force
@@ -2116,8 +2177,8 @@ New-Item -ItemType Directory -Path $AppDir -Force | Out-Null
 New-Item -ItemType Directory -Path "$AppDir\\public" -Force | Out-Null
 Write-Host "  $AppDir" -ForegroundColor Green
 
-# 3. Kopiera bridge-filer
-Write-Host "[3/6] Kopierar filer..." -ForegroundColor Yellow
+# 4. Kopiera bridge-filer
+Write-Host "[4/7] Kopierar filer..." -ForegroundColor Yellow
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 $mainFiles = @("index.js", "package.json", "package-lock.json")
@@ -2137,15 +2198,15 @@ if (Test-Path $publicDir) {
 
 Write-Host "  Filer kopierade" -ForegroundColor Green
 
-# 4. Installera dependencies
-Write-Host "[4/6] Installerar dependencies (detta kan ta nagra minuter)..." -ForegroundColor Yellow
+# 5. Installera dependencies
+Write-Host "[5/7] Installerar dependencies (detta kan ta nagra minuter)..." -ForegroundColor Yellow
 Set-Location $AppDir
 $env:npm_config_loglevel = "error"
 & cmd /c "npm install --omit=dev 2>&1" | Out-Null
 Write-Host "  Dependencies installerade" -ForegroundColor Green
 
-# 5. Skapa .env-fil
-Write-Host "[5/6] Skapar konfiguration..." -ForegroundColor Yellow
+# 6. Skapa .env-fil
+Write-Host "[6/7] Skapar konfiguration..." -ForegroundColor Yellow
 $DeviceId = $env:COMPUTERNAME.ToLower() -replace '[^a-z0-9-]', '-'
 if (-not [string]::IsNullOrWhiteSpace($InstanceName)) {
     $DeviceId = "$DeviceId-$CleanName"
@@ -2162,8 +2223,8 @@ $EnvContent | Out-File -FilePath "$AppDir\\.env" -Encoding UTF8
 Write-Host "  Device ID: $DeviceId" -ForegroundColor Green
 Write-Host "  Port: $Port" -ForegroundColor Green
 
-# 6. Skapa Scheduled Task (kors vid systemstart som SYSTEM)
-Write-Host "[6/6] Skapar autostart-tjanst..." -ForegroundColor Yellow
+# 7. Skapa Scheduled Task (kors vid systemstart som SYSTEM)
+Write-Host "[7/7] Skapar autostart-tjanst..." -ForegroundColor Yellow
 
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
 
@@ -2396,7 +2457,7 @@ if [ "$EUID" -eq 0 ]; then
     exit 1
 fi
 
-echo "[1/6] Kontrollerar Node.js..."
+echo "[1/7] Kontrollerar Node.js..."
 if ! command -v node &> /dev/null; then
     echo "  Node.js hittades inte. Försöker installera..."
     
@@ -2415,12 +2476,35 @@ if ! command -v node &> /dev/null; then
 fi
 echo "  ✓ Node.js $(node --version)"
 
-echo "[2/6] Skapar app-mapp..."
+echo "[2/7] Förbereder uppdatering..."
+
+# Försök pausa befintlig bridge gracefully
+if systemctl --user is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+    echo "  Pausar befintlig bridge..."
+    
+    # Anropa prepare-update endpoint
+    curl -s -X POST "http://localhost:$PORT/api/prepare-update" --connect-timeout 3 > /dev/null 2>&1 && {
+        echo "  ✓ Bridge pausad gracefully"
+        sleep 2
+    } || {
+        echo "  ⚠️ Kunde inte pausa gracefully, fortsätter ändå..."
+    }
+    
+    echo "  Stoppar befintlig tjänst..."
+    systemctl --user stop "$SERVICE_NAME"
+fi
+
+# Ta bort gammal installation om den finns
+if [ -d "$APP_DIR" ]; then
+    echo "  Tar bort befintlig installation..."
+    rm -rf "$APP_DIR"
+fi
+
 mkdir -p "$APP_DIR"
 mkdir -p "$APP_DIR/public"
 echo "  ✓ $APP_DIR"
 
-echo "[3/6] Kopierar filer..."
+echo "[3/7] Kopierar filer..."
 SCRIPT_DIR="$(cd "$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
 
 for file in index.js package.json package-lock.json; do
@@ -2437,12 +2521,12 @@ fi
 
 echo "  ✓ Filer kopierade"
 
-echo "[4/6] Installerar dependencies..."
+echo "[4/7] Installerar dependencies..."
 cd "$APP_DIR"
 npm install --production
 echo "  ✓ Dependencies installerade"
 
-echo "[5/6] Skapar konfiguration..."
+echo "[5/7] Skapar konfiguration..."
 DEVICE_ID=$(hostname | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]-')
 if [ -n "$CLEAN_NAME" ]; then
     DEVICE_ID="$DEVICE_ID-$CLEAN_NAME"
@@ -2457,7 +2541,7 @@ EOF
 echo "  ✓ Device ID: $DEVICE_ID"
 echo "  ✓ Port: $PORT"
 
-echo "[6/6] Skapar systemd service..."
+echo "[6/7] Skapar systemd service..."
 mkdir -p "$HOME/.config/systemd/user"
 
 cat > "$HOME/.config/systemd/user/$SERVICE_NAME.service" << EOF

@@ -7,7 +7,10 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.4';
+const BRIDGE_VERSION = '1.3.5';
+
+// Update state - when true, pauses screensaver activation
+let updateInProgress = false;
 
 // Configuration
 const CONFIG_FILE = path.join(__dirname, 'config.json');
@@ -930,6 +933,12 @@ async function checkAndActivateScreensaver() {
   const config = loadConfig();
   if (!config.enabled || !config.url || !config.selectedChromecast) return;
   
+  // If update is in progress, skip activation
+  if (updateInProgress) {
+    log.debug('Update in progress, skipping screensaver check');
+    return;
+  }
+  
   // If screensaver is already active, skip check entirely
   if (screensaverActive) {
     log.debug('Screensaver flag active, skipping check');
@@ -1163,6 +1172,42 @@ const server = http.createServer(async (req, res) => {
         log.info('🔄 Restart requested via API');
         sendJson(res, { success: true, message: 'Restarting...' });
         setTimeout(() => { process.exit(0); }, 500);
+        return;
+      }
+      
+      // POST /api/prepare-update - gracefully stop for update
+      if (req.method === 'POST' && pathname === '/api/prepare-update') {
+        log.info('🔄 Preparing for update - pausing all activity...');
+        
+        // Set update flag to prevent new screensaver activations
+        updateInProgress = true;
+        
+        // Stop recovery check loop
+        stopRecoveryCheck();
+        
+        // Stop active cast if running
+        const config = loadConfig();
+        if (screensaverActive && config.selectedChromecast) {
+          try {
+            log.info('⏹️ Stopping active screensaver for update...');
+            await stopCast(config.selectedChromecast);
+          } catch (error) {
+            log.warn(`⚠️ Could not stop cast: ${error.message}`);
+          }
+        }
+        
+        // Clean up connections
+        cleanupConnection();
+        
+        // Give Chromecast time to return to backdrop
+        await sleep(2000);
+        
+        log.info('✅ Ready for update - all activity paused');
+        sendJson(res, { 
+          success: true, 
+          message: 'Bridge paused for update',
+          wasActive: screensaverActive 
+        });
         return;
       }
       

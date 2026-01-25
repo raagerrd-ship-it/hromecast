@@ -19,10 +19,28 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.4";
-const RELEASED_AT = "2026-01-24";
+const VERSION = "1.3.5";
+const RELEASED_AT = "2026-01-25";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.5",
+    date: "2026-01-25",
+    changes: {
+      sv: [
+        "Graceful update: Bridge pausar nu casting innan uppdatering",
+        "Nytt API: /api/prepare-update stoppar screensaver och rensar anslutningar",
+        "Förbättrade installationsskript: Anropar prepare-update innan tjänsten stoppas",
+        "Fixat: 'Ready to cast' som visades under uppdateringar",
+      ],
+      en: [
+        "Graceful update: Bridge now pauses casting before update",
+        "New API: /api/prepare-update stops screensaver and cleans up connections",
+        "Improved install scripts: Calls prepare-update before stopping service",
+        "Fixed: 'Ready to cast' appearing during updates",
+      ],
+    }
+  },
   {
     version: "1.3.4",
     date: "2026-01-24",

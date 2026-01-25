@@ -111,8 +111,29 @@ if (-not $nodeVersion) {
 $nodeVersion = node --version
 Write-Host "  Node.js $nodeVersion OK" -ForegroundColor Green
 
-# 2. Skapa app-mapp
-Write-Host "[2/6] Skapar app-mapp..." -ForegroundColor Yellow
+# 2. Forbereda uppdatering - pausa aktiv bridge
+Write-Host "[2/7] Forbereder uppdatering..." -ForegroundColor Yellow
+
+# Forsok pausa befintlig bridge gracefully
+$existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+if ($existingTask -and $existingTask.State -eq "Running") {
+    Write-Host "  Pausar befintlig bridge..." -ForegroundColor Gray
+    
+    # Anropa prepare-update endpoint
+    try {
+        $response = Invoke-RestMethod -Uri "http://localhost:$Port/api/prepare-update" -Method Post -TimeoutSec 5 -ErrorAction Stop
+        Write-Host "  Bridge pausad gracefully" -ForegroundColor Green
+        Start-Sleep -Seconds 2
+    } catch {
+        Write-Host "  Kunde inte pausa gracefully, fortsatter anda..." -ForegroundColor Yellow
+    }
+    
+    Write-Host "  Stoppar befintlig task..." -ForegroundColor Gray
+    Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+}
+
+# 3. Skapa app-mapp
+Write-Host "[3/7] Skapar app-mapp..." -ForegroundColor Yellow
 if (Test-Path $AppDir) {
     Write-Host "  Tar bort befintlig installation..." -ForegroundColor Gray
     Remove-Item -Path $AppDir -Recurse -Force
@@ -121,8 +142,8 @@ New-Item -ItemType Directory -Path $AppDir -Force | Out-Null
 New-Item -ItemType Directory -Path "$AppDir\public" -Force | Out-Null
 Write-Host "  $AppDir" -ForegroundColor Green
 
-# 3. Kopiera bridge-filer
-Write-Host "[3/6] Kopierar filer..." -ForegroundColor Yellow
+# 4. Kopiera bridge-filer
+Write-Host "[4/7] Kopierar filer..." -ForegroundColor Yellow
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # Kopiera huvudfiler
@@ -144,15 +165,15 @@ if (Test-Path $publicDir) {
 
 Write-Host "  Filer kopierade" -ForegroundColor Green
 
-# 4. Installera dependencies
-Write-Host "[4/6] Installerar dependencies (detta kan ta nagra minuter)..." -ForegroundColor Yellow
+# 5. Installera dependencies
+Write-Host "[5/7] Installerar dependencies (detta kan ta nagra minuter)..." -ForegroundColor Yellow
 Set-Location $AppDir
 $env:npm_config_loglevel = "error"
 & cmd /c "npm install --omit=dev 2>&1" | Out-Null
 Write-Host "  Dependencies installerade" -ForegroundColor Green
 
-# 5. Skapa .env-fil
-Write-Host "[5/6] Skapar konfiguration..." -ForegroundColor Yellow
+# 6. Skapa .env-fil
+Write-Host "[6/7] Skapar konfiguration..." -ForegroundColor Yellow
 $DeviceId = $env:COMPUTERNAME.ToLower() -replace '[^a-z0-9-]', '-'
 if (-not [string]::IsNullOrWhiteSpace($InstanceName)) {
     $DeviceId = "$DeviceId-$CleanName"
@@ -169,8 +190,8 @@ $EnvContent | Out-File -FilePath "$AppDir\.env" -Encoding UTF8
 Write-Host "  Device ID: $DeviceId" -ForegroundColor Green
 Write-Host "  Port: $Port" -ForegroundColor Green
 
-# 6. Skapa Scheduled Task (kors vid systemstart som SYSTEM)
-Write-Host "[6/6] Skapar autostart-tjanst..." -ForegroundColor Yellow
+# 7. Skapa Scheduled Task (kors vid systemstart som SYSTEM)
+Write-Host "[7/7] Skapar autostart-tjanst..." -ForegroundColor Yellow
 
 # Ta bort eventuell befintlig task
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue

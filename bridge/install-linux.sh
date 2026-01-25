@@ -74,11 +74,21 @@ if ! command -v node &> /dev/null; then
 fi
 echo "  ✓ Node.js $(node --version)"
 
-# 2. Skapa app-mapp (hantera uppgradering)
-echo "[2/6] Förbereder app-mapp..."
+# 2. Förbereda uppdatering - pausa aktiv bridge
+echo "[2/7] Förbereder uppdatering..."
 
-# Stoppa befintlig tjänst om den finns
+# Försök pausa befintlig bridge gracefully
 if systemctl --user is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+    echo "  Pausar befintlig bridge..."
+    
+    # Anropa prepare-update endpoint
+    curl -s -X POST "http://localhost:$PORT/api/prepare-update" --connect-timeout 3 > /dev/null 2>&1 && {
+        echo "  ✓ Bridge pausad gracefully"
+        sleep 2
+    } || {
+        echo "  ⚠️ Kunde inte pausa gracefully, fortsätter ändå..."
+    }
+    
     echo "  Stoppar befintlig tjänst..."
     systemctl --user stop "$SERVICE_NAME"
 fi
@@ -94,7 +104,7 @@ mkdir -p "$APP_DIR/public"
 echo "  ✓ $APP_DIR"
 
 # 3. Kopiera filer
-echo "[3/6] Kopierar filer..."
+echo "[3/7] Kopierar filer..."
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Kopiera huvudfiler
@@ -114,13 +124,13 @@ fi
 echo "  ✓ Filer kopierade"
 
 # 4. Installera dependencies
-echo "[4/6] Installerar dependencies..."
+echo "[4/7] Installerar dependencies..."
 cd "$APP_DIR"
 npm install --production
 echo "  ✓ Dependencies installerade"
 
 # 5. Skapa .env-fil
-echo "[5/6] Skapar konfiguration..."
+echo "[5/7] Skapar konfiguration..."
 DEVICE_ID=$(hostname | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]-')
 if [ -n "$CLEAN_NAME" ]; then
     DEVICE_ID="$DEVICE_ID-$CLEAN_NAME"
@@ -138,7 +148,7 @@ echo "  ✓ Device ID: $DEVICE_ID"
 echo "  ✓ Port: $PORT"
 
 # 6. Skapa systemd user service
-echo "[6/6] Skapar systemd service..."
+echo "[6/7] Skapar systemd service..."
 mkdir -p "$HOME/.config/systemd/user"
 
 cat > "$HOME/.config/systemd/user/$SERVICE_NAME.service" << EOF
