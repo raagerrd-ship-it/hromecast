@@ -180,7 +180,7 @@ function updateLogs(logs) {
     html += `
       <div class="log-entry info last-check-entry">
         <span class="log-time">${formatLogTime(lastCheckEntry.timestamp)}</span>
-        <span class="log-level">LIVE</span>
+        <span class="log-level">CHECK</span>
         <span class="log-message">${lastCheckEntry.message}</span>
       </div>
     `;
@@ -679,16 +679,6 @@ if (elements.copyUrlBtn) {
 // ============ Init ============
 
 let statusPollInterval = null;
-let logPollInterval = null;
-
-async function loadLogsOnly() {
-  try {
-    const logsData = await api('/api/logs');
-    updateLogs(logsData.logs || []);
-  } catch (error) {
-    console.error('Failed to load logs:', error);
-  }
-}
 
 async function init() {
   updateStatus(false, 'Ansluter...');
@@ -697,30 +687,23 @@ async function init() {
   await loadDevices();
   await loadStatus();
   
-  // Start polling
+  // Start polling based on screensaver check interval
   startStatusPolling();
 }
 
 function startStatusPolling() {
-  // Clear existing intervals if any
+  // Clear existing interval if any
   if (statusPollInterval) {
     clearInterval(statusPollInterval);
   }
-  if (logPollInterval) {
-    clearInterval(logPollInterval);
-  }
   
-  // Status polling based on screensaver check interval (default 60 seconds)
-  const statusIntervalSeconds = state.settings.screensaverCheckInterval || 60;
-  const statusIntervalMs = statusIntervalSeconds * 1000;
+  // Poll at same interval as screensaver check (default 60 seconds)
+  const intervalSeconds = state.settings.screensaverCheckInterval || 60;
+  const intervalMs = intervalSeconds * 1000;
   
-  // Log polling every 10 seconds for responsive LIVE updates
-  const logIntervalMs = 10000;
+  console.log(`📊 Polling interval: ${intervalSeconds}s (matches screensaver check)`);
   
-  console.log(`📊 Status polling: ${statusIntervalSeconds}s, Log polling: 10s`);
-  
-  statusPollInterval = setInterval(loadStatus, statusIntervalMs);
-  logPollInterval = setInterval(loadLogsOnly, logIntervalMs);
+  statusPollInterval = setInterval(loadStatus, intervalMs);
 }
 
 init();

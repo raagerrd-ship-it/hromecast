@@ -19,21 +19,21 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.17";
+const VERSION = "1.3.18";
 const RELEASED_AT = "2026-01-26";
 
 const CHANGELOG: ChangelogEntry[] = [
   {
-    version: "1.3.17",
+    version: "1.3.18",
     date: "2026-01-26",
     changes: {
       sv: [
-        "Snabbare loggvisning: Dashboard pollar loggar var 10:e sekund för responsiv LIVE-indikator",
-        "Separerad polling: Status kontrolleras var 60:e sekund, loggar uppdateras snabbare",
+        "Förenklad polling: Dashboard uppdateras i sync med screensaver-kontroll",
+        "CHECK-label: Tydlig markering för senaste kontrollens resultat",
       ],
       en: [
-        "Faster log display: Dashboard polls logs every 10 seconds for responsive LIVE indicator",
-        "Separated polling: Status checked every 60 seconds, logs update faster",
+        "Simplified polling: Dashboard updates in sync with screensaver check",
+        "CHECK label: Clear indicator for last check result",
       ],
     }
   },
