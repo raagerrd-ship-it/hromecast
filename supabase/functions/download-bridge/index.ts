@@ -153,8 +153,8 @@ let updateInProgress = false;
 const LOG_BUFFER_SIZE = 100;
 let logBuffer = [];
 
-// Special sticky "last check" entry - always shown first, updated every check
-let lastCheckEntry = null;
+// Track the last status check entry for timestamp updates
+let lastStatusCheckIndex = -1;
 
 // Track last logged status to avoid duplicate log entries
 let lastLoggedCheckStatus = null;
@@ -642,18 +642,31 @@ async function checkAndActivateScreensaver() {
   
   const currentCheckKey = status;
   
-  // Always update the sticky "last check" entry (time updates continuously)
-  lastCheckEntry = {
-    timestamp: new Date().toISOString(),
-    level: 'info',
-    message: \`📡 Senaste kontroll (\${checkTime}): \${statusText}\`,
-    isLastCheck: true
-  };
-  
-  // Only log to regular buffer if status changed
+  // Check if status changed
   if (currentCheckKey !== lastLoggedCheckStatus) {
+    // Status changed - create new log entry
     lastLoggedCheckStatus = currentCheckKey;
-    log.info(\`📡 Statusändring (\${checkTime}): \${statusText}\`);
+    const newEntry = {
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      message: \`📡 Statusändring (\${checkTime}): \${statusText}\`,
+      isStatusCheck: true
+    };
+    logBuffer.push(newEntry);
+    lastStatusCheckIndex = logBuffer.length - 1;
+    
+    // Trim buffer if needed
+    if (logBuffer.length > LOG_BUFFER_SIZE) {
+      logBuffer.shift();
+      lastStatusCheckIndex = Math.max(-1, lastStatusCheckIndex - 1);
+    }
+  } else if (lastStatusCheckIndex >= 0 && lastStatusCheckIndex < logBuffer.length) {
+    // Status unchanged - just update timestamp on existing entry
+    const existingEntry = logBuffer[lastStatusCheckIndex];
+    if (existingEntry && existingEntry.isStatusCheck) {
+      existingEntry.timestamp = new Date().toISOString();
+      existingEntry.message = \`📡 Senaste kontroll (\${checkTime}): \${statusText}\`;
+    }
   }
   
   // Activate screensaver if idle
@@ -802,11 +815,7 @@ const server = http.createServer(async (req, res) => {
       }
       
       if (req.method === 'GET' && pathname === '/api/logs') {
-        // Prepend lastCheckEntry if exists
-        const logsWithCheck = lastCheckEntry 
-          ? [lastCheckEntry, ...logBuffer] 
-          : logBuffer;
-        sendJson(res, { logs: logsWithCheck });
+        sendJson(res, { logs: logBuffer });
         return;
       }
       
@@ -1767,26 +1776,31 @@ function updateLogs(logs) {
     return;
   }
   
-  // Separate sticky "last check" entry from regular logs
-  const lastCheckEntry = logs.find(log => log.isLastCheck);
-  const regularLogs = logs.filter(log => !log.isLastCheck);
+  // Find the latest status check entry (the one that gets its timestamp updated)
+  const statusCheckEntries = logs.filter(log => log.isStatusCheck);
+  const latestStatusCheck = statusCheckEntries.length > 0 
+    ? statusCheckEntries[statusCheckEntries.length - 1] 
+    : null;
   
-  // Show newest first for regular logs
-  const reversedLogs = [...regularLogs].reverse();
+  // Get all other logs
+  const otherLogs = logs.filter(log => log !== latestStatusCheck);
+  
+  // Show newest first for other logs
+  const reversedOtherLogs = [...otherLogs].reverse();
   
   let html = '';
   
-  // Always show last check entry at top with special styling
-  if (lastCheckEntry) {
+  // Always show latest status check at top with special styling
+  if (latestStatusCheck) {
     html += '<div class="log-entry info last-check-entry">' +
-      '<span class="log-time">' + formatLogTime(lastCheckEntry.timestamp) + '</span>' +
+      '<span class="log-time">' + formatLogTime(latestStatusCheck.timestamp) + '</span>' +
       '<span class="log-level">CHECK</span>' +
-      '<span class="log-message">' + lastCheckEntry.message + '</span>' +
+      '<span class="log-message">' + latestStatusCheck.message + '</span>' +
     '</div>';
   }
   
-  // Add regular logs
-  html += reversedLogs.map(log => 
+  // Add other logs
+  html += reversedOtherLogs.map(log => 
     '<div class="log-entry ' + log.level + '">' +
       '<span class="log-time">' + formatLogTime(log.timestamp) + '</span>' +
       '<span class="log-level">' + log.level + '</span>' +

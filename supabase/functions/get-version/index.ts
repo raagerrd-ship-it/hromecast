@@ -19,21 +19,21 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.18";
+const VERSION = "1.3.19";
 const RELEASED_AT = "2026-01-26";
 
 const CHANGELOG: ChangelogEntry[] = [
   {
-    version: "1.3.18",
+    version: "1.3.19",
     date: "2026-01-26",
     changes: {
       sv: [
-        "Förenklad polling: Dashboard uppdateras i sync med screensaver-kontroll",
-        "CHECK-label: Tydlig markering för senaste kontrollens resultat",
+        "Smartare loggning: Ny post skapas vid statusändring, sedan uppdateras bara tidsstämpeln",
+        "Renare loggvy: Senaste kontrollens post visas alltid överst med CHECK-etikett",
       ],
       en: [
-        "Simplified polling: Dashboard updates in sync with screensaver check",
-        "CHECK label: Clear indicator for last check result",
+        "Smarter logging: New entry created on status change, then only timestamp updates",
+        "Cleaner log view: Latest check entry always shown at top with CHECK label",
       ],
     }
   },

@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.18';
+const BRIDGE_VERSION = '1.3.19';
 
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
@@ -78,8 +78,8 @@ const activeHeartbeats = new Set();
 const LOG_BUFFER_SIZE = 100;
 let logBuffer = [];
 
-// Special sticky "last check" entry - always shown first, updated every check
-let lastCheckEntry = null;
+// Track the last status check entry for timestamp updates
+let lastStatusCheckIndex = -1;
 
 // Default config with timing settings (all in seconds unless noted)
 const DEFAULT_CONFIG = {
@@ -1065,18 +1065,31 @@ async function checkAndActivateScreensaver() {
       break;
   }
   
-  // Always update the sticky "last check" entry (time updates continuously)
-  lastCheckEntry = {
-    timestamp: new Date().toISOString(),
-    level: 'info',
-    message: `📡 Senaste kontroll (${checkTime}): ${statusText}`,
-    isLastCheck: true  // Mark as special entry
-  };
-  
-  // Only log to regular buffer if status changed
+  // Check if status changed
   if (currentCheckKey !== lastLoggedCheckStatus) {
+    // Status changed - create new log entry
     lastLoggedCheckStatus = currentCheckKey;
-    log.info(`📡 Statusändring (${checkTime}): ${statusText}`);
+    const newEntry = {
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      message: `📡 Statusändring (${checkTime}): ${statusText}`,
+      isStatusCheck: true
+    };
+    logBuffer.push(newEntry);
+    lastStatusCheckIndex = logBuffer.length - 1;
+    
+    // Trim buffer if needed
+    if (logBuffer.length > LOG_BUFFER_SIZE) {
+      logBuffer.shift();
+      lastStatusCheckIndex = Math.max(-1, lastStatusCheckIndex - 1);
+    }
+  } else if (lastStatusCheckIndex >= 0 && lastStatusCheckIndex < logBuffer.length) {
+    // Status unchanged - just update timestamp on existing entry
+    const existingEntry = logBuffer[lastStatusCheckIndex];
+    if (existingEntry && existingEntry.isStatusCheck) {
+      existingEntry.timestamp = new Date().toISOString();
+      existingEntry.message = `📡 Senaste kontroll (${checkTime}): ${statusText}`;
+    }
   }
 
   
@@ -1311,11 +1324,7 @@ const server = http.createServer(async (req, res) => {
       
       // GET /api/logs
       if (req.method === 'GET' && pathname === '/api/logs') {
-        // Prepend lastCheckEntry if exists
-        const logsWithCheck = lastCheckEntry 
-          ? [lastCheckEntry, ...logBuffer] 
-          : logBuffer;
-        sendJson(res, { logs: logsWithCheck });
+        sendJson(res, { logs: logBuffer });
         return;
       }
       
