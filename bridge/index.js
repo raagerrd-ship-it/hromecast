@@ -507,7 +507,7 @@ async function discoverDevicesWithRetry(maxRetries = 3) {
     
     if (attempt < maxRetries) {
       log.info(`🔄 No devices found, retrying (${attempt}/${maxRetries})...`);
-      await sleep(2000); // Wait 2 seconds between attempts
+      await sleep(5000); // Wait 5 seconds between attempts for slower networks
     }
   }
   
