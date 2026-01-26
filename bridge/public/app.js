@@ -12,6 +12,34 @@ async function api(path, options = {}) {
   return res.json();
 }
 
+// ============ Toast Notifications ============
+
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  
+  const icons = {
+    success: '✅',
+    error: '❌',
+    info: 'ℹ️'
+  };
+  
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.innerHTML = `
+    <span class="toast-icon">${icons[type] || icons.info}</span>
+    <span class="toast-message">${message}</span>
+  `;
+  
+  container.appendChild(toast);
+  
+  // Auto-remove after 3 seconds
+  setTimeout(() => {
+    toast.style.animation = 'toast-out 0.3s ease-out forwards';
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
 // DOM elements
 const elements = {
   status: document.getElementById('status'),
@@ -48,6 +76,7 @@ const elements = {
   idleStatusTimeoutInput: document.getElementById('idle-status-timeout-input'),
   castRetryInput: document.getElementById('cast-retry-input'),
   castMaxRetriesInput: document.getElementById('cast-max-retries-input'),
+  receiverAutoRefreshInput: document.getElementById('receiver-auto-refresh-input'),
   // Återhämtning & Skydd
   cooldownAfterTakeoverInput: document.getElementById('cooldown-after-takeover-input'),
   recoveryCheckIntervalInput: document.getElementById('recovery-check-interval-input'),
@@ -56,7 +85,11 @@ const elements = {
   // Reset buttons
   resetDiscoveryBtn: document.getElementById('reset-discovery-btn'),
   resetCastBtn: document.getElementById('reset-cast-btn'),
-  resetRecoveryBtn: document.getElementById('reset-recovery-btn')
+  resetRecoveryBtn: document.getElementById('reset-recovery-btn'),
+  // Restart overlay
+  restartOverlay: document.getElementById('restart-overlay'),
+  restartMessage: document.getElementById('restart-message'),
+  restartTimer: document.getElementById('restart-timer')
 };
 
 // State
@@ -205,6 +238,9 @@ async function loadSettings() {
     if (elements.castMaxRetriesInput) {
       elements.castMaxRetriesInput.value = data.castMaxRetries || 3;
     }
+    if (elements.receiverAutoRefreshInput) {
+      elements.receiverAutoRefreshInput.value = data.receiverAutoRefresh || 45;
+    }
     
     // Load timing settings - Återhämtning & Skydd
     if (elements.cooldownAfterTakeoverInput) {
@@ -273,8 +309,11 @@ async function saveSettings(updates) {
       body: JSON.stringify(updates)
     });
     state.settings = newSettings;
+    return true;
   } catch (error) {
     console.error('Failed to save settings:', error);
+    showToast('Kunde inte spara inställningar', 'error');
+    return false;
   }
 }
 
@@ -325,9 +364,10 @@ async function startCast() {
     
     await api('/api/cast', { method: 'POST' });
     updateScreensaverStatus(true);
+    showToast('Cast startad', 'success');
   } catch (error) {
     console.error('Cast failed:', error);
-    alert('Kunde inte starta cast: ' + error.message);
+    showToast('Kunde inte starta cast: ' + error.message, 'error');
   }
   
   setLoading(false);
@@ -339,8 +379,10 @@ async function stopCast() {
   try {
     await api('/api/stop', { method: 'POST' });
     updateScreensaverStatus(false);
+    showToast('Cast stoppad', 'success');
   } catch (error) {
     console.error('Stop failed:', error);
+    showToast('Kunde inte stoppa cast', 'error');
   }
   
   setLoading(false);
@@ -366,7 +408,7 @@ elements.refreshBtn.addEventListener('click', refreshDevices);
 elements.castBtn.addEventListener('click', startCast);
 elements.stopBtn.addEventListener('click', stopCast);
 
-// Restart bridge
+// Restart bridge with overlay
 const restartBtn = document.getElementById('restart-btn');
 if (restartBtn) {
   restartBtn.addEventListener('click', async () => {
@@ -375,25 +417,51 @@ if (restartBtn) {
     }
     
     restartBtn.disabled = true;
-    restartBtn.textContent = '⏳ Startar om...';
+    
+    // Show overlay
+    if (elements.restartOverlay) {
+      elements.restartOverlay.style.display = 'flex';
+    }
+    if (elements.restartMessage) {
+      elements.restartMessage.textContent = 'Startar om bridge...';
+    }
+    
+    // Start timer
+    let seconds = 0;
+    const timerInterval = setInterval(() => {
+      seconds++;
+      if (elements.restartTimer) {
+        elements.restartTimer.textContent = `${seconds}s`;
+      }
+    }, 1000);
     
     try {
       await api('/api/restart', { method: 'POST' });
-      // Show message and poll for reconnection
-      updateStatus(false, 'Startar om...');
+      
+      // Update message
+      if (elements.restartMessage) {
+        elements.restartMessage.textContent = 'Återansluter...';
+      }
       
       // Poll until server is back
       const pollReconnect = () => {
         setTimeout(async () => {
           try {
             await api('/api/status');
-            // Server is back
+            // Server is back - hide overlay
+            clearInterval(timerInterval);
+            if (elements.restartOverlay) {
+              elements.restartOverlay.style.display = 'none';
+            }
+            
             updateStatus(true, 'Ansluten');
             restartBtn.disabled = false;
             clearSettingsModified();
             await loadSettings();
             await loadDevices();
             await loadStatus();
+            
+            showToast('Bridge omstartad', 'success');
           } catch (e) {
             // Still restarting, poll again
             pollReconnect();
@@ -403,8 +471,12 @@ if (restartBtn) {
       pollReconnect();
     } catch (error) {
       console.error('Restart failed:', error);
+      clearInterval(timerInterval);
+      if (elements.restartOverlay) {
+        elements.restartOverlay.style.display = 'none';
+      }
       restartBtn.disabled = false;
-      restartBtn.textContent = '🔄 Starta om';
+      showToast('Kunde inte starta om bridge', 'error');
     }
   });
 }
@@ -432,6 +504,7 @@ const settingsInputs = [
   { el: elements.idleStatusTimeoutInput, key: 'idleStatusTimeout' },
   { el: elements.castRetryInput, key: 'castRetryDelay' },
   { el: elements.castMaxRetriesInput, key: 'castMaxRetries' },
+  { el: elements.receiverAutoRefreshInput, key: 'receiverAutoRefresh' },
   // Återhämtning & Skydd
   { el: elements.cooldownAfterTakeoverInput, key: 'cooldownAfterTakeover' },
   { el: elements.recoveryCheckIntervalInput, key: 'recoveryCheckInterval' },
@@ -486,6 +559,7 @@ const DEFAULT_VALUES = {
   idleStatusTimeout: 5,
   castRetryDelay: 2,
   castMaxRetries: 3,
+  receiverAutoRefresh: 45,
   // Återhämtning & Skydd
   cooldownAfterTakeover: 30,
   recoveryCheckInterval: 10,
@@ -513,6 +587,7 @@ if (elements.resetDiscoveryBtn) {
     
     // Save
     await saveSettings(updates);
+    showToast('Sök-inställningar återställda', 'info');
     markSettingsModified();
   });
 }
@@ -525,7 +600,8 @@ if (elements.resetCastBtn) {
       keepAliveInterval: DEFAULT_VALUES.keepAliveInterval,
       idleStatusTimeout: DEFAULT_VALUES.idleStatusTimeout,
       castRetryDelay: DEFAULT_VALUES.castRetryDelay,
-      castMaxRetries: DEFAULT_VALUES.castMaxRetries
+      castMaxRetries: DEFAULT_VALUES.castMaxRetries,
+      receiverAutoRefresh: DEFAULT_VALUES.receiverAutoRefresh
     };
     
     // Update UI
@@ -534,9 +610,11 @@ if (elements.resetCastBtn) {
     elements.idleStatusTimeoutInput.value = updates.idleStatusTimeout;
     elements.castRetryInput.value = updates.castRetryDelay;
     elements.castMaxRetriesInput.value = updates.castMaxRetries;
+    elements.receiverAutoRefreshInput.value = updates.receiverAutoRefresh;
     
     // Save
     await saveSettings(updates);
+    showToast('Cast-inställningar återställda', 'info');
     markSettingsModified();
   });
 }
@@ -559,17 +637,18 @@ if (elements.resetRecoveryBtn) {
     
     // Save
     await saveSettings(updates);
+    showToast('Recovery-inställningar återställda', 'info');
     markSettingsModified();
   });
 }
+
+// Copy URL button
+if (elements.copyUrlBtn) {
   elements.copyUrlBtn.addEventListener('click', () => {
     const url = elements.networkUrl?.textContent;
     if (url && url !== '-') {
       navigator.clipboard.writeText(url).then(() => {
-        elements.copyUrlBtn.textContent = '✓ Kopierad!';
-        setTimeout(() => {
-          elements.copyUrlBtn.textContent = '📋 Kopiera';
-        }, 2000);
+        showToast('URL kopierad till urklipp', 'success');
       });
     }
   });

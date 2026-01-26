@@ -171,11 +171,16 @@
       console.log('Keep-alive:', new Date().toISOString());
     }, 10000);
     
-    // Auto-refresh every 45 minutes to clear memory
+    // Auto-refresh to clear memory (configurable via URL param)
+    const urlParams = new URLSearchParams(window.location.search);
+    const refreshMinutes = parseInt(urlParams.get('refresh') || '45', 10);
+    const refreshMs = refreshMinutes * 60 * 1000;
+    console.log(`Auto-refresh configured: every ${refreshMinutes} minutes`);
+    
     setInterval(() => {
       console.log('Auto-refresh to clear memory');
       window.location.reload();
-    }, 45 * 60 * 1000);
+    }, refreshMs);
     
     // Start the receiver
     const options = new cast.framework.CastReceiverOptions();

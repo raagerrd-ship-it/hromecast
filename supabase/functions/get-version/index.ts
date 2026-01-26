@@ -19,10 +19,26 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.12";
+const VERSION = "1.3.13";
 const RELEASED_AT = "2026-01-26";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.13",
+    date: "2026-01-26",
+    changes: {
+      sv: [
+        "Toast-notifikationer för feedback vid åtgärder",
+        "Visuell nedräkning under omstart av bridge",
+        "Konfigurerbart auto-refresh intervall för receiver",
+      ],
+      en: [
+        "Toast notifications for action feedback",
+        "Visual countdown during bridge restart",
+        "Configurable auto-refresh interval for receiver",
+      ],
+    }
+  },
   {
     version: "1.3.12",
     date: "2026-01-26",
