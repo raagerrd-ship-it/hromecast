@@ -1042,6 +1042,7 @@ async function checkAndActivateScreensaver() {
   // Handle different states
   if (result.status === 'our_app') {
     // isChromecastIdleWithRecovery already synced screensaverActive = true
+    log.info('📡 Senaste kontroll: ✅ Vår app aktiv');
     if (!wasScreensaverActive) {
       log.info('✅ Screensaver resumed (was already running on device)');
     }
@@ -1049,7 +1050,8 @@ async function checkAndActivateScreensaver() {
   }
   
   if (result.status === 'busy') {
-    log.info(`📺 Device busy with: ${result.apps?.join(', ') || 'unknown app'}`);
+    const appName = result.apps?.[0] || 'okänd app';
+    log.info(`📡 Senaste kontroll: 📺 ${appName} kör`);
     if (wasScreensaverActive) {
       logScreensaverStop('takeover');
     }
@@ -1057,7 +1059,7 @@ async function checkAndActivateScreensaver() {
   }
   
   if (result.status === 'error') {
-    log.warn('⚠️ Device unreachable');
+    log.info('📡 Senaste kontroll: ❌ Enhet ej nåbar');
     if (wasScreensaverActive) {
       logScreensaverStop('network_error');
     }
@@ -1065,6 +1067,7 @@ async function checkAndActivateScreensaver() {
   }
   
   // status === 'idle' - device is idle and our app is NOT running
+  log.info('📡 Senaste kontroll: ⏸️ Enhet ledig');
   
   // If we thought we were active but device says idle, this is a silent disconnect
   if (wasScreensaverActive) {
