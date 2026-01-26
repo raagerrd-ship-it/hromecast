@@ -78,6 +78,9 @@ const activeHeartbeats = new Set();
 const LOG_BUFFER_SIZE = 100;
 let logBuffer = [];
 
+// Special sticky "last check" entry - always shown first, updated every check
+let lastCheckEntry = null;
+
 // Default config with timing settings (all in seconds unless noted)
 const DEFAULT_CONFIG = {
   enabled: false,
@@ -1045,25 +1048,37 @@ async function checkAndActivateScreensaver() {
   const currentCheckKey = result.status === 'busy' ? `busy:${appName}` : result.status;
   const checkTime = new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   
-  // Only log if status changed
+  // Build status text
+  let statusText = '';
+  switch (result.status) {
+    case 'our_app':
+      statusText = '✅ Vår app aktiv';
+      break;
+    case 'busy':
+      statusText = `📺 ${appName || 'okänd app'} kör`;
+      break;
+    case 'error':
+      statusText = '❌ Enhet ej nåbar';
+      break;
+    case 'idle':
+      statusText = '⏸️ Enhet ledig';
+      break;
+  }
+  
+  // Always update the sticky "last check" entry (time updates continuously)
+  lastCheckEntry = {
+    timestamp: new Date().toISOString(),
+    level: 'info',
+    message: `📡 Senaste kontroll (${checkTime}): ${statusText}`,
+    isLastCheck: true  // Mark as special entry
+  };
+  
+  // Only log to regular buffer if status changed
   if (currentCheckKey !== lastLoggedCheckStatus) {
     lastLoggedCheckStatus = currentCheckKey;
-    
-    switch (result.status) {
-      case 'our_app':
-        log.info(`📡 Senaste kontroll (${checkTime}): ✅ Vår app aktiv`);
-        break;
-      case 'busy':
-        log.info(`📡 Senaste kontroll (${checkTime}): 📺 ${appName || 'okänd app'} kör`);
-        break;
-      case 'error':
-        log.info(`📡 Senaste kontroll (${checkTime}): ❌ Enhet ej nåbar`);
-        break;
-      case 'idle':
-        log.info(`📡 Senaste kontroll (${checkTime}): ⏸️ Enhet ledig`);
-        break;
-    }
+    log.info(`📡 Statusändring (${checkTime}): ${statusText}`);
   }
+
   
   // Handle different states
   if (result.status === 'our_app') {
@@ -1296,7 +1311,11 @@ const server = http.createServer(async (req, res) => {
       
       // GET /api/logs
       if (req.method === 'GET' && pathname === '/api/logs') {
-        sendJson(res, { logs: logBuffer });
+        // Prepend lastCheckEntry if exists
+        const logsWithCheck = lastCheckEntry 
+          ? [lastCheckEntry, ...logBuffer] 
+          : logBuffer;
+        sendJson(res, { logs: logsWithCheck });
         return;
       }
       
