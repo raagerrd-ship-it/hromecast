@@ -85,6 +85,7 @@ const DEFAULT_CONFIG = {
   discoveryInterval: 30,             // Re-scan for devices interval (minutes)
   discoveryTimeout: 10,              // Max time to wait for discovery (seconds) - increased from 8
   discoveryEarlyResolve: 4,          // Early resolve if devices found (seconds) - increased from 3
+  discoveryRetryDelay: 5,            // Delay between discovery retry attempts (seconds)
   idleStatusTimeout: 5,              // Timeout for idle check (seconds)
   castRetryDelay: 2,                 // Base delay for retry backoff (seconds)
   castMaxRetries: 3                  // Max cast retry attempts
@@ -498,6 +499,9 @@ function discoverDevices() {
 
 // Discovery with automatic retry for refresh endpoint
 async function discoverDevicesWithRetry(maxRetries = 3) {
+  const config = loadConfig();
+  const retryDelayMs = (config.discoveryRetryDelay || 5) * 1000;
+  
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     const devices = await discoverDevices();
     
@@ -506,8 +510,8 @@ async function discoverDevicesWithRetry(maxRetries = 3) {
     }
     
     if (attempt < maxRetries) {
-      log.info(`🔄 No devices found, retrying (${attempt}/${maxRetries})...`);
-      await sleep(5000); // Wait 5 seconds between attempts for slower networks
+      log.info(`🔄 No devices found, retrying in ${config.discoveryRetryDelay || 5}s (${attempt}/${maxRetries})...`);
+      await sleep(retryDelayMs);
     }
   }
   
