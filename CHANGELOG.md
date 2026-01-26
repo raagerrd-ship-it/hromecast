@@ -5,6 +5,13 @@ Alla betydande ändringar i Chromecast Bridge dokumenteras här.
 Formatet är baserat på [Keep a Changelog](https://keepachangelog.com/sv/1.0.0/),
 och projektet följer [Semantic Versioning](https://semver.org/lang/sv/).
 
+## [1.3.15] - 2026-01-26
+
+### Tillagt
+- **Brandväggsautomatik**: Windows-installern lägger nu till brandväggsregel automatiskt
+- **Synkad logguppdatering**: Dashboard hämtar loggar i takt med screensaver-kontrollen
+- **Förbättrad LIVE-logg**: Sticky "Senaste kontroll" med tydlig LIVE-indikator
+
 ## [1.2.2] - 2026-01-24
 
 ### Fixat
