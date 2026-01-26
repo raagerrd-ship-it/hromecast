@@ -19,10 +19,26 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.13";
+const VERSION = "1.3.14";
 const RELEASED_AT = "2026-01-26";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.14",
+    date: "2026-01-26",
+    changes: {
+      sv: [
+        "Fixat: Bridge lyssnar nu på alla nätverksgränssnitt (0.0.0.0)",
+        "Mobil-åtkomst: Nu kan du ansluta från andra enheter på nätverket",
+        "Förbättrad nätverks-IP visning vid start",
+      ],
+      en: [
+        "Fixed: Bridge now listens on all network interfaces (0.0.0.0)",
+        "Mobile access: You can now connect from other devices on the network",
+        "Improved network IP display at startup",
+      ],
+    }
+  },
   {
     version: "1.3.13",
     date: "2026-01-26",

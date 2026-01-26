@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.13';
+const BRIDGE_VERSION = '1.3.14';
 
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
@@ -1354,9 +1354,12 @@ async function main() {
     // Don't exit - try to recover
   });
   
-  // Start HTTP server
-  server.listen(PORT, () => {
-    log.info(`🚀 Server running on http://localhost:${PORT}`);
+  // Start HTTP server - bind to 0.0.0.0 to allow access from other devices on the network
+  const networkIP = getNetworkIP();
+  server.listen(PORT, '0.0.0.0', () => {
+    log.info(`🚀 Server running on:`);
+    log.info(`   Local:   http://localhost:${PORT}`);
+    log.info(`   Network: http://${networkIP}:${PORT}`);
   });
   
   // Publish mDNS service
