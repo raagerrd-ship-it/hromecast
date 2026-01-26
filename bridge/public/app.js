@@ -370,7 +370,7 @@ elements.stopBtn.addEventListener('click', stopCast);
 const restartBtn = document.getElementById('restart-btn');
 if (restartBtn) {
   restartBtn.addEventListener('click', async () => {
-    if (!confirm('Vill du starta om bridge-tjänsten? Detta krävs för att timing-ändringar ska träda i kraft.')) {
+    if (!confirm('⚠️ Vill du starta om bridge-tjänsten?\n\nDetta kommer att:\n• Tillfälligt bryta anslutningen till Chromecast\n• Stoppa aktiv screensaver\n• Applicera alla inställningsändringar\n\nTjänsten startar om automatiskt inom några sekunder.')) {
       return;
     }
     
