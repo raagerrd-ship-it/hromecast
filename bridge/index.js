@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.9';
+const BRIDGE_VERSION = '1.3.10';
 
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
@@ -83,8 +83,8 @@ const DEFAULT_CONFIG = {
   screensaverCheckInterval: 60,      // How often to check if device is idle (seconds)
   keepAliveInterval: 5,              // Keep-alive ping interval (seconds)
   discoveryInterval: 30,             // Re-scan for devices interval (minutes)
-  discoveryTimeout: 8,               // Max time to wait for discovery (seconds)
-  discoveryEarlyResolve: 3,          // Early resolve if devices found (seconds)
+  discoveryTimeout: 10,              // Max time to wait for discovery (seconds) - increased from 8
+  discoveryEarlyResolve: 4,          // Early resolve if devices found (seconds) - increased from 3
   idleStatusTimeout: 5,              // Timeout for idle check (seconds)
   castRetryDelay: 2,                 // Base delay for retry backoff (seconds)
   castMaxRetries: 3                  // Max cast retry attempts
@@ -457,8 +457,8 @@ function discoverDevices() {
     
     // Get timing from config
     const config = loadConfig();
-    const earlyResolveMs = (config.discoveryEarlyResolve || 3) * 1000;
-    const maxTimeoutMs = (config.discoveryTimeout || 8) * 1000;
+    const earlyResolveMs = (config.discoveryEarlyResolve || 4) * 1000;
+    const maxTimeoutMs = (config.discoveryTimeout || 10) * 1000;
     
     // Early resolve if devices found
     const earlyResolveTimeout = setTimeout(() => {
@@ -471,18 +471,44 @@ function discoverDevices() {
       }
     }, earlyResolveMs);
     
-    // Max timeout
+    // Max timeout - keep cached devices if none found
     setTimeout(() => {
       clearTimeout(earlyResolveTimeout);
       if (!resolved) {
         resolved = true;
         browser.stop();
-        discoveredDevices = foundDevices;
-        log.info(`📡 Discovery complete: ${foundDevices.length} device(s)`);
-        resolve(foundDevices);
+        
+        // If no devices found, keep the cached ones
+        if (foundDevices.length === 0 && discoveredDevices.length > 0) {
+          log.info(`📡 Discovery timeout, keeping ${discoveredDevices.length} cached device(s)`);
+          resolve(discoveredDevices);
+        } else {
+          discoveredDevices = foundDevices;
+          log.info(`📡 Discovery complete: ${foundDevices.length} device(s)`);
+          resolve(foundDevices);
+        }
       }
     }, maxTimeoutMs);
   });
+}
+
+// Discovery with automatic retry for refresh endpoint
+async function discoverDevicesWithRetry(maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const devices = await discoverDevices();
+    
+    if (devices.length > 0) {
+      return devices;
+    }
+    
+    if (attempt < maxRetries) {
+      log.info(`🔄 No devices found, retrying (${attempt}/${maxRetries})...`);
+      await sleep(2000); // Wait 2 seconds between attempts
+    }
+  }
+  
+  log.warn('⚠️ No devices found after retries');
+  return [];
 }
 
 // ============ Chromecast Control using raw castv2 ============
@@ -653,8 +679,28 @@ async function castMedia(chromecastName, url, retryCount = 0) {
     client.on('close', () => {
       log.info('🔌 Connection closed');
       cleanup();
-      // Don't trigger recovery here - the close might be expected
-      // Recovery is handled by the periodic status check instead
+      
+      // If we thought we were active, do an immediate status check
+      if (screensaverActive) {
+        log.info('⚠️ Connection closed while active - checking status in 3s...');
+        setTimeout(async () => {
+          const config = loadConfig();
+          if (config.selectedChromecast && config.enabled) {
+            const result = await isChromecastIdleWithRecovery(config.selectedChromecast);
+            if (result.status === 'idle') {
+              log.info('🔄 Device idle after close - reactivating...');
+              checkAndActivateScreensaver();
+            } else if (result.status === 'our_app') {
+              log.info('✅ Our app still running on device');
+              screensaverActive = true;
+            } else {
+              log.info(`ℹ️ Device status after close: ${result.status}`);
+              // Start normal recovery for other statuses
+              logScreensaverStop('network_error');
+            }
+          }
+        }, 3000); // Wait 3 seconds for cleanup
+      }
     });
     
     client.connect(device.host, () => {
@@ -1064,7 +1110,8 @@ const server = http.createServer(async (req, res) => {
       
       // POST /api/chromecasts/refresh
       if (req.method === 'POST' && pathname === '/api/chromecasts/refresh') {
-        const devices = await discoverDevices();
+        // Use retry logic for manual refresh
+        const devices = await discoverDevicesWithRetry(3);
         // Reset recovery state on manual refresh
         resetIPRecoveryBackoff();
         lastTakeoverTime = 0;
