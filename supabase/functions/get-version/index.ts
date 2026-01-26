@@ -19,21 +19,21 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.16";
+const VERSION = "1.3.17";
 const RELEASED_AT = "2026-01-26";
 
 const CHANGELOG: ChangelogEntry[] = [
   {
-    version: "1.3.16",
+    version: "1.3.17",
     date: "2026-01-26",
     changes: {
       sv: [
-        "Synkad edge-funktion: Nedladdningsbar bridge innehåller nu all senaste funktionalitet",
-        "Fixat: LIVE-logg och lastCheckEntry saknades i nedladdad version",
+        "Snabbare loggvisning: Dashboard pollar loggar var 10:e sekund för responsiv LIVE-indikator",
+        "Separerad polling: Status kontrolleras var 60:e sekund, loggar uppdateras snabbare",
       ],
       en: [
-        "Synced edge function: Downloadable bridge now includes all latest functionality",
-        "Fixed: LIVE log and lastCheckEntry were missing in downloaded version",
+        "Faster log display: Dashboard polls logs every 10 seconds for responsive LIVE indicator",
+        "Separated polling: Status checked every 60 seconds, logs update faster",
       ],
     }
   },
