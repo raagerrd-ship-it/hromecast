@@ -24,6 +24,13 @@
       position: absolute;
       top: 0;
       left: 0;
+      /* GPU Acceleration */
+      transform: translate3d(0, 0, 0);
+      will-change: transform, contents;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      /* Förhindra onödig layout-beräkning */
+      contain: strict;
     }
     
     #status {
@@ -51,7 +58,7 @@
 <body>
   <div id="status">Ready to cast...</div>
   <div id="loading" style="display:none;">Loading website...</div>
-  <iframe id="content" style="display:none;"></iframe>
+  <iframe id="content" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" loading="eager" style="display:none;"></iframe>
   
   <script>
     const context = cast.framework.CastReceiverContext.getInstance();
