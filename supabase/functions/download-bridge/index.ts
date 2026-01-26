@@ -153,19 +153,35 @@ let updateInProgress = false;
 const LOG_BUFFER_SIZE = 100;
 let logBuffer = [];
 
+// Special sticky "last check" entry - always shown first, updated every check
+let lastCheckEntry = null;
+
+// Track last logged status to avoid duplicate log entries
+let lastLoggedCheckStatus = null;
+
 // Default config with timing settings (all in seconds unless noted)
 const DEFAULT_CONFIG = {
   enabled: false,
   url: '',
   selectedChromecast: null,
+  // Sökning & Discovery
+  discoveryInterval: 30,
+  discoveryTimeout: 10,
+  discoveryEarlyResolve: 4,
+  discoveryRetryDelay: 5,
+  discoveryMaxRetries: 3,
+  // Cast & Session
   screensaverCheckInterval: 60,
   keepAliveInterval: 5,
-  discoveryInterval: 30,
-  discoveryTimeout: 8,
-  discoveryEarlyResolve: 3,
   idleStatusTimeout: 5,
   castRetryDelay: 2,
-  castMaxRetries: 3
+  castMaxRetries: 3,
+  receiverAutoRefresh: 45,
+  // Återhämtning & Skydd
+  cooldownAfterTakeover: 30,
+  recoveryCheckInterval: 10,
+  circuitBreakerThreshold: 5,
+  circuitBreakerCooldown: 5
 };
 
 // ============ Structured Logging ============
@@ -603,7 +619,44 @@ async function checkAndActivateScreensaver() {
     return;
   }
   
+  const now = new Date();
+  const checkTime = now.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+  
+  // Check device status
   const idle = await isChromecastIdle(config.selectedChromecast);
+  
+  // Determine status
+  let status = 'idle';
+  let statusText = '';
+  
+  if (screensaverActive) {
+    status = 'our_app';
+    statusText = '✅ Vår app aktiv';
+  } else if (!idle) {
+    status = 'busy';
+    statusText = '📺 Annan app kör';
+  } else {
+    status = 'idle';
+    statusText = '⏸️ Enhet ledig';
+  }
+  
+  const currentCheckKey = status;
+  
+  // Always update the sticky "last check" entry (time updates continuously)
+  lastCheckEntry = {
+    timestamp: new Date().toISOString(),
+    level: 'info',
+    message: \`📡 Senaste kontroll (\${checkTime}): \${statusText}\`,
+    isLastCheck: true
+  };
+  
+  // Only log to regular buffer if status changed
+  if (currentCheckKey !== lastLoggedCheckStatus) {
+    lastLoggedCheckStatus = currentCheckKey;
+    log.info(\`📡 Statusändring (\${checkTime}): \${statusText}\`);
+  }
+  
+  // Activate screensaver if idle
   if (idle && !screensaverActive) {
     log.info('💤 Device idle, activating screensaver...');
     try {
@@ -749,7 +802,11 @@ const server = http.createServer(async (req, res) => {
       }
       
       if (req.method === 'GET' && pathname === '/api/logs') {
-        sendJson(res, { logs: logBuffer });
+        // Prepend lastCheckEntry if exists
+        const logsWithCheck = lastCheckEntry 
+          ? [lastCheckEntry, ...logBuffer] 
+          : logBuffer;
+        sendJson(res, { logs: logsWithCheck });
         return;
       }
       
