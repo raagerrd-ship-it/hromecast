@@ -1045,11 +1045,6 @@ const PUBLIC_INDEX_HTML = `<!DOCTYPE html>
               <span class="hint">Intervall för session-kontroll</span>
             </div>
             <div class="form-group">
-              <label for="discovery-interval-input">Enhetsökning (min)</label>
-              <input type="number" id="discovery-interval-input" min="5" max="120" step="5" value="30">
-              <span class="hint">Hur ofta söka efter nya enheter</span>
-            </div>
-            <div class="form-group">
               <label for="discovery-timeout-input">Sök-timeout (sek)</label>
               <input type="number" id="discovery-timeout-input" min="3" max="30" step="1" value="8">
               <span class="hint">Max tid för enhetssökning</span>
@@ -1684,7 +1679,6 @@ const elements = {
   settingsContent: document.getElementById('settings-content'),
   screensaverCheckInput: document.getElementById('screensaver-check-input'),
   keepAliveInput: document.getElementById('keep-alive-input'),
-  discoveryIntervalInput: document.getElementById('discovery-interval-input'),
   discoveryTimeoutInput: document.getElementById('discovery-timeout-input'),
   castRetryInput: document.getElementById('cast-retry-input'),
   castMaxRetriesInput: document.getElementById('cast-max-retries-input')
@@ -1832,9 +1826,6 @@ async function loadSettings() {
     }
     if (elements.keepAliveInput) {
       elements.keepAliveInput.value = data.keepAliveInterval || 5;
-    }
-    if (elements.discoveryIntervalInput) {
-      elements.discoveryIntervalInput.value = data.discoveryInterval || 30;
     }
     if (elements.discoveryTimeoutInput) {
       elements.discoveryTimeoutInput.value = data.discoveryTimeout || 8;
@@ -2049,7 +2040,6 @@ if (elements.toggleSettingsBtn && elements.settingsContent) {
 const settingsInputs = [
   { el: elements.screensaverCheckInput, key: 'screensaverCheckInterval' },
   { el: elements.keepAliveInput, key: 'keepAliveInterval' },
-  { el: elements.discoveryIntervalInput, key: 'discoveryInterval' },
   { el: elements.discoveryTimeoutInput, key: 'discoveryTimeout' },
   { el: elements.castRetryInput, key: 'castRetryDelay' },
   { el: elements.castMaxRetriesInput, key: 'castMaxRetries' }

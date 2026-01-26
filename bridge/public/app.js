@@ -64,8 +64,6 @@ const elements = {
   toggleSettingsBtn: document.getElementById('toggle-settings-btn'),
   settingsContent: document.getElementById('settings-content'),
   // Sökning & Discovery
-  discoveryIntervalInput: document.getElementById('discovery-interval-input'),
-  discoveryTimeoutInput: document.getElementById('discovery-timeout-input'),
   discoveryEarlyResolveInput: document.getElementById('discovery-early-resolve-input'),
   discoveryRetryDelayInput: document.getElementById('discovery-retry-delay-input'),
   discoveryMaxRetriesInput: document.getElementById('discovery-max-retries-input'),
@@ -231,12 +229,7 @@ async function loadSettings() {
     }
     
     // Load timing settings - Sökning & Discovery
-    if (elements.discoveryIntervalInput) {
-      elements.discoveryIntervalInput.value = data.discoveryInterval || 30;
-    }
     if (elements.discoveryTimeoutInput) {
-      elements.discoveryTimeoutInput.value = data.discoveryTimeout || 10;
-    }
     if (elements.discoveryEarlyResolveInput) {
       elements.discoveryEarlyResolveInput.value = data.discoveryEarlyResolve || 4;
     }
@@ -516,7 +509,6 @@ if (elements.toggleSettingsBtn && elements.settingsContent) {
 // Settings input handlers - all configurable settings
 const settingsInputs = [
   // Sökning & Discovery
-  { el: elements.discoveryIntervalInput, key: 'discoveryInterval' },
   { el: elements.discoveryTimeoutInput, key: 'discoveryTimeout' },
   { el: elements.discoveryEarlyResolveInput, key: 'discoveryEarlyResolve' },
   { el: elements.discoveryRetryDelayInput, key: 'discoveryRetryDelay' },
@@ -570,9 +562,7 @@ settingsInputs.forEach(({ el, key }) => {
 
 // Default values for reset functionality
 const DEFAULT_VALUES = {
-  // Sökning & Discovery
-  discoveryInterval: 30,
-  discoveryTimeout: 10,
+  // Sökning & Discovery (discoveryInterval removed - no longer used)
   discoveryEarlyResolve: 4,
   discoveryRetryDelay: 5,
   discoveryMaxRetries: 3,
@@ -594,7 +584,6 @@ const DEFAULT_VALUES = {
 if (elements.resetDiscoveryBtn) {
   elements.resetDiscoveryBtn.addEventListener('click', async () => {
     const updates = {
-      discoveryInterval: DEFAULT_VALUES.discoveryInterval,
       discoveryTimeout: DEFAULT_VALUES.discoveryTimeout,
       discoveryEarlyResolve: DEFAULT_VALUES.discoveryEarlyResolve,
       discoveryRetryDelay: DEFAULT_VALUES.discoveryRetryDelay,
@@ -602,8 +591,6 @@ if (elements.resetDiscoveryBtn) {
     };
     
     // Update UI
-    elements.discoveryIntervalInput.value = updates.discoveryInterval;
-    elements.discoveryTimeoutInput.value = updates.discoveryTimeout;
     elements.discoveryEarlyResolveInput.value = updates.discoveryEarlyResolve;
     elements.discoveryRetryDelayInput.value = updates.discoveryRetryDelay;
     elements.discoveryMaxRetriesInput.value = updates.discoveryMaxRetries;
