@@ -19,10 +19,24 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.20";
+const VERSION = "1.3.21";
 const RELEASED_AT = "2026-01-26";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.21",
+    date: "2026-01-26",
+    changes: {
+      sv: [
+        "Fixat: 60-sekunders statusloggning fungerar nu även efter bufferrotation",
+        "Robust sökning: Använder findIndex istället för sårbar indexspårning",
+      ],
+      en: [
+        "Fixed: 60-second status logging now works even after buffer rotation",
+        "Robust search: Uses findIndex instead of vulnerable index tracking",
+      ],
+    }
+  },
   {
     version: "1.3.20",
     date: "2026-01-26",
