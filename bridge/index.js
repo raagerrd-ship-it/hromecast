@@ -86,6 +86,7 @@ const DEFAULT_CONFIG = {
   discoveryTimeout: 10,              // Max time to wait for discovery (seconds) - increased from 8
   discoveryEarlyResolve: 4,          // Early resolve if devices found (seconds) - increased from 3
   discoveryRetryDelay: 5,            // Delay between discovery retry attempts (seconds)
+  discoveryMaxRetries: 3,            // Max number of discovery retry attempts
   idleStatusTimeout: 5,              // Timeout for idle check (seconds)
   castRetryDelay: 2,                 // Base delay for retry backoff (seconds)
   castMaxRetries: 3                  // Max cast retry attempts
@@ -290,7 +291,7 @@ function startRecoveryCheck() {
     } else if (result.status === 'error') {
       // Device unreachable - trigger rediscovery with retry
       log.info('🔄 [RECOVERY] Device unreachable, triggering rediscovery...');
-      const devices = await discoverDevicesWithRetry(3);
+      const devices = await discoverDevicesWithRetry();
       
       // Check if device was found with new IP
       const device = findDevice(config.selectedChromecast);
@@ -498,8 +499,9 @@ function discoverDevices() {
 }
 
 // Discovery with automatic retry for refresh endpoint
-async function discoverDevicesWithRetry(maxRetries = 3) {
+async function discoverDevicesWithRetry(maxRetriesOverride = null) {
   const config = loadConfig();
+  const maxRetries = maxRetriesOverride ?? (config.discoveryMaxRetries || 3);
   const retryDelayMs = (config.discoveryRetryDelay || 5) * 1000;
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -1163,7 +1165,7 @@ const server = http.createServer(async (req, res) => {
       // POST /api/chromecasts/refresh
       if (req.method === 'POST' && pathname === '/api/chromecasts/refresh') {
         // Use retry logic for manual refresh
-        const devices = await discoverDevicesWithRetry(3);
+        const devices = await discoverDevicesWithRetry();
         // Reset recovery state on manual refresh
         resetIPRecoveryBackoff();
         lastTakeoverTime = 0;
