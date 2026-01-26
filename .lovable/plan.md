@@ -1,85 +1,57 @@
 
-# Ta bort mDNS-publicering och mDNS-URL från dashboarden
 
-## Sammanfattning
-Ta bort den onödiga mDNS-publiceringen av bridge-tjänsten och dess URL-visning i dashboarden. Chromecast-upptäckten (som faktiskt använder mDNS) behålls oförändrad.
+# Fixa 60-sekunders statusloggning
 
-## Vad som tas bort
+## Problem
+Statusloggningen försvann helt på grund av två buggar:
 
-### 1. mDNS-publicering av bridge (bridge/index.js)
+### Bugg 1: Index blir ogiltigt
+När `addToLogBuffer()` anropas av andra loggar (t.ex. "Söker efter enheter...") och buffern är full, körs `logBuffer.shift()`. Detta minskar alla index med 1, men `lastStatusCheckIndex` uppdateras inte - så den pekar på fel post eller utanför buffern.
 
-**Rad 1438-1445 - Ta bort:**
+### Bugg 2: Ingen initial post vid start
+Om screensavern redan är aktiv vid start och status inte ändras, skapas aldrig någon statuspost eftersom `lastLoggedCheckStatus` börjar som `null` och sedan sätts till `'our_app'` - men ingen post skapas förrän status **ändras**.
+
+## Lösning
+Istället för att spåra index, sök efter posten med `isStatusCheck: true` direkt i buffern:
+
 ```javascript
-// Publish mDNS service
-bonjour.publish({
-  name: `${os.hostname()}-${DEVICE_ID}`,
-  type: 'http',
-  port: PORT,
-  txt: { path: '/', version: BRIDGE_VERSION }
-});
-log.info(`📡 mDNS published: ${os.hostname()}-${DEVICE_ID}.local`);
-```
+// Hitta befintlig statuspost
+const existingIndex = logBuffer.findIndex(e => e.isStatusCheck);
 
-**Rad 1465 - Ta bort:**
-```javascript
-bonjour.unpublishAll();
-```
-
-**Rad 1302-1304 - Ta bort mdnsUrl från /api/status:**
-```javascript
-mdnsUrl: `http://${DEVICE_ID}.local:${PORT}`,
-```
-
-**Rad 430-433 - Ta bort mDNS från network-info.txt:**
-```
-mDNS (om stöds):
-  http://${DEVICE_ID}.local:${PORT}
-```
-
-### 2. Dashboard HTML (bridge/public/index.html)
-
-**Rad 233-236 - Ta bort:**
-```html
-<div class="network-row">
-  <span class="network-label">mDNS:</span>
-  <code id="mdns-url">-</code>
-</div>
-```
-
-### 3. Dashboard JavaScript (bridge/public/app.js)
-
-**Rad 60 - Ta bort:**
-```javascript
-mdnsUrl: document.getElementById('mdns-url'),
-```
-
-**Rad 319-321 - Ta bort:**
-```javascript
-if (data.mdnsUrl && elements.mdnsUrl) {
-  elements.mdnsUrl.textContent = data.mdnsUrl;
+if (currentCheckKey !== lastLoggedCheckStatus || existingIndex === -1) {
+  // Status ändrad ELLER ingen post finns ännu - skapa/ersätt
+  lastLoggedCheckStatus = currentCheckKey;
+  
+  // Ta bort gammal statuspost om den finns
+  if (existingIndex >= 0) {
+    logBuffer.splice(existingIndex, 1);
+  }
+  
+  // Lägg till ny
+  logBuffer.push({
+    timestamp: new Date().toISOString(),
+    level: 'info',
+    message: `📡 Statusändring (${checkTime}): ${statusText}`,
+    isStatusCheck: true
+  });
+} else {
+  // Status oförändrad - uppdatera bara tidsstämpel
+  logBuffer[existingIndex].timestamp = new Date().toISOString();
+  logBuffer[existingIndex].message = `📡 Senaste kontroll (${checkTime}): ${statusText}`;
 }
 ```
 
-## Vad som behålls
-
-Chromecast-upptäckten via mDNS behålls helt oförändrad:
-```javascript
-const browser = bonjour.find({ type: 'googlecast' });
-```
+## Fördelar
+- Ingen sårbar indexspårning
+- Alltid hittar rätt post via `isStatusCheck`-flaggan
+- Skapar alltid en post första gången (fixar bugg 2)
+- Robust mot bufferrotation
 
 ## Filändringar
 
 | Fil | Ändring |
 |-----|---------|
-| `bridge/index.js` | Ta bort publish, unpublishAll, mdnsUrl i API och network-info.txt |
-| `bridge/public/index.html` | Ta bort mDNS-raden i nätverkssektionen |
-| `bridge/public/app.js` | Ta bort mdnsUrl element och uppdateringslogik |
-| `supabase/functions/download-bridge/index.ts` | Uppdatera INDEX_JS och PUBLIC_APP_JS |
-| `supabase/functions/get-version/index.ts` | Bumpa version till 1.3.20 |
+| `bridge/index.js` | Ersätt index-logik med findIndex-sökning |
+| `supabase/functions/download-bridge/index.ts` | Samma ändring i INDEX_JS |
+| `supabase/functions/get-version/index.ts` | Version 1.3.21 |
 
-## Resultat
-
-- Enklare kod utan onödig mDNS-publicering
-- Renare dashboard utan oanvändbar mDNS-URL
-- Chromecast-upptäckt fungerar precis som förut
-- Mindre förvirring för användare (ingen visad URL som ändå inte fungerar)
