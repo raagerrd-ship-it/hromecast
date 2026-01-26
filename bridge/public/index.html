@@ -95,29 +95,45 @@
           <!-- Group 1: Sökning & Discovery -->
           <div class="settings-group">
             <div class="settings-group-header">
-              <h3 class="settings-group-title">🔍 Sökning & Discovery</h3>
-              <button id="reset-discovery-btn" class="btn btn-secondary btn-small" title="Återställ till standardvärden">↩️ Återställ</button>
+              <h3 class="settings-group-title">🔍 Sökning</h3>
+              <button id="reset-discovery-btn" class="btn btn-secondary btn-small" title="Återställ">↩️</button>
             </div>
-            <div class="settings-grid">
-              <div class="form-group">
-                <label for="discovery-timeout-input">Sök-timeout (sek)</label>
-                <input type="number" id="discovery-timeout-input" min="3" max="30" step="1" value="10">
-                <span class="hint">Max tid för enhetssökning (standard: 10)</span>
+            <div class="settings-group-content">
+              <div class="setting-item">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">Sök-timeout</div>
+                  <div class="setting-item-hint">Max tid för att hitta enheter</div>
+                </div>
+                <div class="setting-item-input">
+                  <input type="number" id="discovery-timeout-input" min="3" max="30" step="1" value="10">
+                </div>
               </div>
-              <div class="form-group">
-                <label for="discovery-early-resolve-input">Tidig avslutning (sek)</label>
-                <input type="number" id="discovery-early-resolve-input" min="1" max="15" step="1" value="4">
-                <span class="hint">Avsluta sökning tidigt om enheter hittas (standard: 4)</span>
+              <div class="setting-item">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">Tidig avslutning</div>
+                  <div class="setting-item-hint">Avsluta när enheter hittas</div>
+                </div>
+                <div class="setting-item-input">
+                  <input type="number" id="discovery-early-resolve-input" min="1" max="15" step="1" value="4">
+                </div>
               </div>
-              <div class="form-group">
-                <label for="discovery-retry-delay-input">Retry-väntetid (sek)</label>
-                <input type="number" id="discovery-retry-delay-input" min="1" max="30" step="1" value="5">
-                <span class="hint">Väntetid mellan sökförsök (standard: 5)</span>
+              <div class="setting-item">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">Retry-fördröjning</div>
+                  <div class="setting-item-hint">Väntetid mellan sökförsök</div>
+                </div>
+                <div class="setting-item-input">
+                  <input type="number" id="discovery-retry-delay-input" min="1" max="30" step="1" value="5">
+                </div>
               </div>
-              <div class="form-group">
-                <label for="discovery-max-retries-input">Antal sökförsök</label>
-                <input type="number" id="discovery-max-retries-input" min="1" max="10" step="1" value="3">
-                <span class="hint">Hur många gånger försöka hitta enheter (standard: 3)</span>
+              <div class="setting-item">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">Max försök</div>
+                  <div class="setting-item-hint">Antal sökförsök</div>
+                </div>
+                <div class="setting-item-input">
+                  <input type="number" id="discovery-max-retries-input" min="1" max="10" step="1" value="3">
+                </div>
               </div>
             </div>
           </div>
@@ -125,39 +141,63 @@
           <!-- Group 2: Cast & Session -->
           <div class="settings-group">
             <div class="settings-group-header">
-              <h3 class="settings-group-title">📺 Cast & Session</h3>
-              <button id="reset-cast-btn" class="btn btn-secondary btn-small" title="Återställ till standardvärden">↩️ Återställ</button>
+              <h3 class="settings-group-title">📺 Cast</h3>
+              <button id="reset-cast-btn" class="btn btn-secondary btn-small" title="Återställ">↩️</button>
             </div>
-            <div class="settings-grid">
-              <div class="form-group">
-                <label for="screensaver-check-input">Screensaver-kontroll (sek)</label>
-                <input type="number" id="screensaver-check-input" min="10" max="600" step="5" value="60">
-                <span class="hint">Hur ofta kontrollera om enheten är ledig (standard: 60)</span>
+            <div class="settings-group-content">
+              <div class="setting-item">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">Screensaver-kontroll</div>
+                  <div class="setting-item-hint">Hur ofta kolla om ledig (sek)</div>
+                </div>
+                <div class="setting-item-input">
+                  <input type="number" id="screensaver-check-input" min="10" max="600" step="5" value="60">
+                </div>
               </div>
-              <div class="form-group">
-                <label for="keep-alive-input">Keep-alive ping (sek)</label>
-                <input type="number" id="keep-alive-input" min="1" max="60" step="1" value="5">
-                <span class="hint">Intervall för session-kontroll (standard: 5)</span>
+              <div class="setting-item">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">Keep-alive</div>
+                  <div class="setting-item-hint">Session-kontroll intervall (sek)</div>
+                </div>
+                <div class="setting-item-input">
+                  <input type="number" id="keep-alive-input" min="1" max="60" step="1" value="5">
+                </div>
               </div>
-              <div class="form-group">
-                <label for="idle-status-timeout-input">Idle-timeout (sek)</label>
-                <input type="number" id="idle-status-timeout-input" min="1" max="30" step="1" value="5">
-                <span class="hint">Timeout för att kontrollera enhetsstatus (standard: 5)</span>
+              <div class="setting-item">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">Idle-timeout</div>
+                  <div class="setting-item-hint">Timeout för statuskontroll (sek)</div>
+                </div>
+                <div class="setting-item-input">
+                  <input type="number" id="idle-status-timeout-input" min="1" max="30" step="1" value="5">
+                </div>
               </div>
-              <div class="form-group">
-                <label for="cast-retry-input">Cast retry-fördröjning (sek)</label>
-                <input type="number" id="cast-retry-input" min="1" max="30" step="1" value="2">
-                <span class="hint">Bas-fördröjning vid misslyckad cast (standard: 2)</span>
+              <div class="setting-item">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">Retry-fördröjning</div>
+                  <div class="setting-item-hint">Bas-fördröjning vid misslyckad cast</div>
+                </div>
+                <div class="setting-item-input">
+                  <input type="number" id="cast-retry-input" min="1" max="30" step="1" value="2">
+                </div>
               </div>
-              <div class="form-group">
-                <label for="cast-max-retries-input">Cast max försök</label>
-                <input type="number" id="cast-max-retries-input" min="1" max="100" step="1" value="3">
-                <span class="hint">Antal försök innan ge upp (standard: 3)</span>
+              <div class="setting-item">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">Max försök</div>
+                  <div class="setting-item-hint">Antal försök innan ge upp</div>
+                </div>
+                <div class="setting-item-input">
+                  <input type="number" id="cast-max-retries-input" min="1" max="100" step="1" value="3">
+                </div>
               </div>
-              <div class="form-group">
-                <label for="receiver-auto-refresh-input">Receiver auto-refresh (min)</label>
-                <input type="number" id="receiver-auto-refresh-input" min="15" max="120" step="5" value="45">
-                <span class="hint">Hur ofta receiver startar om för minnesrensning (standard: 45)</span>
+              <div class="setting-item">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">Auto-refresh</div>
+                  <div class="setting-item-hint">Receiver omstart för minne (min)</div>
+                </div>
+                <div class="setting-item-input">
+                  <input type="number" id="receiver-auto-refresh-input" min="15" max="120" step="5" value="45">
+                </div>
               </div>
             </div>
           </div>
@@ -165,37 +205,53 @@
           <!-- Group 3: Återhämtning & Skydd -->
           <div class="settings-group">
             <div class="settings-group-header">
-              <h3 class="settings-group-title">🛡️ Återhämtning & Skydd</h3>
-              <button id="reset-recovery-btn" class="btn btn-secondary btn-small" title="Återställ till standardvärden">↩️ Återställ</button>
+              <h3 class="settings-group-title">🛡️ Skydd</h3>
+              <button id="reset-recovery-btn" class="btn btn-secondary btn-small" title="Återställ">↩️</button>
             </div>
-            <div class="settings-grid">
-              <div class="form-group">
-                <label for="cooldown-after-takeover-input">Cooldown efter takeover (sek)</label>
-                <input type="number" id="cooldown-after-takeover-input" min="5" max="300" step="5" value="30">
-                <span class="hint">Väntetid efter att annan app tagit över (standard: 30)</span>
+            <div class="settings-group-content">
+              <div class="setting-item">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">Takeover cooldown</div>
+                  <div class="setting-item-hint">Väntetid efter app-takeover (sek)</div>
+                </div>
+                <div class="setting-item-input">
+                  <input type="number" id="cooldown-after-takeover-input" min="5" max="300" step="5" value="30">
+                </div>
               </div>
-              <div class="form-group">
-                <label for="recovery-check-interval-input">Recovery-kontroll (sek)</label>
-                <input type="number" id="recovery-check-interval-input" min="5" max="120" step="5" value="10">
-                <span class="hint">Hur ofta kontrollera återhämtning (standard: 10)</span>
+              <div class="setting-item">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">Recovery-intervall</div>
+                  <div class="setting-item-hint">Hur ofta kolla återhämtning (sek)</div>
+                </div>
+                <div class="setting-item-input">
+                  <input type="number" id="recovery-check-interval-input" min="5" max="120" step="5" value="10">
+                </div>
               </div>
-              <div class="form-group">
-                <label for="circuit-breaker-threshold-input">Circuit breaker tröskel</label>
-                <input type="number" id="circuit-breaker-threshold-input" min="1" max="20" step="1" value="5">
-                <span class="hint">Antal fel innan circuit breaker aktiveras (standard: 5)</span>
+              <div class="setting-item">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">Circuit breaker</div>
+                  <div class="setting-item-hint">Fel-tröskel för att pausa</div>
+                </div>
+                <div class="setting-item-input">
+                  <input type="number" id="circuit-breaker-threshold-input" min="1" max="20" step="1" value="5">
+                </div>
               </div>
-              <div class="form-group">
-                <label for="circuit-breaker-cooldown-input">Circuit breaker paus (min)</label>
-                <input type="number" id="circuit-breaker-cooldown-input" min="1" max="60" step="1" value="5">
-                <span class="hint">Hur länge pausa vid för många fel (standard: 5)</span>
+              <div class="setting-item">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">Breaker paus</div>
+                  <div class="setting-item-hint">Pauslängd vid för många fel (min)</div>
+                </div>
+                <div class="setting-item-input">
+                  <input type="number" id="circuit-breaker-cooldown-input" min="1" max="60" step="1" value="5">
+                </div>
               </div>
             </div>
           </div>
 
           <div class="settings-actions">
-            <button id="restart-btn" class="btn btn-warning" title="Starta om bridge för att tillämpa ändringar">🔄 Starta om bridge</button>
+            <button id="restart-btn" class="btn btn-warning" title="Starta om bridge för att tillämpa ändringar">🔄 Starta om</button>
           </div>
-          <p class="hint settings-note">⚠️ Ändringar kräver omstart av bridge för full effekt</p>
+          <p class="hint settings-note">⚠️ Ändringar kräver omstart</p>
         </div>
       </section>
 
