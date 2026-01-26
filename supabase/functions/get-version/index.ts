@@ -19,10 +19,30 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.24";
+const VERSION = "1.3.25";
 const RELEASED_AT = "2026-01-26";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.25",
+    date: "2026-01-26",
+    changes: {
+      sv: [
+        "Säkerhet: Body size limit (10KB) för att förhindra överbelastning",
+        "Säkerhet: Path traversal-skydd för statiska filer",
+        "Säkerhet: Vitlista för tillåtna filtyper",
+        "Säkerhet: X-Content-Type-Options, X-Frame-Options, X-XSS-Protection headers",
+        "Förbättrad felhantering i parseBody med request error-lyssnare",
+      ],
+      en: [
+        "Security: Body size limit (10KB) to prevent overload",
+        "Security: Path traversal protection for static files",
+        "Security: Whitelist for allowed file types",
+        "Security: X-Content-Type-Options, X-Frame-Options, X-XSS-Protection headers",
+        "Improved error handling in parseBody with request error listener",
+      ],
+    }
+  },
   {
     version: "1.3.24",
     date: "2026-01-26",

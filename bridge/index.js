@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.24';
+const BRIDGE_VERSION = '1.3.25';
 
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
@@ -1127,6 +1127,10 @@ async function checkAndActivateScreensaver() {
 
 // ============ HTTP Server ============
 
+// Security constants
+const MAX_BODY_SIZE = 10 * 1024; // 10KB max request body
+const ALLOWED_EXTENSIONS = new Set(['.html', '.css', '.js', '.json', '.png', '.jpg', '.ico']);
+
 const MIME_TYPES = {
   '.html': 'text/html',
   '.css': 'text/css',
@@ -1137,31 +1141,73 @@ const MIME_TYPES = {
   '.ico': 'image/x-icon'
 };
 
+// Security headers for all responses
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'SAMEORIGIN',
+  'X-XSS-Protection': '1; mode=block'
+};
+
 function serveStatic(filePath, res) {
   const ext = path.extname(filePath);
+  
+  // Security: Only allow known file extensions
+  if (!ALLOWED_EXTENSIONS.has(ext)) {
+    res.writeHead(403, SECURITY_HEADERS);
+    res.end('Forbidden');
+    return;
+  }
+  
+  // Security: Prevent path traversal
+  const normalizedPath = path.normalize(filePath);
+  if (!normalizedPath.startsWith(PUBLIC_DIR)) {
+    log.warn(`⚠️ Path traversal attempt blocked: ${filePath}`);
+    res.writeHead(403, SECURITY_HEADERS);
+    res.end('Forbidden');
+    return;
+  }
+  
   const contentType = MIME_TYPES[ext] || 'text/plain';
   
-  fs.readFile(filePath, (err, data) => {
+  fs.readFile(normalizedPath, (err, data) => {
     if (err) {
-      res.writeHead(404);
+      res.writeHead(404, SECURITY_HEADERS);
       res.end('Not Found');
     } else {
-      res.writeHead(200, { 'Content-Type': contentType });
+      res.writeHead(200, { 
+        'Content-Type': contentType,
+        ...SECURITY_HEADERS
+      });
       res.end(data);
     }
   });
 }
 
-function parseBody(req) {
+function parseBody(req, maxSize = MAX_BODY_SIZE) {
   return new Promise((resolve, reject) => {
     let body = '';
-    req.on('data', chunk => body += chunk);
+    let size = 0;
+    
+    req.on('data', chunk => {
+      size += chunk.length;
+      if (size > maxSize) {
+        req.destroy();
+        reject(new Error(`Request body too large (max ${maxSize} bytes)`));
+        return;
+      }
+      body += chunk;
+    });
+    
     req.on('end', () => {
       try {
         resolve(body ? JSON.parse(body) : {});
       } catch (e) {
-        reject(e);
+        reject(new Error('Invalid JSON'));
       }
+    });
+    
+    req.on('error', (err) => {
+      reject(err);
     });
   });
 }
@@ -1169,7 +1215,8 @@ function parseBody(req) {
 function sendJson(res, data, status = 200) {
   res.writeHead(status, { 
     'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*'
+    'Access-Control-Allow-Origin': '*',
+    ...SECURITY_HEADERS
   });
   res.end(JSON.stringify(data));
 }
@@ -1191,7 +1238,10 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const pathname = url.pathname;
   
-  // CORS
+  // Apply security headers and CORS to all responses
+  Object.entries(SECURITY_HEADERS).forEach(([key, value]) => {
+    res.setHeader(key, value);
+  });
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
