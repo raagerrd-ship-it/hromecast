@@ -1,73 +1,53 @@
-# Welcome to your Lovable project
+# Chromecast Screensaver Bridge
 
-## Project info
+Casta webbsidor till din Chromecast som en skärmsläckare när enheten är inaktiv.
 
-**URL**: https://lovable.dev/projects/db36ca02-4c2b-4e0e-a58f-a351aa767ebf
+🌐 **Live app**: [hromecast.lovable.app](https://hromecast.lovable.app)
 
-## How can I edit this code?
+## Funktioner
 
-There are several ways of editing your application.
+- 🖥️ Casta valfri webbsida till Chromecast
+- ⏰ Automatisk skärmsläckare när Chromecast är inaktiv
+- 🔍 Automatisk upptäckt av Chromecast-enheter
+- 🎛️ Webbaserad dashboard för konfiguration
+- 🔄 Automatiska uppdateringar
 
-**Use Lovable**
+## Arkitektur
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/db36ca02-4c2b-4e0e-a58f-a351aa767ebf) and start prompting.
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   Webb-app      │     │   Bridge        │     │   Chromecast    │
+│   (React)       │────▶│   (Node.js)     │────▶│   (Custom App)  │
+│                 │     │   Lokalt        │     │   FE376873      │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+```
 
-Changes made via Lovable will be committed automatically to this repo.
+- **Webb-app**: React-frontend för nedladdning och dokumentation
+- **Bridge**: Node.js-server som körs lokalt i ditt nätverk
+- **Custom Receiver**: Chromecast-app som visar webbsidor i fullskärm
 
-**Use your preferred IDE**
+## Installation
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+1. Besök [hromecast.lovable.app/setup](https://hromecast.lovable.app/setup)
+2. Ladda ner bridge-paketet
+3. Följ installationsguiden för ditt operativsystem
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## Utveckling
 
-Follow these steps:
+```bash
+# Installera dependencies
+npm install
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Starta utvecklingsserver
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+## Teknologier
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+- **Frontend**: React, TypeScript, Vite, Tailwind CSS, shadcn/ui
+- **Backend**: Supabase Edge Functions
+- **Bridge**: Node.js, castv2, Bonjour
 
-**Use GitHub Codespaces**
+## Licens
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/db36ca02-4c2b-4e0e-a58f-a351aa767ebf) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+MIT
