@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.12';
+const BRIDGE_VERSION = '1.3.13';
 
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
@@ -87,6 +87,7 @@ const DEFAULT_CONFIG = {
   idleStatusTimeout: 5,              // Timeout for idle check (seconds)
   castRetryDelay: 2,                 // Base delay for retry backoff (seconds)
   castMaxRetries: 3,                 // Max cast retry attempts
+  receiverAutoRefresh: 45,           // Auto-refresh receiver (minutes)
   // Återhämtning & Skydd
   cooldownAfterTakeover: 30,         // Cooldown after another app takes over (seconds)
   recoveryCheckInterval: 10,         // How often to check for recovery (seconds)
@@ -894,13 +895,20 @@ async function castMedia(chromecastName, url, retryCount = 0) {
             
             const media = client.createChannel('sender-0', transportId, 'urn:x-cast:com.google.cast.media', 'JSON');
             
-            log.info(`📺 Loading URL: ${url}`);
+            // Add receiver auto-refresh parameter to URL
+            const config = loadConfig();
+            const refreshMinutes = config.receiverAutoRefresh || 45;
+            const urlWithRefresh = url.includes('?') 
+              ? `${url}&refresh=${refreshMinutes}` 
+              : `${url}?refresh=${refreshMinutes}`;
+            
+            log.info(`📺 Loading URL: ${urlWithRefresh}`);
             media.send({
               type: 'LOAD',
               requestId: 5,
               sessionId: sessionId,
               media: {
-                contentId: url,
+                contentId: urlWithRefresh,
                 contentType: 'text/html',
                 streamType: 'LIVE',
                 metadata: {
