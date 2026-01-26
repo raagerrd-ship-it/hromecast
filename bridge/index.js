@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.22';
+const BRIDGE_VERSION = '1.3.23';
 
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
@@ -82,13 +82,12 @@ let logBuffer = [];
 // (The old index-based approach broke when other logs caused buffer.shift())
 
 // Default config with timing settings (all in seconds unless noted)
+// Note: discoveryInterval removed - discovery only runs at start, on reconnect, and manually
 const DEFAULT_CONFIG = {
   enabled: false,
   url: '',
   selectedChromecast: null,
-  // Note: discoveryInterval removed - discovery only runs at start, on reconnect, and manually
   // Sökning & Discovery
-  discoveryInterval: 30,             // Re-scan for devices interval (minutes)
   discoveryTimeout: 10,              // Max time to wait for discovery (seconds)
   discoveryEarlyResolve: 4,          // Early resolve if devices found (seconds)
   discoveryRetryDelay: 5,            // Delay between discovery retry attempts (seconds)
@@ -581,11 +580,7 @@ async function checkAndReconnectSavedDevice() {
   }
 }
 
-// Wrapper for periodic discovery that also checks for reconnection
-async function periodicDiscoveryWithReconnect() {
-  await discoverDevices();
-  await checkAndReconnectSavedDevice();
-}
+// Note: periodicDiscoveryWithReconnect removed - discovery now only runs at start/recovery/manual
 
 // ============ Chromecast Control using raw castv2 ============
 
@@ -960,20 +955,7 @@ async function castMedia(chromecastName, url, retryCount = 0) {
   });
 }
 
-// Retry wrapper for cast operations
-async function castMediaWithRetry(chromecastName, url) {
-  const config = loadConfig();
-  const maxRetries = config.castMaxRetries || 3;
-  
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      return await castMedia(chromecastName, url, 0);
-    } catch (error) {
-      log.warn(`⚠️ Cast attempt ${attempt}/${maxRetries} failed: ${error.message}`);
-      if (attempt === maxRetries) throw error;
-    }
-  }
-}
+// Note: castMediaWithRetry removed - castMedia() already has built-in retry logic
 
 async function stopCast(chromecastName) {
   const device = findDevice(chromecastName);
@@ -1130,9 +1112,10 @@ async function checkAndActivateScreensaver() {
   // Check cooldown period (skip for network_error and silent_disconnect)
   const timeSinceTakeover = Date.now() - lastTakeoverTime;
   const skipCooldown = lastErrorType === 'network_error' || lastErrorType === 'silent_disconnect';
+  const cooldownMs = (config.cooldownAfterTakeover || 30) * 1000;
   
-  if (!skipCooldown && lastTakeoverTime > 0 && timeSinceTakeover < COOLDOWN_AFTER_TAKEOVER) {
-    const remainingSecs = Math.ceil((COOLDOWN_AFTER_TAKEOVER - timeSinceTakeover) / 1000);
+  if (!skipCooldown && lastTakeoverTime > 0 && timeSinceTakeover < cooldownMs) {
+    const remainingSecs = Math.ceil((cooldownMs - timeSinceTakeover) / 1000);
     log.info(`⏸️ Cooldown active, ${remainingSecs}s remaining`);
     return;
   }
