@@ -19,10 +19,26 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.14";
+const VERSION = "1.3.15";
 const RELEASED_AT = "2026-01-26";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.15",
+    date: "2026-01-26",
+    changes: {
+      sv: [
+        "Brandväggsautomatik: Windows-installern lägger nu till brandväggsregel automatiskt",
+        "Synkad logguppdatering: Dashboard hämtar loggar i takt med screensaver-kontrollen",
+        "Förbättrad LIVE-logg: Sticky 'Senaste kontroll' med tydlig LIVE-indikator",
+      ],
+      en: [
+        "Firewall automation: Windows installer now adds firewall rule automatically",
+        "Synchronized log updates: Dashboard fetches logs in sync with screensaver check",
+        "Improved LIVE log: Sticky 'Last check' with clear LIVE indicator",
+      ],
+    }
+  },
   {
     version: "1.3.14",
     date: "2026-01-26",
