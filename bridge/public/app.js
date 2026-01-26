@@ -51,7 +51,6 @@ const elements = {
   enabledToggle: document.getElementById('enabled-toggle'),
   urlInput: document.getElementById('url-input'),
   screensaverStatus: document.getElementById('screensaver-status'),
-  lastCheckResult: document.getElementById('last-check-result'),
   castBtn: document.getElementById('cast-btn'),
   stopBtn: document.getElementById('stop-btn'),
   previewContainer: document.getElementById('preview-container'),
@@ -142,52 +141,6 @@ function updateScreensaverStatus(active) {
   text.textContent = active ? 'Aktiv på TV' : 'Inaktiv';
 }
 
-function updateLastDeviceCheck(check) {
-  const el = elements.lastCheckResult;
-  if (!el || !check || !check.timestamp) {
-    if (el) el.textContent = '-';
-    return;
-  }
-  
-  // Format time
-  const time = new Date(check.timestamp).toLocaleTimeString('sv-SE', { 
-    hour: '2-digit', 
-    minute: '2-digit', 
-    second: '2-digit' 
-  });
-  
-  // Status text and class
-  let statusText = '';
-  let statusClass = '';
-  
-  switch (check.status) {
-    case 'our_app':
-      statusText = '✅ Vår app aktiv';
-      statusClass = 'our-app';
-      break;
-    case 'idle':
-      statusText = '⏸️ Enhet ledig';
-      statusClass = 'idle';
-      break;
-    case 'busy':
-      statusText = `📺 ${check.appName || 'Annan app'}`;
-      statusClass = 'busy';
-      break;
-    case 'error':
-      statusText = '❌ Fel';
-      statusClass = 'error';
-      break;
-    case 'circuit_open':
-      statusText = '⚡ Pausad';
-      statusClass = 'error';
-      break;
-    default:
-      statusText = check.status || '-';
-  }
-  
-  el.textContent = `${statusText} (${time})`;
-  el.className = `last-check-result ${statusClass}`;
-}
 
 function updatePreview(url) {
   const container = elements.previewContainer;
@@ -340,11 +293,6 @@ async function loadStatus() {
     }
     if (data.mdnsUrl && elements.mdnsUrl) {
       elements.mdnsUrl.textContent = data.mdnsUrl;
-    }
-    
-    // Update last device check result
-    if (data.lastDeviceCheck && elements.lastCheckResult) {
-      updateLastDeviceCheck(data.lastDeviceCheck);
     }
     
     // Also load logs
