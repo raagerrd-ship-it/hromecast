@@ -873,8 +873,11 @@ const server = http.createServer(async (req, res) => {
 // ============ Main ============
 
 async function main() {
+  const config = loadConfig();
+  
   log.info(\`🚀 Chromecast Bridge v\${BRIDGE_VERSION} starting...\`);
   log.info(\`📋 Device ID: \${DEVICE_ID}\`);
+  log.info(\`⏱️ Check interval: \${config.screensaverCheckInterval || 60}s\`);
   
   writeNetworkInfo();
   
@@ -886,7 +889,6 @@ async function main() {
   // Note: Discovery only runs at start, on reconnect, and manually via API
   await discoverDevices();
   
-  const config = loadConfig();
   const screensaverMs = (config.screensaverCheckInterval || 60) * 1000;
   
   // Note: No periodic discovery interval - saves network resources
