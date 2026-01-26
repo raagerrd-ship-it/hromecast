@@ -30,6 +30,13 @@ let client = null;
 let keepAliveInterval = null;
 let screensaverActive = false;
 
+// Last device check result - for dashboard display
+let lastDeviceCheck = {
+  timestamp: null,
+  status: null,  // 'idle', 'our_app', 'other_app', 'error', 'circuit_open'
+  appName: null  // Name of running app if other_app
+};
+
 // Recovery state
 let lastTakeoverTime = 0;
 let recoveryCheckInterval = null;
@@ -659,16 +666,28 @@ async function isChromecastIdleWithRecovery(deviceName, retryCount = 0) {
           const otherApps = apps.filter(app => app.appId !== BACKDROP_APP_ID && app.appId !== CUSTOM_APP_ID);
           const ourAppRunning = apps.some(app => app.appId === CUSTOM_APP_ID);
           
+          let result;
           if (ourAppRunning) {
             log.debug('Our app is running');
             screensaverActive = true; // Sync local state with device state
-            resolve({ status: 'our_app' });
+            result = { status: 'our_app' };
           } else if (otherApps.length === 0) {
             log.debug('Device is idle');
-            resolve({ status: 'idle' });
+            result = { status: 'idle' };
           } else {
-            log.debug(`Device busy with: ${otherApps.map(a => a.displayName || a.appId).join(', ')}`);
-            resolve({ status: 'busy', apps: otherApps.map(a => a.displayName || a.appId) });
+            const appNames = otherApps.map(a => a.displayName || a.appId);
+            log.debug(`Device busy with: ${appNames.join(', ')}`);
+            result = { status: 'busy', apps: appNames };
+          }
+          
+          // Update last device check
+          lastDeviceCheck = {
+            timestamp: new Date().toISOString(),
+            status: result.status,
+            appName: result.apps ? result.apps[0] : null
+          };
+          
+          resolve(result);
           }
         }
       });
@@ -1235,6 +1254,8 @@ const server = http.createServer(async (req, res) => {
           selectedChromecast: config.selectedChromecast,
           screensaverActive,
           uptime: process.uptime(),
+          // Last device check result
+          lastDeviceCheck,
           // Recovery status
           circuitBreaker: {
             isOpen: circuitBreakerState.isOpen,

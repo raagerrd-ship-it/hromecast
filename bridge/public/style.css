@@ -381,6 +381,43 @@ input:checked + .slider:before {
   box-shadow: 0 0 10px var(--success);
 }
 
+/* Last device check */
+.last-check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  margin-top: 0.5rem;
+  background: var(--bg);
+  border-radius: 8px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.last-check-label {
+  opacity: 0.7;
+}
+
+.last-check-result {
+  font-weight: 500;
+}
+
+.last-check-result.our-app {
+  color: var(--success);
+}
+
+.last-check-result.idle {
+  color: var(--text-muted);
+}
+
+.last-check-result.busy {
+  color: var(--warning);
+}
+
+.last-check-result.error {
+  color: var(--danger);
+}
+
 /* Preview */
 .preview-container {
   aspect-ratio: 16/9;
