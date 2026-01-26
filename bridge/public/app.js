@@ -679,6 +679,16 @@ if (elements.copyUrlBtn) {
 // ============ Init ============
 
 let statusPollInterval = null;
+let logPollInterval = null;
+
+async function loadLogsOnly() {
+  try {
+    const logsData = await api('/api/logs');
+    updateLogs(logsData.logs || []);
+  } catch (error) {
+    console.error('Failed to load logs:', error);
+  }
+}
 
 async function init() {
   updateStatus(false, 'Ansluter...');
@@ -687,23 +697,30 @@ async function init() {
   await loadDevices();
   await loadStatus();
   
-  // Start polling based on screensaver check interval
+  // Start polling
   startStatusPolling();
 }
 
 function startStatusPolling() {
-  // Clear existing interval if any
+  // Clear existing intervals if any
   if (statusPollInterval) {
     clearInterval(statusPollInterval);
   }
+  if (logPollInterval) {
+    clearInterval(logPollInterval);
+  }
   
-  // Use screensaverCheckInterval from settings (default 60 seconds)
-  const intervalSeconds = state.settings.screensaverCheckInterval || 60;
-  const intervalMs = intervalSeconds * 1000;
+  // Status polling based on screensaver check interval (default 60 seconds)
+  const statusIntervalSeconds = state.settings.screensaverCheckInterval || 60;
+  const statusIntervalMs = statusIntervalSeconds * 1000;
   
-  console.log(`📊 Log polling interval: ${intervalSeconds}s (matches screensaver check)`);
+  // Log polling every 10 seconds for responsive LIVE updates
+  const logIntervalMs = 10000;
   
-  statusPollInterval = setInterval(loadStatus, intervalMs);
+  console.log(`📊 Status polling: ${statusIntervalSeconds}s, Log polling: 10s`);
+  
+  statusPollInterval = setInterval(loadStatus, statusIntervalMs);
+  logPollInterval = setInterval(loadLogsOnly, logIntervalMs);
 }
 
 init();
