@@ -1,57 +1,68 @@
 
 
-# Fixa 60-sekunders statusloggning
+# Kodrensning och Optimering v1.3.23
 
-## Problem
-Statusloggningen försvann helt på grund av två buggar:
+## Sammanfattning
+Städa upp koden efter de senaste optimeringarna genom att ta bort oanvända funktioner, konstanter och konfigurationsvärden.
 
-### Bugg 1: Index blir ogiltigt
-När `addToLogBuffer()` anropas av andra loggar (t.ex. "Söker efter enheter...") och buffern är full, körs `logBuffer.shift()`. Detta minskar alla index med 1, men `lastStatusCheckIndex` uppdateras inte - så den pekar på fel post eller utanför buffern.
+## Identifierade Problem
 
-### Bugg 2: Ingen initial post vid start
-Om screensavern redan är aktiv vid start och status inte ändras, skapas aldrig någon statuspost eftersom `lastLoggedCheckStatus` börjar som `null` och sedan sätts till `'our_app'` - men ingen post skapas förrän status **ändras**.
+### 1. Oanvänd konfigurationsvärde
+`discoveryInterval: 30` finns kvar i `DEFAULT_CONFIG` men används inte längre efter att vi tog bort den löpande discovery.
 
-## Lösning
-Istället för att spåra index, sök efter posten med `isStatusCheck: true` direkt i buffern:
+### 2. Oanvänd funktion
+`periodicDiscoveryWithReconnect()` (rad 585-588) anropas inte längre och kan tas bort.
 
-```javascript
-// Hitta befintlig statuspost
-const existingIndex = logBuffer.findIndex(e => e.isStatusCheck);
+### 3. Inkonsekvent cooldown-hantering
+`COOLDOWN_AFTER_TAKEOVER` på rad 1134 refererar till en konstant som inte existerar - bör använda config-värdet.
 
-if (currentCheckKey !== lastLoggedCheckStatus || existingIndex === -1) {
-  // Status ändrad ELLER ingen post finns ännu - skapa/ersätt
-  lastLoggedCheckStatus = currentCheckKey;
-  
-  // Ta bort gammal statuspost om den finns
-  if (existingIndex >= 0) {
-    logBuffer.splice(existingIndex, 1);
-  }
-  
-  // Lägg till ny
-  logBuffer.push({
-    timestamp: new Date().toISOString(),
-    level: 'info',
-    message: `📡 Statusändring (${checkTime}): ${statusText}`,
-    isStatusCheck: true
-  });
-} else {
-  // Status oförändrad - uppdatera bara tidsstämpel
-  logBuffer[existingIndex].timestamp = new Date().toISOString();
-  logBuffer[existingIndex].message = `📡 Senaste kontroll (${checkTime}): ${statusText}`;
-}
-```
+### 4. Duplicerad retry-logik
+`castMediaWithRetry()` wrapper-funktionen (rad 964-976) är inte nödvändig eftersom `castMedia()` redan har inbyggd retry-logik.
 
-## Fördelar
-- Ingen sårbar indexspårning
-- Alltid hittar rätt post via `isStatusCheck`-flaggan
-- Skapar alltid en post första gången (fixar bugg 2)
-- Robust mot bufferrotation
-
-## Filändringar
+## Ändringar
 
 | Fil | Ändring |
 |-----|---------|
-| `bridge/index.js` | Ersätt index-logik med findIndex-sökning |
-| `supabase/functions/download-bridge/index.ts` | Samma ändring i INDEX_JS |
-| `supabase/functions/get-version/index.ts` | Version 1.3.21 |
+| `bridge/index.js` | Ta bort `discoveryInterval` från DEFAULT_CONFIG |
+| `bridge/index.js` | Ta bort `periodicDiscoveryWithReconnect()` |
+| `bridge/index.js` | Fixa COOLDOWN_AFTER_TAKEOVER att använda config |
+| `bridge/index.js` | Ta bort oanvänd `castMediaWithRetry()` |
+| `supabase/functions/download-bridge/index.ts` | Samma ändringar i INDEX_JS |
+| `supabase/functions/get-version/index.ts` | Version 1.3.23 |
+
+## Tekniska detaljer
+
+### Före (DEFAULT_CONFIG)
+```javascript
+const DEFAULT_CONFIG = {
+  // ...
+  discoveryInterval: 30, // <-- oanvänd
+  // ...
+};
+```
+
+### Efter
+```javascript
+const DEFAULT_CONFIG = {
+  // ...
+  // discoveryInterval borttagen - discovery körs bara vid start/återanslutning/manuellt
+  // ...
+};
+```
+
+### Fixa cooldown-referens
+```javascript
+// Före (rad 1134):
+if (!skipCooldown && lastTakeoverTime > 0 && timeSinceTakeover < COOLDOWN_AFTER_TAKEOVER) {
+
+// Efter:
+const cooldownMs = (config.cooldownAfterTakeover || 30) * 1000;
+if (!skipCooldown && lastTakeoverTime > 0 && timeSinceTakeover < cooldownMs) {
+```
+
+## Resultat
+- Renare kod utan döda funktioner
+- Konsekvent konfigurationshantering
+- Mindre förvirring vid framtida underhåll
+- Ingen funktionalitetsändring
 
