@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.10';
+const BRIDGE_VERSION = '1.3.11';
 
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
@@ -35,13 +35,11 @@ let lastTakeoverTime = 0;
 let recoveryCheckInterval = null;
 let lastErrorType = 'takeover'; // 'takeover' (needs cooldown) or 'network_error' (skip cooldown)
 
-// Circuit breaker state
-const CIRCUIT_BREAKER_THRESHOLD = 5;
+// Circuit breaker state (threshold and cooldown now in config)
 let circuitBreakerState = {
   failures: 0,
   lastFailureTime: 0,
-  isOpen: false,
-  cooldownMs: 5 * 60 * 1000 // 5 minutes in "open" state
+  isOpen: false
 };
 
 // IP recovery backoff state
@@ -59,9 +57,7 @@ let ipRecoveryState = {
   currentInterval: IP_RECOVERY_BACKOFF.baseInterval
 };
 
-// Cooldown settings
-const COOLDOWN_AFTER_TAKEOVER = 30 * 1000; // 30 seconds
-const BASE_RECOVERY_CHECK_INTERVAL = 10000; // 10 seconds
+// Note: Cooldown and recovery intervals are now configurable via config
 
 // Retry configuration
 const MAX_RETRIES = 3;
@@ -79,17 +75,23 @@ const DEFAULT_CONFIG = {
   enabled: false,
   url: '',
   selectedChromecast: null,
-  // Timing settings
-  screensaverCheckInterval: 60,      // How often to check if device is idle (seconds)
-  keepAliveInterval: 5,              // Keep-alive ping interval (seconds)
+  // Sökning & Discovery
   discoveryInterval: 30,             // Re-scan for devices interval (minutes)
-  discoveryTimeout: 10,              // Max time to wait for discovery (seconds) - increased from 8
-  discoveryEarlyResolve: 4,          // Early resolve if devices found (seconds) - increased from 3
+  discoveryTimeout: 10,              // Max time to wait for discovery (seconds)
+  discoveryEarlyResolve: 4,          // Early resolve if devices found (seconds)
   discoveryRetryDelay: 5,            // Delay between discovery retry attempts (seconds)
   discoveryMaxRetries: 3,            // Max number of discovery retry attempts
+  // Cast & Session
+  screensaverCheckInterval: 60,      // How often to check if device is idle (seconds)
+  keepAliveInterval: 5,              // Keep-alive ping interval (seconds)
   idleStatusTimeout: 5,              // Timeout for idle check (seconds)
   castRetryDelay: 2,                 // Base delay for retry backoff (seconds)
-  castMaxRetries: 3                  // Max cast retry attempts
+  castMaxRetries: 3,                 // Max cast retry attempts
+  // Återhämtning & Skydd
+  cooldownAfterTakeover: 30,         // Cooldown after another app takes over (seconds)
+  recoveryCheckInterval: 10,         // How often to check for recovery (seconds)
+  circuitBreakerThreshold: 5,        // Failures before circuit breaker opens
+  circuitBreakerCooldown: 5          // Circuit breaker pause (minutes)
 };
 
 // ============ Structured Logging ============
@@ -146,14 +148,16 @@ function getBackoffDelay(attempt) {
 
 function checkCircuitBreaker() {
   if (circuitBreakerState.isOpen) {
+    const config = loadConfig();
+    const cooldownMs = (config.circuitBreakerCooldown || 5) * 60 * 1000;
     const elapsed = Date.now() - circuitBreakerState.lastFailureTime;
-    if (elapsed > circuitBreakerState.cooldownMs) {
+    if (elapsed > cooldownMs) {
       // Half-open: allow one attempt
       log.info('⚡ [CIRCUIT] Half-open - allowing one attempt');
       circuitBreakerState.isOpen = false;
       circuitBreakerState.failures = 0;
     } else {
-      const remainingSec = Math.ceil((circuitBreakerState.cooldownMs - elapsed) / 1000);
+      const remainingSec = Math.ceil((cooldownMs - elapsed) / 1000);
       log.debug(`⚡ [CIRCUIT] Open - skipping attempt (${remainingSec}s remaining)`);
       return false; // Circuit is open, skip
     }
@@ -162,11 +166,15 @@ function checkCircuitBreaker() {
 }
 
 function recordCircuitFailure() {
+  const config = loadConfig();
+  const threshold = config.circuitBreakerThreshold || 5;
+  const cooldownMin = config.circuitBreakerCooldown || 5;
+  
   circuitBreakerState.failures++;
   circuitBreakerState.lastFailureTime = Date.now();
-  if (circuitBreakerState.failures >= CIRCUIT_BREAKER_THRESHOLD) {
+  if (circuitBreakerState.failures >= threshold) {
     circuitBreakerState.isOpen = true;
-    log.warn(`⚡ [CIRCUIT] Opened after ${CIRCUIT_BREAKER_THRESHOLD} failures - pausing attempts for 5 min`);
+    log.warn(`⚡ [CIRCUIT] Opened after ${threshold} failures - pausing attempts for ${cooldownMin} min`);
   }
 }
 
@@ -243,6 +251,10 @@ function canAttemptIPRecovery() {
 function startRecoveryCheck() {
   if (recoveryCheckInterval) return; // Already running
   
+  const config = loadConfig();
+  const recoveryIntervalMs = (config.recoveryCheckInterval || 10) * 1000;
+  const cooldownMs = (config.cooldownAfterTakeover || 30) * 1000;
+  
   log.info('🔄 Starting recovery check with exponential backoff...');
   
   recoveryCheckInterval = setInterval(async () => {
@@ -252,8 +264,8 @@ function startRecoveryCheck() {
     const skipCooldown = lastErrorType === 'network_error' || lastErrorType === 'silent_disconnect';
     
     // Still in cooldown?
-    if (!skipCooldown && timeSinceTakeover < COOLDOWN_AFTER_TAKEOVER) {
-      const remainingSecs = Math.ceil((COOLDOWN_AFTER_TAKEOVER - timeSinceTakeover) / 1000);
+    if (!skipCooldown && timeSinceTakeover < cooldownMs) {
+      const remainingSecs = Math.ceil((cooldownMs - timeSinceTakeover) / 1000);
       log.debug(`⏸️ [RECOVERY] Cooldown: ${remainingSecs}s remaining`);
       return;
     }
@@ -270,14 +282,14 @@ function startRecoveryCheck() {
     
     // Cooldown over - check if device is idle
     log.info('🔍 [RECOVERY] Checking device status...');
-    const config = loadConfig();
+    const currentConfig = loadConfig();
     
-    if (!config.selectedChromecast) {
+    if (!currentConfig.selectedChromecast) {
       log.warn('⚠️ [RECOVERY] No device selected');
       return;
     }
     
-    const result = await isChromecastIdleWithRecovery(config.selectedChromecast);
+    const result = await isChromecastIdleWithRecovery(currentConfig.selectedChromecast);
     
     if (result.status === 'idle') {
       log.info('✅ [RECOVERY] Device idle, triggering screensaver...');
@@ -294,9 +306,9 @@ function startRecoveryCheck() {
       const devices = await discoverDevicesWithRetry();
       
       // Check if device was found with new IP
-      const device = findDevice(config.selectedChromecast);
+      const device = findDevice(currentConfig.selectedChromecast);
       if (device) {
-        log.info(`✅ [RECOVERY] Device "${config.selectedChromecast}" found at ${device.host} - reconnecting now!`);
+        log.info(`✅ [RECOVERY] Device "${currentConfig.selectedChromecast}" found at ${device.host} - reconnecting now!`);
         resetIPRecoveryBackoff();
         stopRecoveryCheck();
         // Immediately try to reconnect
@@ -309,7 +321,7 @@ function startRecoveryCheck() {
       log.debug(`⏭️ [RECOVERY] Device still busy (${result.status}), will check again...`);
       resetIPRecoveryBackoff();
     }
-  }, BASE_RECOVERY_CHECK_INTERVAL);
+  }, recoveryIntervalMs);
 }
 
 function stopRecoveryCheck() {

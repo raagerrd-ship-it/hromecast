@@ -19,10 +19,28 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.10";
+const VERSION = "1.3.11";
 const RELEASED_AT = "2026-01-26";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.11",
+    date: "2026-01-26",
+    changes: {
+      sv: [
+        "Alla timing-inställningar nu konfigurerbara i dashboarden",
+        "Nya inställningar: cooldown efter takeover, recovery-intervall, circuit breaker",
+        "Grupperade inställningar: Sökning, Cast & Session, Återhämtning",
+        "Förbättrade beskrivningar med standardvärden för varje inställning",
+      ],
+      en: [
+        "All timing settings now configurable in dashboard",
+        "New settings: cooldown after takeover, recovery interval, circuit breaker",
+        "Grouped settings: Search, Cast & Session, Recovery",
+        "Improved descriptions with default values for each setting",
+      ],
+    }
+  },
   {
     version: "1.3.10",
     date: "2026-01-26",
