@@ -160,12 +160,12 @@ let logBuffer = [];
 let lastLoggedCheckStatus = null;
 
 // Default config with timing settings (all in seconds unless noted)
+// Note: discoveryInterval removed - discovery only runs at start, on reconnect, and manually
 const DEFAULT_CONFIG = {
   enabled: false,
   url: '',
   selectedChromecast: null,
   // Sökning & Discovery
-  discoveryInterval: 30,
   discoveryTimeout: 10,
   discoveryEarlyResolve: 4,
   discoveryRetryDelay: 5,
@@ -549,23 +549,7 @@ async function castMedia(chromecastName, url) {
   });
 }
 
-async function castMediaWithRetry(chromecastName, url) {
-  const config = loadConfig();
-  const maxRetries = config.castMaxRetries || 3;
-  const baseDelay = (config.castRetryDelay || 2) * 1000;
-  
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      return await castMedia(chromecastName, url);
-    } catch (error) {
-      log.warn(\`⚠️ Cast attempt \${attempt}/\${maxRetries} failed: \${error.message}\`);
-      if (attempt === maxRetries) throw error;
-      const delay = baseDelay * attempt;
-      log.info(\`🔄 Retrying in \${delay / 1000}s...\`);
-      await new Promise(r => setTimeout(r, delay));
-    }
-  }
-}
+// Note: castMediaWithRetry removed - castMedia already has built-in retry via checkAndActivateScreensaver
 
 async function stopCast(chromecastName) {
   const device = findDevice(chromecastName);
@@ -674,7 +658,7 @@ async function checkAndActivateScreensaver() {
   if (idle && !screensaverActive) {
     log.info('💤 Device idle, activating screensaver...');
     try {
-      await castMediaWithRetry(config.selectedChromecast, config.url);
+      await castMedia(config.selectedChromecast, config.url);
     } catch (error) {
       log.error('Failed to activate screensaver:', error.message);
     }

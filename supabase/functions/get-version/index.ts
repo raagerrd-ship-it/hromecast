@@ -19,10 +19,28 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.22";
+const VERSION = "1.3.23";
 const RELEASED_AT = "2026-01-26";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.23",
+    date: "2026-01-26",
+    changes: {
+      sv: [
+        "Kodrensning: Borttagen oanvänd discoveryInterval från config",
+        "Borttagen oanvänd periodicDiscoveryWithReconnect-funktion",
+        "Borttagen duplicerad castMediaWithRetry-wrapper",
+        "Fixat: Cooldown använder nu config istället för odefinierad konstant",
+      ],
+      en: [
+        "Code cleanup: Removed unused discoveryInterval from config",
+        "Removed unused periodicDiscoveryWithReconnect function",
+        "Removed duplicate castMediaWithRetry wrapper",
+        "Fixed: Cooldown now uses config instead of undefined constant",
+      ],
+    }
+  },
   {
     version: "1.3.22",
     date: "2026-01-26",
