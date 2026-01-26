@@ -19,10 +19,24 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.11";
+const VERSION = "1.3.12";
 const RELEASED_AT = "2026-01-26";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.12",
+    date: "2026-01-26",
+    changes: {
+      sv: [
+        "Ren installation: Konfiguration bevaras inte längre vid uppdatering",
+        "Alla nya standardvärden appliceras automatiskt",
+      ],
+      en: [
+        "Clean install: Configuration no longer preserved on update",
+        "All new default values applied automatically",
+      ],
+    }
+  },
   {
     version: "1.3.11",
     date: "2026-01-26",

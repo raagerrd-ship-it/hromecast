@@ -135,26 +135,12 @@ if ($existingTask -and $existingTask.State -eq "Running") {
 # 3. Skapa app-mapp (bevara config.json)
 Write-Host "[3/7] Skapar app-mapp..." -ForegroundColor Yellow
 
-# Spara befintlig config.json om den finns
-$ConfigBackup = $null
-$ConfigPath = "$AppDir\config.json"
-if (Test-Path $ConfigPath) {
-    Write-Host "  Sparar befintlig konfiguration (URL, enhet etc.)..." -ForegroundColor Gray
-    $ConfigBackup = Get-Content -Path $ConfigPath -Raw
-}
-
 if (Test-Path $AppDir) {
     Write-Host "  Tar bort befintlig installation..." -ForegroundColor Gray
     Remove-Item -Path $AppDir -Recurse -Force
 }
 New-Item -ItemType Directory -Path $AppDir -Force | Out-Null
 New-Item -ItemType Directory -Path "$AppDir\public" -Force | Out-Null
-
-# Återställ config.json om den fanns
-if ($ConfigBackup) {
-    $ConfigBackup | Out-File -FilePath $ConfigPath -Encoding UTF8 -NoNewline
-    Write-Host "  Konfiguration aterstall" -ForegroundColor Green
-}
 
 Write-Host "  $AppDir" -ForegroundColor Green
 
