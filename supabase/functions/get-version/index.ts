@@ -19,10 +19,24 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.15";
+const VERSION = "1.3.16";
 const RELEASED_AT = "2026-01-26";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.16",
+    date: "2026-01-26",
+    changes: {
+      sv: [
+        "Synkad edge-funktion: Nedladdningsbar bridge innehåller nu all senaste funktionalitet",
+        "Fixat: LIVE-logg och lastCheckEntry saknades i nedladdad version",
+      ],
+      en: [
+        "Synced edge function: Downloadable bridge now includes all latest functionality",
+        "Fixed: LIVE log and lastCheckEntry were missing in downloaded version",
+      ],
+    }
+  },
   {
     version: "1.3.15",
     date: "2026-01-26",
