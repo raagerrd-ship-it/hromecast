@@ -1,11 +1,27 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Expose-Headers": "Content-Disposition",
 };
+
+// GitHub raw URLs - files fetched directly from repo
+const GITHUB_RAW_BASE = "https://raw.githubusercontent.com/raagerrd-ship-it/hromecast/main/bridge/";
+
+const FILES = [
+  "index.js",
+  "package.json",
+  ".env.example",
+  "README.md",
+  "public/index.html",
+  "public/style.css",
+  "public/app.js",
+  "install-linux.sh",
+  "install-windows.ps1",
+  "uninstall-linux.sh",
+  "uninstall-windows.ps1",
+];
 
 // Simple ZIP file creation without external dependencies
 function createZip(files: Record<string, Uint8Array>): Uint8Array {
@@ -111,24 +127,7 @@ function createZip(files: Record<string, Uint8Array>): Uint8Array {
   return uint8.slice(0, offset + 2);
 }
 
-// Storage configuration
-const BUCKET = "bridge-files";
 const VERSION_PLACEHOLDER = "__BRIDGE_VERSION__";
-
-// Files to include in the ZIP (relative paths in the bucket)
-const FILES = [
-  { storagePath: "current/index.js", zipPath: "index.js" },
-  { storagePath: "current/package.json", zipPath: "package.json" },
-  { storagePath: "current/.env.example", zipPath: ".env.example" },
-  { storagePath: "current/README.md", zipPath: "README.md" },
-  { storagePath: "current/public/index.html", zipPath: "public/index.html" },
-  { storagePath: "current/public/style.css", zipPath: "public/style.css" },
-  { storagePath: "current/public/app.js", zipPath: "public/app.js" },
-  { storagePath: "current/install-linux.sh", zipPath: "install-linux.sh" },
-  { storagePath: "current/install-windows.ps1", zipPath: "install-windows.ps1" },
-  { storagePath: "current/uninstall-linux.sh", zipPath: "uninstall-linux.sh" },
-  { storagePath: "current/uninstall-windows.ps1", zipPath: "uninstall-windows.ps1" },
-];
 
 async function fetchVersion(): Promise<string> {
   try {
@@ -159,38 +158,30 @@ serve(async (req) => {
     const version = await fetchVersion();
     console.log(`Using version: ${version}`);
 
-    // Create Supabase client
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // Fetch all files from storage
+    // Fetch all files from GitHub
     const fileContents: Record<string, Uint8Array> = {};
     const encoder = new TextEncoder();
     
     for (const file of FILES) {
-      console.log(`Fetching: ${file.storagePath}`);
+      const url = `${GITHUB_RAW_BASE}${file}`;
+      console.log(`Fetching: ${url}`);
       
-      const { data, error } = await supabase.storage
-        .from(BUCKET)
-        .download(file.storagePath);
+      const response = await fetch(url);
       
-      if (error) {
-        console.error(`Error fetching ${file.storagePath}:`, error.message);
-        throw new Error(`Failed to fetch ${file.storagePath}: ${error.message}`);
+      if (!response.ok) {
+        console.error(`Error fetching ${file}: ${response.statusText}`);
+        throw new Error(`Failed to fetch ${file}: ${response.statusText}`);
       }
       
-      // Get file content as text, then convert to Uint8Array
-      let content = await data.text();
+      let content = await response.text();
       
       // Inject version into index.js
-      if (file.zipPath === "index.js") {
+      if (file === "index.js") {
         content = content.replace(VERSION_PLACEHOLDER, version);
-        // Also update the hardcoded version if present
         content = content.replace(/const BRIDGE_VERSION = '[^']+';/, `const BRIDGE_VERSION = '${version}';`);
       }
       
-      fileContents[file.zipPath] = encoder.encode(content);
+      fileContents[file] = encoder.encode(content);
     }
 
     console.log(`Creating ZIP with ${Object.keys(fileContents).length} files...`);
