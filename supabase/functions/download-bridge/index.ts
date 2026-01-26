@@ -6,8 +6,11 @@ const corsHeaders = {
   "Access-Control-Expose-Headers": "Content-Disposition",
 };
 
-// GitHub raw URLs - files fetched directly from repo
-const GITHUB_RAW_BASE = "https://raw.githubusercontent.com/raagerrd-ship-it/hromecast/main/bridge/";
+// GitHub configuration
+const GITHUB_OWNER = "raagerrd-ship-it";
+const GITHUB_REPO = "hromecast";
+const GITHUB_BRANCH = "main";
+const GITHUB_API_BASE = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/bridge`;
 
 const FILES = [
   "index.js",
@@ -158,15 +161,27 @@ serve(async (req) => {
     const version = await fetchVersion();
     console.log(`Using version: ${version}`);
 
-    // Fetch all files from GitHub
+    // Get GitHub token for private repo access
+    const githubToken = Deno.env.get("GITHUB_TOKEN");
+    if (!githubToken) {
+      throw new Error("GITHUB_TOKEN not configured");
+    }
+
+    // Fetch all files from GitHub API
     const fileContents: Record<string, Uint8Array> = {};
     const encoder = new TextEncoder();
     
     for (const file of FILES) {
-      const url = `${GITHUB_RAW_BASE}${file}`;
-      console.log(`Fetching: ${url}`);
+      const url = `${GITHUB_API_BASE}/${file}?ref=${GITHUB_BRANCH}`;
+      console.log(`Fetching: ${file}`);
       
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        headers: {
+          "Authorization": `Bearer ${githubToken}`,
+          "Accept": "application/vnd.github.v3.raw",
+          "User-Agent": "Chromecast-Bridge-Downloader",
+        },
+      });
       
       if (!response.ok) {
         console.error(`Error fetching ${file}: ${response.statusText}`);
