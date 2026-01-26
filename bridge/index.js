@@ -1406,7 +1406,7 @@ async function main() {
   log.info(`🚀 Chromecast Bridge v${BRIDGE_VERSION} starting...`);
   log.info(`📋 Device ID: ${DEVICE_ID}`);
   log.info(`🎬 Custom App ID: ${CUSTOM_APP_ID}`);
-  log.info(`⚡ Circuit breaker: ${CIRCUIT_BREAKER_THRESHOLD} failures = 5min pause`);
+  log.info(`⚡ Circuit breaker: ${config.circuitBreakerThreshold || 5} failures = ${config.circuitBreakerCooldown || 5}min pause`);
   log.info(`🔄 Recovery: 30s cooldown, exponential backoff`);
   
   // Write network info file
