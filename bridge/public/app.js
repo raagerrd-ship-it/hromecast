@@ -52,7 +52,11 @@ const elements = {
   cooldownAfterTakeoverInput: document.getElementById('cooldown-after-takeover-input'),
   recoveryCheckIntervalInput: document.getElementById('recovery-check-interval-input'),
   circuitBreakerThresholdInput: document.getElementById('circuit-breaker-threshold-input'),
-  circuitBreakerCooldownInput: document.getElementById('circuit-breaker-cooldown-input')
+  circuitBreakerCooldownInput: document.getElementById('circuit-breaker-cooldown-input'),
+  // Reset buttons
+  resetDiscoveryBtn: document.getElementById('reset-discovery-btn'),
+  resetCastBtn: document.getElementById('reset-cast-btn'),
+  resetRecoveryBtn: document.getElementById('reset-recovery-btn')
 };
 
 // State
@@ -468,7 +472,96 @@ settingsInputs.forEach(({ el, key }) => {
   }
 });
 
-if (elements.copyUrlBtn) {
+// Default values for reset functionality
+const DEFAULT_VALUES = {
+  // Sökning & Discovery
+  discoveryInterval: 30,
+  discoveryTimeout: 10,
+  discoveryEarlyResolve: 4,
+  discoveryRetryDelay: 5,
+  discoveryMaxRetries: 3,
+  // Cast & Session
+  screensaverCheckInterval: 60,
+  keepAliveInterval: 5,
+  idleStatusTimeout: 5,
+  castRetryDelay: 2,
+  castMaxRetries: 3,
+  // Återhämtning & Skydd
+  cooldownAfterTakeover: 30,
+  recoveryCheckInterval: 10,
+  circuitBreakerThreshold: 5,
+  circuitBreakerCooldown: 5
+};
+
+// Reset Discovery settings
+if (elements.resetDiscoveryBtn) {
+  elements.resetDiscoveryBtn.addEventListener('click', async () => {
+    const updates = {
+      discoveryInterval: DEFAULT_VALUES.discoveryInterval,
+      discoveryTimeout: DEFAULT_VALUES.discoveryTimeout,
+      discoveryEarlyResolve: DEFAULT_VALUES.discoveryEarlyResolve,
+      discoveryRetryDelay: DEFAULT_VALUES.discoveryRetryDelay,
+      discoveryMaxRetries: DEFAULT_VALUES.discoveryMaxRetries
+    };
+    
+    // Update UI
+    elements.discoveryIntervalInput.value = updates.discoveryInterval;
+    elements.discoveryTimeoutInput.value = updates.discoveryTimeout;
+    elements.discoveryEarlyResolveInput.value = updates.discoveryEarlyResolve;
+    elements.discoveryRetryDelayInput.value = updates.discoveryRetryDelay;
+    elements.discoveryMaxRetriesInput.value = updates.discoveryMaxRetries;
+    
+    // Save
+    await saveSettings(updates);
+    markSettingsModified();
+  });
+}
+
+// Reset Cast settings
+if (elements.resetCastBtn) {
+  elements.resetCastBtn.addEventListener('click', async () => {
+    const updates = {
+      screensaverCheckInterval: DEFAULT_VALUES.screensaverCheckInterval,
+      keepAliveInterval: DEFAULT_VALUES.keepAliveInterval,
+      idleStatusTimeout: DEFAULT_VALUES.idleStatusTimeout,
+      castRetryDelay: DEFAULT_VALUES.castRetryDelay,
+      castMaxRetries: DEFAULT_VALUES.castMaxRetries
+    };
+    
+    // Update UI
+    elements.screensaverCheckInput.value = updates.screensaverCheckInterval;
+    elements.keepAliveInput.value = updates.keepAliveInterval;
+    elements.idleStatusTimeoutInput.value = updates.idleStatusTimeout;
+    elements.castRetryInput.value = updates.castRetryDelay;
+    elements.castMaxRetriesInput.value = updates.castMaxRetries;
+    
+    // Save
+    await saveSettings(updates);
+    markSettingsModified();
+  });
+}
+
+// Reset Recovery settings
+if (elements.resetRecoveryBtn) {
+  elements.resetRecoveryBtn.addEventListener('click', async () => {
+    const updates = {
+      cooldownAfterTakeover: DEFAULT_VALUES.cooldownAfterTakeover,
+      recoveryCheckInterval: DEFAULT_VALUES.recoveryCheckInterval,
+      circuitBreakerThreshold: DEFAULT_VALUES.circuitBreakerThreshold,
+      circuitBreakerCooldown: DEFAULT_VALUES.circuitBreakerCooldown
+    };
+    
+    // Update UI
+    elements.cooldownAfterTakeoverInput.value = updates.cooldownAfterTakeover;
+    elements.recoveryCheckIntervalInput.value = updates.recoveryCheckInterval;
+    elements.circuitBreakerThresholdInput.value = updates.circuitBreakerThreshold;
+    elements.circuitBreakerCooldownInput.value = updates.circuitBreakerCooldown;
+    
+    // Save
+    await saveSettings(updates);
+    markSettingsModified();
+  });
+}
   elements.copyUrlBtn.addEventListener('click', () => {
     const url = elements.networkUrl?.textContent;
     if (url && url !== '-') {
