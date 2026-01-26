@@ -166,16 +166,36 @@ function updateLogs(logs) {
     return;
   }
   
-  // Show newest first
-  const reversedLogs = [...logs].reverse();
+  // Separate sticky "last check" entry from regular logs
+  const lastCheckEntry = logs.find(log => log.isLastCheck);
+  const regularLogs = logs.filter(log => !log.isLastCheck);
   
-  container.innerHTML = reversedLogs.map(log => `
+  // Show newest first for regular logs
+  const reversedLogs = [...regularLogs].reverse();
+  
+  let html = '';
+  
+  // Always show last check entry at top with special styling
+  if (lastCheckEntry) {
+    html += `
+      <div class="log-entry info last-check-entry">
+        <span class="log-time">${formatLogTime(lastCheckEntry.timestamp)}</span>
+        <span class="log-level">LIVE</span>
+        <span class="log-message">${lastCheckEntry.message}</span>
+      </div>
+    `;
+  }
+  
+  // Add regular logs
+  html += reversedLogs.map(log => `
     <div class="log-entry ${log.level}">
       <span class="log-time">${formatLogTime(log.timestamp)}</span>
       <span class="log-level">${log.level}</span>
       <span class="log-message">${log.message}</span>
     </div>
   `).join('');
+  
+  container.innerHTML = html;
 }
 
 function setLoading(loading) {
