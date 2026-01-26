@@ -287,15 +287,19 @@ function startRecoveryCheck() {
       resetIPRecoveryBackoff();
       stopRecoveryCheck();
     } else if (result.status === 'error') {
-      // Device unreachable - trigger rediscovery
+      // Device unreachable - trigger rediscovery with retry
       log.info('🔄 [RECOVERY] Device unreachable, triggering rediscovery...');
-      await discoverDevices();
+      const devices = await discoverDevicesWithRetry(3);
       
       // Check if device was found with new IP
       const device = findDevice(config.selectedChromecast);
       if (device) {
-        log.info(`✅ [RECOVERY] Device found at ${device.host}, will retry next check`);
+        log.info(`✅ [RECOVERY] Device "${config.selectedChromecast}" found at ${device.host} - reconnecting now!`);
         resetIPRecoveryBackoff();
+        stopRecoveryCheck();
+        // Immediately try to reconnect
+        checkAndActivateScreensaver();
+        return;
       } else {
         recordIPRecoveryFailure();
       }
@@ -509,6 +513,50 @@ async function discoverDevicesWithRetry(maxRetries = 3) {
   
   log.warn('⚠️ No devices found after retries');
   return [];
+}
+
+// Check if saved device is available and reconnect if needed
+async function checkAndReconnectSavedDevice() {
+  const config = loadConfig();
+  
+  // Only if we have a saved device and screensaver is enabled but not active
+  if (!config.selectedChromecast || !config.enabled || !config.url) {
+    return;
+  }
+  
+  // Skip if already active
+  if (screensaverActive) {
+    return;
+  }
+  
+  // Skip if in recovery mode (recovery loop handles this)
+  if (recoveryCheckInterval) {
+    return;
+  }
+  
+  // Check if our saved device is now available
+  const device = findDevice(config.selectedChromecast);
+  if (device) {
+    log.info(`🔗 Saved device "${config.selectedChromecast}" found at ${device.host} - checking status...`);
+    
+    const result = await isChromecastIdleWithRecovery(config.selectedChromecast);
+    
+    if (result.status === 'idle') {
+      log.info('🚀 Device idle - auto-reconnecting...');
+      checkAndActivateScreensaver();
+    } else if (result.status === 'our_app') {
+      log.info('✅ Our app already running on saved device');
+      screensaverActive = true;
+    } else {
+      log.info(`ℹ️ Saved device status: ${result.status}`);
+    }
+  }
+}
+
+// Wrapper for periodic discovery that also checks for reconnection
+async function periodicDiscoveryWithReconnect() {
+  await discoverDevices();
+  await checkAndReconnectSavedDevice();
 }
 
 // ============ Chromecast Control using raw castv2 ============
@@ -1294,15 +1342,16 @@ async function main() {
   });
   log.info(`📡 mDNS published: ${os.hostname()}-${DEVICE_ID}.local`);
   
-  // Initial device discovery
+  // Initial device discovery and check for saved device
   await discoverDevices();
+  await checkAndReconnectSavedDevice();
   
   // Periodic tasks
   const config = loadConfig();
   
-  // Discovery interval (default: 30 minutes)
+  // Discovery interval (default: 30 minutes) - also checks for saved device reconnection
   const discoveryMs = (config.discoveryInterval || 30) * 60 * 1000;
-  setInterval(discoverDevices, discoveryMs);
+  setInterval(periodicDiscoveryWithReconnect, discoveryMs);
   
   // Screensaver check interval (default: 60 seconds)
   const screensaverMs = (config.screensaverCheckInterval || 60) * 1000;

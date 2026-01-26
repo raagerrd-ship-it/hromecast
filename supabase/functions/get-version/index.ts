@@ -30,16 +30,16 @@ const CHANGELOG: ChangelogEntry[] = [
       sv: [
         "Förbättrad enhetsökning: Automatisk retry (upp till 3 försök) vid tom sökning",
         "Bevarar cachade enheter: Enhetslistan töms inte längre vid misslyckad sökning",
+        "Automatisk återanslutning: Återansluter direkt till sparad enhet efter IP-byte",
         "Längre söktimeout: 10s (tidigare 8s) för mer tid åt enheter att svara",
         "Omedelbar recovery: Kontrollerar enhetsstatus direkt vid tappad anslutning",
-        "Snabbare återanslutning: Väntar inte 60s när anslutningen stängs oväntat",
       ],
       en: [
         "Improved device discovery: Automatic retry (up to 3 attempts) on empty search",
         "Preserves cached devices: Device list no longer empties on failed discovery",
+        "Automatic reconnection: Immediately reconnects to saved device after IP change",
         "Longer discovery timeout: 10s (was 8s) for more time for devices to respond",
         "Immediate recovery: Checks device status immediately on connection loss",
-        "Faster reconnection: Doesn't wait 60s when connection closes unexpectedly",
       ],
     }
   },
