@@ -36,14 +36,23 @@ const elements = {
   // Settings elements
   toggleSettingsBtn: document.getElementById('toggle-settings-btn'),
   settingsContent: document.getElementById('settings-content'),
-  screensaverCheckInput: document.getElementById('screensaver-check-input'),
-  keepAliveInput: document.getElementById('keep-alive-input'),
+  // Sökning & Discovery
   discoveryIntervalInput: document.getElementById('discovery-interval-input'),
   discoveryTimeoutInput: document.getElementById('discovery-timeout-input'),
+  discoveryEarlyResolveInput: document.getElementById('discovery-early-resolve-input'),
   discoveryRetryDelayInput: document.getElementById('discovery-retry-delay-input'),
   discoveryMaxRetriesInput: document.getElementById('discovery-max-retries-input'),
+  // Cast & Session
+  screensaverCheckInput: document.getElementById('screensaver-check-input'),
+  keepAliveInput: document.getElementById('keep-alive-input'),
+  idleStatusTimeoutInput: document.getElementById('idle-status-timeout-input'),
   castRetryInput: document.getElementById('cast-retry-input'),
-  castMaxRetriesInput: document.getElementById('cast-max-retries-input')
+  castMaxRetriesInput: document.getElementById('cast-max-retries-input'),
+  // Återhämtning & Skydd
+  cooldownAfterTakeoverInput: document.getElementById('cooldown-after-takeover-input'),
+  recoveryCheckIntervalInput: document.getElementById('recovery-check-interval-input'),
+  circuitBreakerThresholdInput: document.getElementById('circuit-breaker-threshold-input'),
+  circuitBreakerCooldownInput: document.getElementById('circuit-breaker-cooldown-input')
 };
 
 // State
@@ -159,18 +168,15 @@ async function loadSettings() {
       elements.chromecastSelect.value = data.selectedChromecast;
     }
     
-    // Load timing settings
-    if (elements.screensaverCheckInput) {
-      elements.screensaverCheckInput.value = data.screensaverCheckInterval || 60;
-    }
-    if (elements.keepAliveInput) {
-      elements.keepAliveInput.value = data.keepAliveInterval || 5;
-    }
+    // Load timing settings - Sökning & Discovery
     if (elements.discoveryIntervalInput) {
       elements.discoveryIntervalInput.value = data.discoveryInterval || 30;
     }
     if (elements.discoveryTimeoutInput) {
       elements.discoveryTimeoutInput.value = data.discoveryTimeout || 10;
+    }
+    if (elements.discoveryEarlyResolveInput) {
+      elements.discoveryEarlyResolveInput.value = data.discoveryEarlyResolve || 4;
     }
     if (elements.discoveryRetryDelayInput) {
       elements.discoveryRetryDelayInput.value = data.discoveryRetryDelay || 5;
@@ -178,11 +184,36 @@ async function loadSettings() {
     if (elements.discoveryMaxRetriesInput) {
       elements.discoveryMaxRetriesInput.value = data.discoveryMaxRetries || 3;
     }
+    
+    // Load timing settings - Cast & Session
+    if (elements.screensaverCheckInput) {
+      elements.screensaverCheckInput.value = data.screensaverCheckInterval || 60;
+    }
+    if (elements.keepAliveInput) {
+      elements.keepAliveInput.value = data.keepAliveInterval || 5;
+    }
+    if (elements.idleStatusTimeoutInput) {
+      elements.idleStatusTimeoutInput.value = data.idleStatusTimeout || 5;
+    }
     if (elements.castRetryInput) {
       elements.castRetryInput.value = data.castRetryDelay || 2;
     }
     if (elements.castMaxRetriesInput) {
       elements.castMaxRetriesInput.value = data.castMaxRetries || 3;
+    }
+    
+    // Load timing settings - Återhämtning & Skydd
+    if (elements.cooldownAfterTakeoverInput) {
+      elements.cooldownAfterTakeoverInput.value = data.cooldownAfterTakeover || 30;
+    }
+    if (elements.recoveryCheckIntervalInput) {
+      elements.recoveryCheckIntervalInput.value = data.recoveryCheckInterval || 10;
+    }
+    if (elements.circuitBreakerThresholdInput) {
+      elements.circuitBreakerThresholdInput.value = data.circuitBreakerThreshold || 5;
+    }
+    if (elements.circuitBreakerCooldownInput) {
+      elements.circuitBreakerCooldownInput.value = data.circuitBreakerCooldown || 5;
     }
     
     updateScreensaverStatus(data.screensaverActive);
@@ -383,16 +414,25 @@ if (elements.toggleSettingsBtn && elements.settingsContent) {
   });
 }
 
-// Settings input handlers
+// Settings input handlers - all configurable settings
 const settingsInputs = [
-  { el: elements.screensaverCheckInput, key: 'screensaverCheckInterval' },
-  { el: elements.keepAliveInput, key: 'keepAliveInterval' },
+  // Sökning & Discovery
   { el: elements.discoveryIntervalInput, key: 'discoveryInterval' },
   { el: elements.discoveryTimeoutInput, key: 'discoveryTimeout' },
+  { el: elements.discoveryEarlyResolveInput, key: 'discoveryEarlyResolve' },
   { el: elements.discoveryRetryDelayInput, key: 'discoveryRetryDelay' },
   { el: elements.discoveryMaxRetriesInput, key: 'discoveryMaxRetries' },
+  // Cast & Session
+  { el: elements.screensaverCheckInput, key: 'screensaverCheckInterval' },
+  { el: elements.keepAliveInput, key: 'keepAliveInterval' },
+  { el: elements.idleStatusTimeoutInput, key: 'idleStatusTimeout' },
   { el: elements.castRetryInput, key: 'castRetryDelay' },
-  { el: elements.castMaxRetriesInput, key: 'castMaxRetries' }
+  { el: elements.castMaxRetriesInput, key: 'castMaxRetries' },
+  // Återhämtning & Skydd
+  { el: elements.cooldownAfterTakeoverInput, key: 'cooldownAfterTakeover' },
+  { el: elements.recoveryCheckIntervalInput, key: 'recoveryCheckInterval' },
+  { el: elements.circuitBreakerThresholdInput, key: 'circuitBreakerThreshold' },
+  { el: elements.circuitBreakerCooldownInput, key: 'circuitBreakerCooldown' }
 ];
 
 // Track if settings have been modified
@@ -412,7 +452,7 @@ function clearSettingsModified() {
   const restartBtn = document.getElementById('restart-btn');
   if (restartBtn) {
     restartBtn.classList.remove('needs-restart');
-    restartBtn.textContent = '🔄 Starta om';
+    restartBtn.textContent = '🔄 Starta om bridge';
   }
 }
 
