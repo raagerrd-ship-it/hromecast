@@ -166,28 +166,33 @@ function updateLogs(logs) {
     return;
   }
   
-  // Separate sticky "last check" entry from regular logs
-  const lastCheckEntry = logs.find(log => log.isLastCheck);
-  const regularLogs = logs.filter(log => !log.isLastCheck);
+  // Find the latest status check entry (the one that gets its timestamp updated)
+  const statusCheckEntries = logs.filter(log => log.isStatusCheck);
+  const latestStatusCheck = statusCheckEntries.length > 0 
+    ? statusCheckEntries[statusCheckEntries.length - 1] 
+    : null;
   
-  // Show newest first for regular logs
-  const reversedLogs = [...regularLogs].reverse();
+  // Get all other logs
+  const otherLogs = logs.filter(log => log !== latestStatusCheck);
+  
+  // Show newest first for other logs
+  const reversedOtherLogs = [...otherLogs].reverse();
   
   let html = '';
   
-  // Always show last check entry at top with special styling
-  if (lastCheckEntry) {
+  // Always show latest status check at top with special styling
+  if (latestStatusCheck) {
     html += `
       <div class="log-entry info last-check-entry">
-        <span class="log-time">${formatLogTime(lastCheckEntry.timestamp)}</span>
+        <span class="log-time">${formatLogTime(latestStatusCheck.timestamp)}</span>
         <span class="log-level">CHECK</span>
-        <span class="log-message">${lastCheckEntry.message}</span>
+        <span class="log-message">${latestStatusCheck.message}</span>
       </div>
     `;
   }
   
-  // Add regular logs
-  html += reversedLogs.map(log => `
+  // Add other logs
+  html += reversedOtherLogs.map(log => `
     <div class="log-entry ${log.level}">
       <span class="log-time">${formatLogTime(log.timestamp)}</span>
       <span class="log-level">${log.level}</span>
