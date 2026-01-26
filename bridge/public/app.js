@@ -41,6 +41,7 @@ const elements = {
   discoveryIntervalInput: document.getElementById('discovery-interval-input'),
   discoveryTimeoutInput: document.getElementById('discovery-timeout-input'),
   discoveryRetryDelayInput: document.getElementById('discovery-retry-delay-input'),
+  discoveryMaxRetriesInput: document.getElementById('discovery-max-retries-input'),
   castRetryInput: document.getElementById('cast-retry-input'),
   castMaxRetriesInput: document.getElementById('cast-max-retries-input')
 };
@@ -173,6 +174,9 @@ async function loadSettings() {
     }
     if (elements.discoveryRetryDelayInput) {
       elements.discoveryRetryDelayInput.value = data.discoveryRetryDelay || 5;
+    }
+    if (elements.discoveryMaxRetriesInput) {
+      elements.discoveryMaxRetriesInput.value = data.discoveryMaxRetries || 3;
     }
     if (elements.castRetryInput) {
       elements.castRetryInput.value = data.castRetryDelay || 2;
@@ -386,6 +390,7 @@ const settingsInputs = [
   { el: elements.discoveryIntervalInput, key: 'discoveryInterval' },
   { el: elements.discoveryTimeoutInput, key: 'discoveryTimeout' },
   { el: elements.discoveryRetryDelayInput, key: 'discoveryRetryDelay' },
+  { el: elements.discoveryMaxRetriesInput, key: 'discoveryMaxRetries' },
   { el: elements.castRetryInput, key: 'castRetryDelay' },
   { el: elements.castMaxRetriesInput, key: 'castMaxRetries' }
 ];
