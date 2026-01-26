@@ -678,6 +678,8 @@ if (elements.copyUrlBtn) {
 
 // ============ Init ============
 
+let statusPollInterval = null;
+
 async function init() {
   updateStatus(false, 'Ansluter...');
   
@@ -685,8 +687,23 @@ async function init() {
   await loadDevices();
   await loadStatus();
   
-  // Poll status every 10 seconds
-  setInterval(loadStatus, 10000);
+  // Start polling based on screensaver check interval
+  startStatusPolling();
+}
+
+function startStatusPolling() {
+  // Clear existing interval if any
+  if (statusPollInterval) {
+    clearInterval(statusPollInterval);
+  }
+  
+  // Use screensaverCheckInterval from settings (default 60 seconds)
+  const intervalSeconds = state.settings.screensaverCheckInterval || 60;
+  const intervalMs = intervalSeconds * 1000;
+  
+  console.log(`📊 Log polling interval: ${intervalSeconds}s (matches screensaver check)`);
+  
+  statusPollInterval = setInterval(loadStatus, intervalMs);
 }
 
 init();
