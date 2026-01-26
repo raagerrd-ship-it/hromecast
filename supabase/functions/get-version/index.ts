@@ -19,10 +19,26 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.23";
+const VERSION = "1.3.24";
 const RELEASED_AT = "2026-01-26";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.24",
+    date: "2026-01-26",
+    changes: {
+      sv: [
+        "Buggfix: config-variabel deklarerad innan användning i main()",
+        "Borttagen oanvänd isChromecastIdle() legacy-funktion",
+        "Förbättrad startlogg: Visar nu config-baserade värden",
+      ],
+      en: [
+        "Bugfix: config variable declared before use in main()",
+        "Removed unused isChromecastIdle() legacy function",
+        "Improved startup log: Now shows config-based values",
+      ],
+    }
+  },
   {
     version: "1.3.23",
     date: "2026-01-26",

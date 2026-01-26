@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.23';
+const BRIDGE_VERSION = '1.3.24';
 
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
@@ -692,11 +692,7 @@ async function isChromecastIdleWithRecovery(deviceName, retryCount = 0) {
   });
 }
 
-// Simple idle check (legacy, for quick checks)
-async function isChromecastIdle(deviceName) {
-  const result = await isChromecastIdleWithRecovery(deviceName);
-  return result.status === 'idle';
-}
+// Note: isChromecastIdle() removed in v1.3.24 - was unused legacy wrapper
 
 // Cast media using raw castv2 with retry and circuit breaker
 async function castMedia(chromecastName, url, retryCount = 0) {
@@ -1396,11 +1392,13 @@ const server = http.createServer(async (req, res) => {
 // ============ Main Entry Point ============
 
 async function main() {
+  const config = loadConfig();
+  
   log.info(`🚀 Chromecast Bridge v${BRIDGE_VERSION} starting...`);
   log.info(`📋 Device ID: ${DEVICE_ID}`);
   log.info(`🎬 Custom App ID: ${CUSTOM_APP_ID}`);
   log.info(`⚡ Circuit breaker: ${config.circuitBreakerThreshold || 5} failures = ${config.circuitBreakerCooldown || 5}min pause`);
-  log.info(`🔄 Recovery: 30s cooldown, exponential backoff`);
+  log.info(`🔄 Recovery: ${config.cooldownAfterTakeover || 30}s cooldown, exponential backoff`);
   
   // Write network info file
   writeNetworkInfo();
