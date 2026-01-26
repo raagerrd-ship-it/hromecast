@@ -246,9 +246,6 @@ Device ID: \${DEVICE_ID}
 
 Åtkomst från mobil/annan enhet:
   http://\${ip}:\${PORT}
-
-mDNS (om stöds):
-  http://\${DEVICE_ID}.local:\${PORT}
 \`;
   try {
     fs.writeFileSync(path.join(__dirname, 'network-info.txt'), info.trim());
@@ -805,7 +802,6 @@ const server = http.createServer(async (req, res) => {
           port: PORT,
           networkIP: networkIP,
           networkUrl: \`http://\${networkIP}:\${PORT}\`,
-          mdnsUrl: \`http://\${DEVICE_ID}.local:\${PORT}\`,
           devices: discoveredDevices.length,
           selectedChromecast: config.selectedChromecast,
           screensaverActive,
@@ -898,14 +894,6 @@ async function main() {
     log.info(\`🚀 Server running on http://localhost:\${PORT}\`);
   });
   
-  bonjour.publish({
-    name: \`\${os.hostname()}-\${DEVICE_ID}\`,
-    type: 'http',
-    port: PORT,
-    txt: { path: '/', version: BRIDGE_VERSION }
-  });
-  log.info(\`📡 mDNS published: \${os.hostname()}-\${DEVICE_ID}.local\`);
-  
   await discoverDevices();
   
   const config = loadConfig();
@@ -917,7 +905,6 @@ async function main() {
   
   process.on('SIGINT', () => {
     log.info('👋 Shutting down...');
-    bonjour.unpublishAll();
     server.close();
     if (client) client.close();
     process.exit(0);
@@ -1105,10 +1092,6 @@ const PUBLIC_INDEX_HTML = `<!DOCTYPE html>
               <span class="network-label">Nätverks-URL:</span>
               <code id="network-url">-</code>
               <button id="copy-url-btn" class="btn btn-small">📋 Kopiera</button>
-            </div>
-            <div class="network-row">
-              <span class="network-label">mDNS:</span>
-              <code id="mdns-url">-</code>
             </div>
           </div>
           <p class="hint">Öppna denna adress i din mobil för att konfigurera bridge:n</p>
@@ -1688,7 +1671,6 @@ const elements = {
   deviceId: document.getElementById('device-id'),
   port: document.getElementById('port'),
   networkUrl: document.getElementById('network-url'),
-  mdnsUrl: document.getElementById('mdns-url'),
   copyUrlBtn: document.getElementById('copy-url-btn'),
   logsContainer: document.getElementById('logs-container'),
   clearLogsBtn: document.getElementById('clear-logs-btn'),
@@ -1892,9 +1874,6 @@ async function loadStatus() {
     // Update network URL display
     if (data.networkUrl && elements.networkUrl) {
       elements.networkUrl.textContent = data.networkUrl;
-    }
-    if (data.mdnsUrl && elements.mdnsUrl) {
-      elements.mdnsUrl.textContent = data.mdnsUrl;
     }
     
     // Also load logs

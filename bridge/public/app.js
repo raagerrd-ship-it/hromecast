@@ -57,7 +57,6 @@ const elements = {
   deviceId: document.getElementById('device-id'),
   port: document.getElementById('port'),
   networkUrl: document.getElementById('network-url'),
-  mdnsUrl: document.getElementById('mdns-url'),
   copyUrlBtn: document.getElementById('copy-url-btn'),
   logsContainer: document.getElementById('logs-container'),
   clearLogsBtn: document.getElementById('clear-logs-btn'),
@@ -315,9 +314,6 @@ async function loadStatus() {
     // Update network URL display
     if (data.networkUrl && elements.networkUrl) {
       elements.networkUrl.textContent = data.networkUrl;
-    }
-    if (data.mdnsUrl && elements.mdnsUrl) {
-      elements.mdnsUrl.textContent = data.mdnsUrl;
     }
     
     // Also load logs
