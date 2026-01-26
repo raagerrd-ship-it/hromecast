@@ -1,94 +1,140 @@
-# Plan: Automatisk synkronisering mellan bridge/ och download-bridge
 
-## ✅ SLUTFÖRD
 
-**Implementerad:** 2026-01-26
+# Plan: Automatisk synkronisering vid kodändringar
 
----
+## Problemet
 
-## Vad som gjordes
+När du ändrar kod i `bridge/` via Lovable-chatten måste filerna manuellt laddas upp till Storage innan nedladdningen fungerar. Du vill att detta ska ske automatiskt.
 
-### 1. Skapade Storage bucket `bridge-files`
-- Publik läsåtkomst för alla
-- Skrivåtkomst för admin
+## Lösningsalternativ
 
-### 2. Laddade upp alla bridge-filer till Storage
-Filer under `current/`:
-- `index.js` (50.2KB)
-- `package.json`
-- `.env.example`
-- `README.md`
-- `public/index.html`
-- `public/style.css`
-- `public/app.js`
-- `install-linux.sh`
-- `install-windows.ps1`
-- `uninstall-linux.sh`
-- `uninstall-windows.ps1`
+### Alternativ A: Edge Function läser direkt från projektfiler via GitHub (Rekommenderat)
 
-### 3. Skrev om download-bridge Edge Function
-Ny arkitektur:
-1. Hämtar version från `get-version` endpoint
-2. Hämtar alla filer från Storage bucket dynamiskt
-3. Injicerar version i `index.js`
-4. Genererar och returnerar ZIP-fil
+Om projektet synkas till GitHub kan Edge Function hämta filerna direkt från GitHub raw URLs:
+
+```text
+bridge/index.js → GitHub → Edge Function → ZIP
+```
+
+**Fördelar:**
+- Helt automatiskt - ändra kod, pusha, färdigt
+- Ingen manuell uppladdning
+- Ingen Storage-bucket behövs
+
+**Nackdelar:**
+- Kräver att GitHub-sync är aktiverat
+- Kräver att repot är publikt (eller en GitHub-token)
 
 ---
 
-## Resultat
+### Alternativ B: Hårdkodade filer i Edge Function (Original-stil, men bättre)
 
-| Aspekt | Före | Efter |
-|--------|------|-------|
-| download-bridge storlek | ~2923 rader | ~220 rader |
-| Synkroniseringsrisk | Hög | **Ingen** |
-| Underhåll | Två ställen | **Ett ställe** |
-| Fil-källa | Strängliteraler | Storage bucket |
-
----
-
-## Arbetsflöde för uppdateringar
-
-När du ändrar bridge-koden:
-
-1. **Redigera filer i `bridge/`** - detta är källkoden
-2. **Ladda upp till Storage** - använd `supabase--storage-upload` för varje ändrad fil
-3. **Uppdatera version** - ändra i `get-version` Edge Function
-4. **Nedladdning fungerar automatiskt** - Edge Function hämtar alltid från Storage
-
-### Exempel: Uppdatera index.js
+Gå tillbaka till att ha filerna inbäddade i Edge Function, men med bättre struktur:
 
 ```typescript
-// I Lovable:
-await supabase.storage
-  .from('bridge-files')
-  .upload('current/index.js', fileContent, { upsert: true });
+// Import files as modules or fetch from Lovable CDN
+const INDEX_JS = await import("./files/index.js.ts").then(m => m.default);
+```
+
+**Fördelar:**
+- Allt i samma kodbas - Lovable-ändringar deployar automatiskt
+- Ingen extern beroende
+
+**Nackdelar:**
+- Edge Function blir stor igen
+- Fortfarande manuell synk mellan `bridge/` och Edge Function
+
+---
+
+### Alternativ C: Lovable-intern webhook för auto-upload (Ej möjligt)
+
+Lovable har ingen inbyggd "post-edit hook" som kan trigga en uppladdning. Detta är inte genomförbart utan extern automation.
+
+---
+
+## Rekommendation: GitHub-baserad lösning
+
+### Så här fungerar det
+
+1. **Aktivera GitHub-sync** i Lovable-projektinställningar
+2. **Uppdatera Edge Function** att hämta från GitHub raw URLs
+3. **Vid varje ändring**: Lovable pushar till GitHub → Edge Function hämtar senaste
+
+### Teknisk implementation
+
+```typescript
+// supabase/functions/download-bridge/index.ts
+
+const GITHUB_RAW_BASE = "https://raw.githubusercontent.com/OWNER/REPO/main/bridge/";
+
+const FILES = [
+  "index.js",
+  "package.json",
+  ".env.example",
+  "README.md",
+  "public/index.html",
+  "public/style.css", 
+  "public/app.js",
+  "install-linux.sh",
+  "install-windows.ps1",
+  "uninstall-linux.sh",
+  "uninstall-windows.ps1"
+];
+
+serve(async (req) => {
+  const version = await fetchVersion();
+  const fileContents = {};
+  
+  for (const file of FILES) {
+    const response = await fetch(`${GITHUB_RAW_BASE}${file}`);
+    let content = await response.text();
+    
+    if (file === "index.js") {
+      content = content.replace(/const BRIDGE_VERSION = '[^']+';/, 
+        `const BRIDGE_VERSION = '${version}';`);
+    }
+    
+    fileContents[file] = content;
+  }
+  
+  return createZipResponse(fileContents, version);
+});
 ```
 
 ---
 
-## Storage-struktur
+## Arbetsflöde efter implementation
 
+```text
+1. Du ändrar bridge/index.js i Lovable-chatten
+2. Lovable sparar och pushar till GitHub automatiskt
+3. Användare klickar "Ladda ner bridge"
+4. Edge Function hämtar senaste från GitHub
+5. ZIP genereras med aktuell version
 ```
-bridge-files/
-└── current/
-    ├── index.js
-    ├── package.json
-    ├── .env.example
-    ├── README.md
-    ├── public/
-    │   ├── index.html
-    │   ├── style.css
-    │   └── app.js
-    ├── install-linux.sh
-    ├── install-windows.ps1
-    ├── uninstall-linux.sh
-    └── uninstall-windows.ps1
-```
+
+**Ingen manuell uppladdning krävs!**
 
 ---
 
-## Framtida förbättringar (valfritt)
+## Förutsättningar
 
-- **Versionerade mappar**: `v1.3.25/`, `v1.3.26/` för att behålla historik
-- **Automatisk upload**: GitHub Action eller script som synkar `bridge/` till Storage
-- **Cache-invalidering**: Lägg till version i Storage-path för CDN-cache
+- GitHub-sync måste vara aktiverat för projektet
+- Repot måste vara publikt (för raw.githubusercontent.com åtkomst)
+- Alternativt: Använd GitHub-token som hemlighet för privata repon
+
+---
+
+## Filer som ändras
+
+| Fil | Ändring |
+|-----|---------|
+| `supabase/functions/download-bridge/index.ts` | Byter från Storage till GitHub raw URLs |
+| `.lovable/plan.md` | Uppdateras med nytt flöde |
+
+---
+
+## Fråga innan implementation
+
+Är GitHub-sync aktiverat för projektet? Om inte, vill du aktivera det eller föredrar du en annan lösning?
+
