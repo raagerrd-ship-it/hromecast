@@ -153,8 +153,8 @@ let updateInProgress = false;
 const LOG_BUFFER_SIZE = 100;
 let logBuffer = [];
 
-// Track the last status check entry for timestamp updates
-let lastStatusCheckIndex = -1;
+// Note: We no longer track lastStatusCheckIndex - we use findIndex instead
+// (The old index-based approach broke when other logs caused buffer.shift())
 
 // Track last logged status to avoid duplicate log entries
 let lastLoggedCheckStatus = null;
@@ -639,31 +639,35 @@ async function checkAndActivateScreensaver() {
   
   const currentCheckKey = status;
   
-  // Check if status changed
-  if (currentCheckKey !== lastLoggedCheckStatus) {
-    // Status changed - create new log entry
+  // Find existing status check entry (robust against buffer rotation)
+  const existingIndex = logBuffer.findIndex(e => e.isStatusCheck);
+  
+  // Create/update status log entry
+  if (currentCheckKey !== lastLoggedCheckStatus || existingIndex === -1) {
+    // Status changed OR no entry exists yet - create new entry
     lastLoggedCheckStatus = currentCheckKey;
-    const newEntry = {
+    
+    // Remove old status entry if it exists
+    if (existingIndex >= 0) {
+      logBuffer.splice(existingIndex, 1);
+    }
+    
+    // Add new entry
+    logBuffer.push({
       timestamp: new Date().toISOString(),
       level: 'info',
       message: \`📡 Statusändring (\${checkTime}): \${statusText}\`,
       isStatusCheck: true
-    };
-    logBuffer.push(newEntry);
-    lastStatusCheckIndex = logBuffer.length - 1;
+    });
     
     // Trim buffer if needed
     if (logBuffer.length > LOG_BUFFER_SIZE) {
       logBuffer.shift();
-      lastStatusCheckIndex = Math.max(-1, lastStatusCheckIndex - 1);
     }
-  } else if (lastStatusCheckIndex >= 0 && lastStatusCheckIndex < logBuffer.length) {
+  } else {
     // Status unchanged - just update timestamp on existing entry
-    const existingEntry = logBuffer[lastStatusCheckIndex];
-    if (existingEntry && existingEntry.isStatusCheck) {
-      existingEntry.timestamp = new Date().toISOString();
-      existingEntry.message = \`📡 Senaste kontroll (\${checkTime}): \${statusText}\`;
-    }
+    logBuffer[existingIndex].timestamp = new Date().toISOString();
+    logBuffer[existingIndex].message = \`📡 Senaste kontroll (\${checkTime}): \${statusText}\`;
   }
   
   // Activate screensaver if idle
