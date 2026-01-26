@@ -30,12 +30,13 @@ let client = null;
 let keepAliveInterval = null;
 let screensaverActive = false;
 
-// Last device check result - for dashboard display
+// Last device check result - for dashboard display and change detection
 let lastDeviceCheck = {
   timestamp: null,
   status: null,  // 'idle', 'our_app', 'other_app', 'error', 'circuit_open'
   appName: null  // Name of running app if other_app
 };
+let lastLoggedCheckStatus = null;  // Track what we last logged to avoid duplicates
 
 // Recovery state
 let lastTakeoverTime = 0;
@@ -1039,10 +1040,34 @@ async function checkAndActivateScreensaver() {
     return;
   }
   
+  // Build current check key for change detection
+  const appName = result.apps?.[0] || null;
+  const currentCheckKey = result.status === 'busy' ? `busy:${appName}` : result.status;
+  const checkTime = new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  
+  // Only log if status changed
+  if (currentCheckKey !== lastLoggedCheckStatus) {
+    lastLoggedCheckStatus = currentCheckKey;
+    
+    switch (result.status) {
+      case 'our_app':
+        log.info(`📡 Senaste kontroll (${checkTime}): ✅ Vår app aktiv`);
+        break;
+      case 'busy':
+        log.info(`📡 Senaste kontroll (${checkTime}): 📺 ${appName || 'okänd app'} kör`);
+        break;
+      case 'error':
+        log.info(`📡 Senaste kontroll (${checkTime}): ❌ Enhet ej nåbar`);
+        break;
+      case 'idle':
+        log.info(`📡 Senaste kontroll (${checkTime}): ⏸️ Enhet ledig`);
+        break;
+    }
+  }
+  
   // Handle different states
   if (result.status === 'our_app') {
     // isChromecastIdleWithRecovery already synced screensaverActive = true
-    log.info('📡 Senaste kontroll: ✅ Vår app aktiv');
     if (!wasScreensaverActive) {
       log.info('✅ Screensaver resumed (was already running on device)');
     }
@@ -1050,8 +1075,6 @@ async function checkAndActivateScreensaver() {
   }
   
   if (result.status === 'busy') {
-    const appName = result.apps?.[0] || 'okänd app';
-    log.info(`📡 Senaste kontroll: 📺 ${appName} kör`);
     if (wasScreensaverActive) {
       logScreensaverStop('takeover');
     }
@@ -1059,7 +1082,6 @@ async function checkAndActivateScreensaver() {
   }
   
   if (result.status === 'error') {
-    log.info('📡 Senaste kontroll: ❌ Enhet ej nåbar');
     if (wasScreensaverActive) {
       logScreensaverStop('network_error');
     }
@@ -1067,7 +1089,6 @@ async function checkAndActivateScreensaver() {
   }
   
   // status === 'idle' - device is idle and our app is NOT running
-  log.info('📡 Senaste kontroll: ⏸️ Enhet ledig');
   
   // If we thought we were active but device says idle, this is a silent disconnect
   if (wasScreensaverActive) {
