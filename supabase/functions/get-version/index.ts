@@ -28,14 +28,16 @@ const CHANGELOG: ChangelogEntry[] = [
     date: "2026-01-26",
     changes: {
       sv: [
+        "Ny loggfunktion: 'Senaste kontroll' visas högst upp med löpande uppdaterad tid",
+        "Statusändringar loggas separat för tydlig tidslinje",
         "Fixat: Bridge lyssnar nu på alla nätverksgränssnitt (0.0.0.0)",
         "Mobil-åtkomst: Nu kan du ansluta från andra enheter på nätverket",
-        "Förbättrad nätverks-IP visning vid start",
       ],
       en: [
+        "New log feature: 'Last check' shown at top with continuously updated time",
+        "Status changes logged separately for clear timeline",
         "Fixed: Bridge now listens on all network interfaces (0.0.0.0)",
         "Mobile access: You can now connect from other devices on the network",
-        "Improved network IP display at startup",
       ],
     }
   },
