@@ -103,6 +103,10 @@ foreach ($install in $toUninstall) {
         
         Write-Host "  Tar bort task: $taskName" -ForegroundColor Gray
         Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+        
+        # Ta bort brandvaggsregler for denna instans
+        Write-Host "  Tar bort brandvaggsregler..." -ForegroundColor Gray
+        Get-NetFirewallRule | Where-Object { $_.DisplayName -like "Chromecast Bridge - $taskName*" } | Remove-NetFirewallRule -ErrorAction SilentlyContinue
     }
     
     if ($folderPath -and (Test-Path $folderPath)) {
