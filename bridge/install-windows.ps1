@@ -93,7 +93,7 @@ Write-Host "  Mapp: $AppDir" -ForegroundColor Gray
 Write-Host ""
 
 # 1. Kontrollera/installera Node.js
-Write-Host "[1/6] Kontrollerar Node.js..." -ForegroundColor Yellow
+Write-Host "[1/8] Kontrollerar Node.js..." -ForegroundColor Yellow
 $nodeVersion = $null
 try {
     $nodeVersion = node --version 2>$null
@@ -112,7 +112,7 @@ $nodeVersion = node --version
 Write-Host "  Node.js $nodeVersion OK" -ForegroundColor Green
 
 # 2. Forbereda uppdatering - pausa aktiv bridge
-Write-Host "[2/7] Forbereder uppdatering..." -ForegroundColor Yellow
+Write-Host "[2/8] Forbereder uppdatering..." -ForegroundColor Yellow
 
 # Forsok pausa befintlig bridge gracefully
 $existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
@@ -133,7 +133,7 @@ if ($existingTask -and $existingTask.State -eq "Running") {
 }
 
 # 3. Skapa app-mapp (bevara config.json)
-Write-Host "[3/7] Skapar app-mapp..." -ForegroundColor Yellow
+Write-Host "[3/8] Skapar app-mapp..." -ForegroundColor Yellow
 
 if (Test-Path $AppDir) {
     Write-Host "  Tar bort befintlig installation..." -ForegroundColor Gray
@@ -145,7 +145,7 @@ New-Item -ItemType Directory -Path "$AppDir\public" -Force | Out-Null
 Write-Host "  $AppDir" -ForegroundColor Green
 
 # 4. Kopiera bridge-filer
-Write-Host "[4/7] Kopierar filer..." -ForegroundColor Yellow
+Write-Host "[4/8] Kopierar filer..." -ForegroundColor Yellow
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # Kopiera huvudfiler
@@ -168,14 +168,14 @@ if (Test-Path $publicDir) {
 Write-Host "  Filer kopierade" -ForegroundColor Green
 
 # 5. Installera dependencies
-Write-Host "[5/7] Installerar dependencies (detta kan ta nagra minuter)..." -ForegroundColor Yellow
+Write-Host "[5/8] Installerar dependencies (detta kan ta nagra minuter)..." -ForegroundColor Yellow
 Set-Location $AppDir
 $env:npm_config_loglevel = "error"
 & cmd /c "npm install --omit=dev 2>&1" | Out-Null
 Write-Host "  Dependencies installerade" -ForegroundColor Green
 
 # 6. Skapa .env-fil
-Write-Host "[6/7] Skapar konfiguration..." -ForegroundColor Yellow
+Write-Host "[6/8] Skapar konfiguration..." -ForegroundColor Yellow
 $DeviceId = $env:COMPUTERNAME.ToLower() -replace '[^a-z0-9-]', '-'
 if (-not [string]::IsNullOrWhiteSpace($InstanceName)) {
     $DeviceId = "$DeviceId-$CleanName"
@@ -193,7 +193,7 @@ Write-Host "  Device ID: $DeviceId" -ForegroundColor Green
 Write-Host "  Port: $Port" -ForegroundColor Green
 
 # 7. Skapa Scheduled Task (kors vid systemstart som SYSTEM)
-Write-Host "[7/7] Skapar autostart-tjanst..." -ForegroundColor Yellow
+Write-Host "[7/8] Skapar autostart-tjanst..." -ForegroundColor Yellow
 
 # Ta bort eventuell befintlig task
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
@@ -215,6 +215,22 @@ if (-not $createdTask) {
     Pause-OnError "Kunde inte skapa scheduled task '$TaskName'. Kontrollera att du har admin-rattigheter."
 }
 Write-Host "  Scheduled Task skapad (kors vid systemstart)" -ForegroundColor Green
+
+# 8. Oppna brandvagg for mobil-atkomst
+Write-Host "[8/8] Konfigurerar brandvagg..." -ForegroundColor Yellow
+$FirewallRuleName = "Chromecast Bridge - $AppName (Port $Port)"
+
+# Ta bort eventuell befintlig regel
+Remove-NetFirewallRule -DisplayName $FirewallRuleName -ErrorAction SilentlyContinue
+
+# Skapa ny regel for inkommande trafik
+try {
+    New-NetFirewallRule -DisplayName $FirewallRuleName -Direction Inbound -Protocol TCP -LocalPort $Port -Action Allow -Profile Private,Domain -Description "Tillater atkomst till Chromecast Bridge fran andra enheter pa narverket" | Out-Null
+    Write-Host "  Brandvaggsregel skapad for port $Port" -ForegroundColor Green
+} catch {
+    Write-Host "  Kunde inte skapa brandvaggsregel: $($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host "  Du kan behova oppna port $Port manuellt i Windows-brandvaggen" -ForegroundColor Yellow
+}
 
 # Starta tjansten direkt
 Write-Host ""
