@@ -432,7 +432,7 @@ Device ID: ${DEVICE_ID}
   try {
     fs.writeFileSync(path.join(__dirname, 'network-info.txt'), info.trim());
   } catch (error) {
-    console.error('Could not write network-info.txt:', error.message);
+    log.error('Could not write network-info.txt:', error.message);
   }
 }
 
@@ -445,7 +445,7 @@ function loadConfig() {
       return { ...DEFAULT_CONFIG, ...JSON.parse(data) };
     }
   } catch (error) {
-    console.error('Error loading config:', error.message);
+    log.error('Error loading config:', error.message);
   }
   return { ...DEFAULT_CONFIG };
 }
@@ -455,7 +455,7 @@ function saveConfig(config) {
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
     return true;
   } catch (error) {
-    console.error('Error saving config:', error.message);
+    log.error('Error saving config:', error.message);
     return false;
   }
 }
@@ -1473,8 +1473,6 @@ async function main() {
   await checkAndReconnectSavedDevice();
   
   // Periodic tasks
-  const config = loadConfig();
-  
   // Screensaver check interval (default: 60 seconds)
   // Note: No periodic discovery - it only runs at start, on reconnect, and manually
   const screensaverMs = (config.screensaverCheckInterval || 60) * 1000;
