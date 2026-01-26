@@ -898,13 +898,14 @@ async function main() {
     log.info(\`🚀 Server running on http://localhost:\${PORT}\`);
   });
   
+  // Initial device discovery
+  // Note: Discovery only runs at start, on reconnect, and manually via API
   await discoverDevices();
   
   const config = loadConfig();
-  const discoveryMs = (config.discoveryInterval || 30) * 60 * 1000;
   const screensaverMs = (config.screensaverCheckInterval || 60) * 1000;
   
-  setInterval(discoverDevices, discoveryMs);
+  // Note: No periodic discovery interval - saves network resources
   setInterval(checkAndActivateScreensaver, screensaverMs);
   
   process.on('SIGINT', () => {

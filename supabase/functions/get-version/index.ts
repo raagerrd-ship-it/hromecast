@@ -19,10 +19,24 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.21";
+const VERSION = "1.3.22";
 const RELEASED_AT = "2026-01-26";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.22",
+    date: "2026-01-26",
+    changes: {
+      sv: [
+        "Optimerad discovery: Söker endast vid start, återanslutning och manuellt",
+        "Sparar nätverksresurser: Ingen löpande 30-sekunders skanning längre",
+      ],
+      en: [
+        "Optimized discovery: Only scans at start, on reconnect, and manually",
+        "Saves network resources: No more periodic 30-second scanning",
+      ],
+    }
+  },
   {
     version: "1.3.21",
     date: "2026-01-26",

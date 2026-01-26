@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.21';
+const BRIDGE_VERSION = '1.3.22';
 
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
@@ -86,6 +86,7 @@ const DEFAULT_CONFIG = {
   enabled: false,
   url: '',
   selectedChromecast: null,
+  // Note: discoveryInterval removed - discovery only runs at start, on reconnect, and manually
   // Sökning & Discovery
   discoveryInterval: 30,             // Re-scan for devices interval (minutes)
   discoveryTimeout: 10,              // Max time to wait for discovery (seconds)
@@ -1436,17 +1437,15 @@ async function main() {
   });
   
   // Initial device discovery and check for saved device
+  // Note: Discovery only runs at start, on reconnect (in recovery loop), and manually via API
   await discoverDevices();
   await checkAndReconnectSavedDevice();
   
   // Periodic tasks
   const config = loadConfig();
   
-  // Discovery interval (default: 30 minutes) - also checks for saved device reconnection
-  const discoveryMs = (config.discoveryInterval || 30) * 60 * 1000;
-  setInterval(periodicDiscoveryWithReconnect, discoveryMs);
-  
   // Screensaver check interval (default: 60 seconds)
+  // Note: No periodic discovery - it only runs at start, on reconnect, and manually
   const screensaverMs = (config.screensaverCheckInterval || 60) * 1000;
   setInterval(checkAndActivateScreensaver, screensaverMs);
   
