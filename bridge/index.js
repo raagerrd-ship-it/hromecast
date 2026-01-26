@@ -428,9 +428,6 @@ Device ID: ${DEVICE_ID}
 
 Åtkomst från mobil/annan enhet:
   http://${ip}:${PORT}
-
-mDNS (om stöds):
-  http://${DEVICE_ID}.local:${PORT}
 `;
   try {
     fs.writeFileSync(path.join(__dirname, 'network-info.txt'), info.trim());
@@ -1301,7 +1298,6 @@ const server = http.createServer(async (req, res) => {
           port: PORT,
           networkIP: networkIP,
           networkUrl: `http://${networkIP}:${PORT}`,
-          mdnsUrl: `http://${DEVICE_ID}.local:${PORT}`,
           devices: discoveredDevices.length,
           selectedChromecast: config.selectedChromecast,
           screensaverActive,
@@ -1435,15 +1431,6 @@ async function main() {
     log.info(`   Network: http://${networkIP}:${PORT}`);
   });
   
-  // Publish mDNS service
-  bonjour.publish({
-    name: `${os.hostname()}-${DEVICE_ID}`,
-    type: 'http',
-    port: PORT,
-    txt: { path: '/', version: BRIDGE_VERSION }
-  });
-  log.info(`📡 mDNS published: ${os.hostname()}-${DEVICE_ID}.local`);
-  
   // Initial device discovery and check for saved device
   await discoverDevices();
   await checkAndReconnectSavedDevice();
@@ -1462,7 +1449,6 @@ async function main() {
   // Graceful shutdown
   process.on('SIGINT', () => {
     log.info('👋 Shutting down...');
-    bonjour.unpublishAll();
     server.close();
     stopRecoveryCheck();
     activeHeartbeats.forEach(h => clearInterval(h));

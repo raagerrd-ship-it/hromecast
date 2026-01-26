@@ -19,10 +19,24 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.19";
+const VERSION = "1.3.20";
 const RELEASED_AT = "2026-01-26";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.20",
+    date: "2026-01-26",
+    changes: {
+      sv: [
+        "Städning: Borttagen onödig mDNS-publicering av bridge-tjänsten",
+        "Renare dashboard: mDNS-URL visas inte längre (användes aldrig)",
+      ],
+      en: [
+        "Cleanup: Removed unnecessary mDNS publishing of bridge service",
+        "Cleaner dashboard: mDNS URL no longer displayed (was never used)",
+      ],
+    }
+  },
   {
     version: "1.3.19",
     date: "2026-01-26",
