@@ -1,154 +1,103 @@
 
-# Förbättra Bridge Discovery och Anslutningsstabilitet
+# Gör fler inställningar konfigurerbara och förbättra beskrivningar
 
-## Problem som ska lösas
+## Mål
+1. Exponera alla relevanta hårdkodade värden i dashboarden
+2. Lägga till tydliga beskrivningar med standardvärden för varje inställning
+3. Gruppera inställningar logiskt för bättre översikt
 
-1. **Discovery kräver flera försök** - Enheten hittas inte på första försöket
-2. **Tappar TV-anslutning** - Även när TV:n är i idle-läge
+## Nya konfigurerbara inställningar
 
-## Rotorsaker
+### Lägg till i DEFAULT_CONFIG:
+| Nyckel | Standard | Beskrivning |
+|--------|----------|-------------|
+| `cooldownAfterTakeover` | 30 sek | Väntetid efter att annan app tagit över |
+| `recoveryCheckInterval` | 10 sek | Hur ofta kontrollera återhämtning |
+| `circuitBreakerThreshold` | 5 | Antal fel innan circuit breaker |
+| `circuitBreakerCooldown` | 5 min | Paus när circuit breaker öppen |
 
-### Discovery-problem
-- Early resolve timeout (3 sekunder) är för kort för vissa nätverk/enheter
-- Max timeout (8 sekunder) kan vara för kort om TV:n precis vaknat
-- `discoveredDevices` uppdateras inte inkrementellt under sökning
-- Ingen retry-logik vid tom discovery
+### Lägg till i dashboarden (saknas idag):
+| Nyckel | Standard | Beskrivning |
+|--------|----------|-------------|
+| `discoveryEarlyResolve` | 4 sek | Tidig avslutning av sökning |
+| `idleStatusTimeout` | 5 sek | Timeout för idle-kontroll |
 
-### Anslutningsproblem  
-- `client.on('close')` triggar ingen omedelbar recovery
-- 60 sekunders intervall mellan status-checks kan missa snabba disconnects
-- Heartbeat-fel leder till recovery men discovery kan misslyckas
+## Dashboard-uppdateringar
 
-## Lösning
+### Ny gruppering av inställningar
 
-### 1. Förbättra Discovery-logik
+**Grupp 1: Sökning & Discovery**
+- Enhetsökning (min) - standard: 30
+- Sök-timeout (sek) - standard: 10
+- Tidig avslutning (sek) - standard: 4
+- Retry-väntetid (sek) - standard: 5
+- Antal sökförsök - standard: 3
 
-**Öka timeouts och lägg till retry:**
+**Grupp 2: Cast & Session**
+- Screensaver-kontroll (sek) - standard: 60
+- Keep-alive ping (sek) - standard: 5
+- Idle-timeout (sek) - standard: 5
+- Cast retry-fördröjning (sek) - standard: 2
+- Cast max försök - standard: 3
 
-```javascript
-// Nya standardvärden i DEFAULT_CONFIG
-discoveryTimeout: 10,        // 8 → 10 sekunder (mer tid för enheter att svara)
-discoveryEarlyResolve: 4,    // 3 → 4 sekunder (lite mer marginal)
-```
+**Grupp 3: Återhämtning & Skydd**
+- Cooldown efter takeover (sek) - standard: 30
+- Recovery-kontroll intervall (sek) - standard: 10
+- Circuit breaker tröskel - standard: 5
+- Circuit breaker paus (min) - standard: 5
 
-**Lägg till automatisk retry vid tom discovery:**
+### Förbättrade beskrivningar
+Varje inställning får:
+1. Tydlig label
+2. Förklarande hint-text
+3. Standardvärde visas i hint: `(standard: X)`
 
-```javascript
-async function discoverDevicesWithRetry(maxRetries = 2) {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    const devices = await discoverDevices();
-    
-    if (devices.length > 0) {
-      return devices;
-    }
-    
-    if (attempt < maxRetries) {
-      log.info(`🔄 No devices found, retrying (${attempt}/${maxRetries})...`);
-      await sleep(2000); // Vänta 2 sekunder mellan försök
-    }
-  }
-  
-  log.warn('⚠️ No devices found after retries');
-  return [];
-}
-```
+## Tekniska ändringar
 
-**Uppdatera API-endpoint att använda retry:**
+### bridge/index.js
+1. Lägg till nya nycklar i `DEFAULT_CONFIG`:
+   ```javascript
+   cooldownAfterTakeover: 30,        // Väntetid efter takeover (sek)
+   recoveryCheckInterval: 10,        // Interval för recovery (sek)
+   circuitBreakerThreshold: 5,       // Antal fel innan breaker
+   circuitBreakerCooldown: 5,        // Breaker paus (min)
+   ```
 
-```javascript
-// POST /api/chromecasts/refresh
-if (req.method === 'POST' && pathname === '/api/chromecasts/refresh') {
-  const devices = await discoverDevicesWithRetry(3); // 3 försök
-  // ...
-}
-```
+2. Uppdatera hårdkodade konstanter att läsa från config:
+   - `COOLDOWN_AFTER_TAKEOVER` → `config.cooldownAfterTakeover * 1000`
+   - `BASE_RECOVERY_CHECK_INTERVAL` → `config.recoveryCheckInterval * 1000`
+   - `CIRCUIT_BREAKER_THRESHOLD` → `config.circuitBreakerThreshold`
+   - `circuitBreakerState.cooldownMs` → `config.circuitBreakerCooldown * 60 * 1000`
 
-### 2. Förbättra Connection Close-hantering
+### bridge/public/index.html
+1. Omstrukturera settings-sektionen med tre grupper
+2. Lägg till nya input-fält med förbättrade hints som inkluderar standardvärden
+3. Varje hint får formatet: `Förklaring (standard: X)`
 
-**Lägg till omedelbar status-check vid connection close:**
+### bridge/public/app.js
+1. Lägg till nya element-referenser
+2. Uppdatera `loadSettings()` för nya fält
+3. Uppdatera `settingsInputs` array med nya mappningar
 
-```javascript
-client.on('close', () => {
-  log.info('🔌 Connection closed');
-  cleanup();
-  
-  // Om vi trodde vi var aktiva, gör en omedelbar status-check
-  if (screensaverActive) {
-    log.info('⚠️ Connection closed while active - checking status...');
-    setTimeout(async () => {
-      const config = loadConfig();
-      if (config.selectedChromecast && config.enabled) {
-        const result = await isChromecastIdleWithRecovery(config.selectedChromecast);
-        if (result.status === 'idle') {
-          log.info('🔄 Device idle after close - reactivating...');
-          checkAndActivateScreensaver();
-        } else if (result.status === 'our_app') {
-          log.info('✅ Our app still running on device');
-          screensaverActive = true;
-        }
-      }
-    }, 3000); // Vänta 3 sekunder för eventuell cleanup
-  }
-});
-```
-
-### 3. Bevara existerande enheter vid misslyckad discovery
-
-**Förhindra att listan töms vid timeout:**
-
-```javascript
-function discoverDevices() {
-  return new Promise((resolve) => {
-    log.info('🔍 Scanning for Chromecast devices...');
-    
-    const browser = bonjour.find({ type: 'googlecast' });
-    const foundDevices = [];
-    let resolved = false;
-    
-    // ... befintlig kod ...
-    
-    // Max timeout - behåll gamla enheter om inga nya hittas
-    setTimeout(() => {
-      // ... cleanup ...
-      
-      // OM inga enheter hittades, BEHÅLL de gamla
-      if (foundDevices.length === 0 && discoveredDevices.length > 0) {
-        log.info(`📡 Discovery timeout, keeping ${discoveredDevices.length} cached device(s)`);
-        resolve(discoveredDevices);
-      } else {
-        discoveredDevices = foundDevices;
-        log.info(`📡 Discovery complete: ${foundDevices.length} device(s)`);
-        resolve(foundDevices);
-      }
-    }, maxTimeoutMs);
-  });
-}
-```
-
-## Fil som ändras
+## Fil-ändringar
 
 | Fil | Ändringar |
 |-----|-----------|
-| `bridge/index.js` | Discovery retry, förbättrad close-hantering, bevarade enheter vid timeout |
+| `bridge/index.js` | Ny config-nycklar, dynamiska värden istället för konstanter |
+| `bridge/public/index.html` | Grupperade inställningar, nya fält, förbättrade hints |
+| `bridge/public/app.js` | Nya element-hanterare, load/save för nya fält |
+
+## Exempel på förbättrad hint-text
+
+**Före:**
+```
+Hur ofta kontrollera om enheten är ledig
+```
+
+**Efter:**
+```
+Hur ofta kontrollera om enheten är ledig (standard: 60)
+```
 
 ## Version
-
-Bumpas till `1.3.10` med changelog-entry för förbättrad discovery och anslutningsstabilitet.
-
----
-
-## Tekniska detaljer
-
-### Sammanfattning av kodändringar
-
-1. **DEFAULT_CONFIG** - Ökade timeouts för discovery
-2. **discoverDevicesWithRetry()** - Ny funktion med automatisk retry
-3. **discoverDevices()** - Behåll cachade enheter vid tom discovery
-4. **client.on('close')** - Omedelbar status-check och re-connect vid oväntad stängning
-5. **/api/chromecasts/refresh** - Använd retry-variant
-
-### Förväntade förbättringar
-
-- Användare ska hitta enheter på första försöket (tack vare retry)
-- Om enheten inte svarar behålls cached-data (förhindrar tom lista)
-- Connection close triggar omedelbar recovery istället för att vänta 60 sekunder
+Bumpas till `1.3.11` med changelog för "alla timing-inställningar nu konfigurerbara".
