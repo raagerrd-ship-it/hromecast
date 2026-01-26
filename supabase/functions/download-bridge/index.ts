@@ -1767,16 +1767,34 @@ function updateLogs(logs) {
     return;
   }
   
-  // Show newest first
-  const reversedLogs = [...logs].reverse();
+  // Separate sticky "last check" entry from regular logs
+  const lastCheckEntry = logs.find(log => log.isLastCheck);
+  const regularLogs = logs.filter(log => !log.isLastCheck);
   
-  container.innerHTML = reversedLogs.map(log => 
+  // Show newest first for regular logs
+  const reversedLogs = [...regularLogs].reverse();
+  
+  let html = '';
+  
+  // Always show last check entry at top with special styling
+  if (lastCheckEntry) {
+    html += '<div class="log-entry info last-check-entry">' +
+      '<span class="log-time">' + formatLogTime(lastCheckEntry.timestamp) + '</span>' +
+      '<span class="log-level">CHECK</span>' +
+      '<span class="log-message">' + lastCheckEntry.message + '</span>' +
+    '</div>';
+  }
+  
+  // Add regular logs
+  html += reversedLogs.map(log => 
     '<div class="log-entry ' + log.level + '">' +
       '<span class="log-time">' + formatLogTime(log.timestamp) + '</span>' +
       '<span class="log-level">' + log.level + '</span>' +
       '<span class="log-message">' + log.message + '</span>' +
     '</div>'
   ).join('');
+  
+  container.innerHTML = html;
 }
 
 function setLoading(loading) {
@@ -2081,16 +2099,6 @@ if (elements.clearLogsBtn) {
 // ============ Init ============
 
 let statusPollInterval = null;
-let logPollInterval = null;
-
-async function loadLogsOnly() {
-  try {
-    const logsData = await api('/api/logs');
-    updateLogs(logsData.logs || []);
-  } catch (error) {
-    console.error('Failed to load logs:', error);
-  }
-}
 
 async function init() {
   updateStatus(false, 'Ansluter...');
@@ -2099,30 +2107,23 @@ async function init() {
   await loadDevices();
   await loadStatus();
   
-  // Start polling
+  // Start polling based on screensaver check interval
   startStatusPolling();
 }
 
 function startStatusPolling() {
-  // Clear existing intervals if any
+  // Clear existing interval if any
   if (statusPollInterval) {
     clearInterval(statusPollInterval);
   }
-  if (logPollInterval) {
-    clearInterval(logPollInterval);
-  }
   
-  // Status polling based on screensaver check interval (default 60 seconds)
-  const statusIntervalSeconds = state.settings.screensaverCheckInterval || 60;
-  const statusIntervalMs = statusIntervalSeconds * 1000;
+  // Poll at same interval as screensaver check (default 60 seconds)
+  const intervalSeconds = state.settings.screensaverCheckInterval || 60;
+  const intervalMs = intervalSeconds * 1000;
   
-  // Log polling every 10 seconds for responsive LIVE updates
-  const logIntervalMs = 10000;
+  console.log('📊 Polling interval: ' + intervalSeconds + 's (matches screensaver check)');
   
-  console.log('📊 Status polling: ' + statusIntervalSeconds + 's, Log polling: 10s');
-  
-  statusPollInterval = setInterval(loadStatus, statusIntervalMs);
-  logPollInterval = setInterval(loadLogsOnly, logIntervalMs);
+  statusPollInterval = setInterval(loadStatus, intervalMs);
 }
 
 init();`;
