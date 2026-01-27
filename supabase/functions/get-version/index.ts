@@ -19,10 +19,26 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.35";
+const VERSION = "1.3.36";
 const RELEASED_AT = "2026-01-27";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.36",
+    date: "2026-01-27",
+    changes: {
+      sv: [
+        "Debug: Global felhantering i receiver för att fånga okända krascher",
+        "Debug: Detaljerad loggning i bridge vid Cast-kommunikation",
+        "Förbättrad diagnostik för CAST_INIT_TIMEOUT-fel",
+      ],
+      en: [
+        "Debug: Global error handling in receiver to catch unknown crashes",
+        "Debug: Detailed logging in bridge during Cast communication",
+        "Improved diagnostics for CAST_INIT_TIMEOUT errors",
+      ],
+    }
+  },
   {
     version: "1.3.35",
     date: "2026-01-27",
