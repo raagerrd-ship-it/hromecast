@@ -448,6 +448,42 @@ if (elements.checkBtn) {
   });
 }
 
+// Reload receiver button - forces stop + restart to load fresh receiver code
+const reloadReceiverBtn = document.getElementById('reload-receiver-btn');
+if (reloadReceiverBtn) {
+  reloadReceiverBtn.addEventListener('click', async () => {
+    reloadReceiverBtn.disabled = true;
+    const originalText = reloadReceiverBtn.textContent;
+    reloadReceiverBtn.textContent = '⏳ Stoppar...';
+    
+    try {
+      // 1. Stop the app completely
+      await api('/api/force-stop', { method: 'POST' });
+      showToast('Stoppar receiver...', 'info');
+      
+      // 2. Wait for Chromecast to close the app
+      reloadReceiverBtn.textContent = '⏳ Väntar...';
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // 3. Start fresh cast
+      reloadReceiverBtn.textContent = '⏳ Startar...';
+      await api('/api/cast', { method: 'POST' });
+      
+      updateScreensaverStatus(true);
+      showToast('Receiver omstartad!', 'success');
+      
+      // Reload logs to show the new activity
+      await loadStatus();
+    } catch (error) {
+      console.error('Reload receiver failed:', error);
+      showToast('Kunde inte ladda om receiver: ' + error.message, 'error');
+    }
+    
+    reloadReceiverBtn.disabled = false;
+    reloadReceiverBtn.textContent = originalText;
+  });
+}
+
 // Restart bridge with overlay
 const restartBtn = document.getElementById('restart-btn');
 if (restartBtn) {
