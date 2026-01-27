@@ -154,10 +154,11 @@
     
     function updateDebugDisplay() {
       if (debugLogVisible) {
-        debugLogEl.innerHTML = logBuffer.slice(-15).map(e => 
+        // Sort newest first (reverse order)
+        const recentLogs = logBuffer.slice(-15).reverse();
+        debugLogEl.innerHTML = recentLogs.map(e => 
           `<div class="log-entry ${e.level}">${e.timestamp} ${e.message}</div>`
         ).join('');
-        debugLogEl.scrollTop = debugLogEl.scrollHeight;
       }
     }
     
