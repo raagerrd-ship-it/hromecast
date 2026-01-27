@@ -301,6 +301,12 @@
     );
     
     function loadWebsite(url, isRetry = false) {
+      // Skip reload if same URL is already loaded and working
+      if (!isRetry && url === currentUrl && contentLoaded && healthCheckFailures === 0) {
+        log('info', `📩 URL refresh received - already loaded, skipping reload`);
+        return;
+      }
+      
       log('info', `Loading: ${url}${isRetry ? ' (retry)' : ''}`);
       
       currentUrl = url;
