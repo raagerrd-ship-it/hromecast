@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.27';
+const BRIDGE_VERSION = '1.3.28';
 
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
@@ -728,20 +728,15 @@ async function isChromecastIdleWithRecovery(deviceName, retryCount = 0) {
           const otherApps = apps.filter(app => app.appId !== BACKDROP_APP_ID && app.appId !== CUSTOM_APP_ID);
           const ourAppRunning = apps.some(app => app.appId === CUSTOM_APP_ID);
           
-          // Enhanced diagnostics - log raw app data
-          log.info(`📊 Device apps: ${apps.length === 0 ? 'none' : apps.map(a => `${a.displayName || 'unknown'}(${a.appId})`).join(', ')}`);
-          
+          // Silent status check - no logging here, checkAndActivateScreensaver handles it
           let result;
           if (ourAppRunning) {
-            log.info('✅ Our custom app confirmed running');
             screensaverActive = true; // Sync local state with device state
             result = { status: 'our_app' };
           } else if (otherApps.length === 0) {
-            log.info('⏸️ Device idle (no apps or only Backdrop)');
             result = { status: 'idle' };
           } else {
             const appNames = otherApps.map(a => a.displayName || a.appId);
-            log.info(`📺 Device busy: ${appNames.join(', ')}`);
             result = { status: 'busy', apps: appNames };
           }
           
@@ -1085,7 +1080,6 @@ async function checkAndActivateScreensaver() {
   
   // ALWAYS check device status - don't skip based on local flag
   // The old working version (v1.0.19) did this and never had silent disconnect issues
-  log.info(`🔍 Checking device status... (flag: ${wasScreensaverActive ? 'active' : 'inactive'})`);
   const result = await isChromecastIdleWithRecovery(config.selectedChromecast);
   
   if (result.status === 'circuit_open') {
