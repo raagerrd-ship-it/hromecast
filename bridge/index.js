@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.31';
+const BRIDGE_VERSION = '1.3.32';
 
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
@@ -1440,6 +1440,35 @@ const server = http.createServer(async (req, res) => {
       if (req.method === 'DELETE' && pathname === '/api/logs') {
         logBuffer = [];
         sendJson(res, { success: true });
+        return;
+      }
+      
+      // POST /api/check - Manual status check and reconnect
+      if (req.method === 'POST' && pathname === '/api/check') {
+        log.info('🔍 Manual check requested via API');
+        const config = loadConfig();
+        
+        if (!config.selectedChromecast) {
+          sendJson(res, { success: false, error: 'No Chromecast selected' }, 400);
+          return;
+        }
+        
+        // Run status check immediately
+        const result = await isChromecastIdleWithRecovery(config.selectedChromecast);
+        
+        if (result.status === 'idle' && config.enabled && config.url) {
+          log.info('✅ Device idle - triggering cast...');
+          try {
+            await castMedia(config.selectedChromecast, config.url);
+            sendJson(res, { success: true, status: 'cast_triggered', deviceStatus: result });
+          } catch (error) {
+            sendJson(res, { success: false, status: 'cast_failed', error: error.message, deviceStatus: result });
+          }
+        } else if (result.status === 'our_app') {
+          sendJson(res, { success: true, status: 'already_running', deviceStatus: result });
+        } else {
+          sendJson(res, { success: true, status: result.status, deviceStatus: result });
+        }
         return;
       }
       

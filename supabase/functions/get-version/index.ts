@@ -19,10 +19,26 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.31";
+const VERSION = "1.3.32";
 const RELEASED_AT = "2026-01-27";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.32",
+    date: "2026-01-27",
+    changes: {
+      sv: [
+        "Ny 'Kontrollera' knapp: Manuell statuskontroll och återanslutning",
+        "Loggsortering: Loggar sorteras nu korrekt efter tidsstämpel (senaste överst)",
+        "Ny API endpoint /api/check för manuell kontroll",
+      ],
+      en: [
+        "New 'Check' button: Manual status check and reconnection",
+        "Log sorting: Logs now sorted correctly by timestamp (newest first)",
+        "New API endpoint /api/check for manual checking",
+      ],
+    }
+  },
   {
     version: "1.3.31",
     date: "2026-01-27",
