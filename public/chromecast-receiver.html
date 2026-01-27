@@ -367,7 +367,9 @@
       };
     }
     
-    // Health check - verify iframe is still responsive
+    // Health check - verify iframe is still responsive (silent when OK)
+    let lastHealthStatus = null;
+    
     function performHealthCheck() {
       const now = Date.now();
       const timeSinceLoad = iframeLoadTime ? Math.round((now - iframeLoadTime) / 1000) : 0;
@@ -381,43 +383,47 @@
             // Reset failure counter on success
             if (healthCheckFailures > 0) {
               log('info', `Health check recovered after ${healthCheckFailures} failures`);
-              // Re-schedule auto-hide after recovery
-              scheduleDebugAutoHide();
             }
             healthCheckFailures = 0;
             lastHealthCheck = now;
             
-            log('info', `💚 Health OK (uptime: ${timeSinceLoad}s)`);
-            // Re-schedule auto-hide on successful checks
+            // Only log on status change, not every check
+            if (lastHealthStatus !== 'ok') {
+              log('info', `💚 Health OK`);
+              lastHealthStatus = 'ok';
+            }
             scheduleDebugAutoHide();
           } else {
             throw new Error('No document access');
           }
         } catch (e) {
           // Cross-origin restrictions prevent document access - this is normal for external sites
-          // We can only detect if the iframe element itself is gone
           if (contentEl.src === currentUrl) {
             healthCheckFailures = 0;
             lastHealthCheck = now;
-            log('info', `💚 Iframe present (uptime: ${timeSinceLoad}s, cross-origin)`);
-            // Re-schedule auto-hide on successful checks
+            
+            // Only log on status change
+            if (lastHealthStatus !== 'ok-crossorigin') {
+              log('info', `💚 Iframe OK (cross-origin)`);
+              lastHealthStatus = 'ok-crossorigin';
+            }
             scheduleDebugAutoHide();
           } else {
             healthCheckFailures++;
             log('warn', `⚠️ HEALTH CHECK ISSUE #${healthCheckFailures}: src mismatch`);
             log('warn', `⚠️ Expected: ${currentUrl}`);
             log('warn', `⚠️ Actual: ${contentEl.src}`);
+            lastHealthStatus = 'mismatch';
             
             if (healthCheckFailures >= 3) {
               log('error', `❌ MULTIPLE HEALTH FAILURES - attempting reconnect`);
               log('error', `❌ This will show "Ready to cast..." until bridge re-casts`);
-              contentLoaded = false; // Mark as not loaded so retry logic works
+              contentLoaded = false;
               scheduleRetry('health check failures');
             }
           }
         }
       } else if (!contentLoaded && currentUrl && loadRetryCount === 0) {
-        // Only warn if we're not already in retry mode
         log('warn', `⏳ Still loading: ${currentUrl}`);
       }
     }
@@ -425,11 +431,11 @@
     // Run health check every 30 seconds
     setInterval(performHealthCheck, 30000);
     
-    // Keep-alive heartbeat (every 10 seconds)
+    // Silent heartbeat - only logs to console, not to debug panel
     setInterval(() => {
       const uptime = iframeLoadTime ? Math.round((Date.now() - iframeLoadTime) / 1000) : 0;
-      log('info', `♥ Heartbeat (uptime: ${uptime}s, loaded: ${contentLoaded})`);
-    }, 10000);
+      console.log(`[Heartbeat] uptime: ${uptime}s, loaded: ${contentLoaded}`);
+    }, 30000);
     
     // Auto-refresh to clear memory (configurable via URL param)
     const urlParams = new URLSearchParams(window.location.search);
