@@ -78,6 +78,11 @@
       max-height: 200px;
       overflow-y: auto;
       font-family: monospace;
+      display: none;
+    }
+    
+    #debug-log.has-errors {
+      display: block;
     }
     
     .log-entry {
@@ -116,7 +121,7 @@
     const contentEl = document.getElementById('content');
     const debugLogEl = document.getElementById('debug-log');
     
-    // Simple logging
+    // Simple logging - only show debug panel if errors occur
     function log(level, message) {
       const timestamp = new Date().toLocaleTimeString('sv-SE');
       const entry = document.createElement('div');
@@ -124,6 +129,11 @@
       entry.textContent = timestamp + ' ' + message;
       debugLogEl.insertBefore(entry, debugLogEl.firstChild);
       console.log('[' + level.toUpperCase() + '] ' + message);
+      
+      // Show debug panel only for errors
+      if (level === 'error') {
+        debugLogEl.classList.add('has-errors');
+      }
     }
     
     function setStatus(text, type) {
@@ -167,10 +177,9 @@
         loadingEl.style.display = 'none';
         contentEl.style.display = 'block';
         
-        // Hide status and debug log after successful load
+        // Hide status after successful load (debug log only shows on errors)
         setTimeout(function() {
           statusEl.style.opacity = '0.3';
-          debugLogEl.style.display = 'none';
         }, 5000);
       };
       
