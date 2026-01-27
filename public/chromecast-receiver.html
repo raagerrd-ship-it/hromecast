@@ -213,7 +213,6 @@
       log('info', 'Starting receiver context...');
       const options = new cast.framework.CastReceiverOptions();
       options.disableIdleTimeout = true;
-      options.maxInactivity = 0;
       
       context.start(options);
       log('info', 'Receiver started successfully');
