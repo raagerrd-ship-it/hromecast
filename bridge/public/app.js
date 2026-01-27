@@ -76,6 +76,7 @@ const elements = {
   castRetryInput: document.getElementById('cast-retry-input'),
   castMaxRetriesInput: document.getElementById('cast-max-retries-input'),
   receiverAutoRefreshInput: document.getElementById('receiver-auto-refresh-input'),
+  refreshUrlIntervalInput: document.getElementById('refresh-url-interval-input'),
   // Återhämtning & Skydd
   cooldownAfterTakeoverInput: document.getElementById('cooldown-after-takeover-input'),
   recoveryCheckIntervalInput: document.getElementById('recovery-check-interval-input'),
@@ -243,6 +244,9 @@ async function loadSettings() {
     }
     if (elements.receiverAutoRefreshInput) {
       elements.receiverAutoRefreshInput.value = data.receiverAutoRefresh || 45;
+    }
+    if (elements.refreshUrlIntervalInput) {
+      elements.refreshUrlIntervalInput.value = data.refreshUrlInterval || 5;
     }
     
     // Load timing settings - Återhämtning & Skydd
@@ -540,6 +544,7 @@ const settingsInputs = [
   { el: elements.castRetryInput, key: 'castRetryDelay' },
   { el: elements.castMaxRetriesInput, key: 'castMaxRetries' },
   { el: elements.receiverAutoRefreshInput, key: 'receiverAutoRefresh' },
+  { el: elements.refreshUrlIntervalInput, key: 'refreshUrlInterval' },
   // Återhämtning & Skydd
   { el: elements.cooldownAfterTakeoverInput, key: 'cooldownAfterTakeover' },
   { el: elements.recoveryCheckIntervalInput, key: 'recoveryCheckInterval' },
@@ -594,6 +599,7 @@ const DEFAULT_VALUES = {
   castRetryDelay: 2,
   castMaxRetries: 3,
   receiverAutoRefresh: 45,
+  refreshUrlInterval: 5,
   // Återhämtning & Skydd
   cooldownAfterTakeover: 30,
   recoveryCheckInterval: 10,
@@ -635,7 +641,8 @@ if (elements.resetCastBtn) {
       idleStatusTimeout: DEFAULT_VALUES.idleStatusTimeout,
       castRetryDelay: DEFAULT_VALUES.castRetryDelay,
       castMaxRetries: DEFAULT_VALUES.castMaxRetries,
-      receiverAutoRefresh: DEFAULT_VALUES.receiverAutoRefresh
+      receiverAutoRefresh: DEFAULT_VALUES.receiverAutoRefresh,
+      refreshUrlInterval: DEFAULT_VALUES.refreshUrlInterval
     };
     
     // Update UI
@@ -645,6 +652,7 @@ if (elements.resetCastBtn) {
     elements.castRetryInput.value = updates.castRetryDelay;
     elements.castMaxRetriesInput.value = updates.castMaxRetries;
     elements.receiverAutoRefreshInput.value = updates.receiverAutoRefresh;
+    elements.refreshUrlIntervalInput.value = updates.refreshUrlInterval;
     
     // Save
     await saveSettings(updates);

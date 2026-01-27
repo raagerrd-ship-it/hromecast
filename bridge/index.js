@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.32';
+const BRIDGE_VERSION = '1.3.33';
 
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
@@ -81,6 +81,9 @@ let logBuffer = [];
 // Track last status check messages for deduplication
 let lastCheckMessages = [];
 
+// Track last URL refresh time (for refreshUrlInterval feature)
+let lastUrlRefreshTime = 0;
+
 // Default config with timing settings (all in seconds unless noted)
 // Note: discoveryInterval removed - discovery only runs at start, on reconnect, and manually
 const DEFAULT_CONFIG = {
@@ -99,6 +102,7 @@ const DEFAULT_CONFIG = {
   castRetryDelay: 2,                 // Base delay for retry backoff (seconds)
   castMaxRetries: 3,                 // Max cast retry attempts
   receiverAutoRefresh: 45,           // Auto-refresh receiver (minutes)
+  refreshUrlInterval: 5,             // How often to re-send URL to receiver (minutes) - ensures receiver has content after auto-refresh
   // Återhämtning & Skydd
   cooldownAfterTakeover: 30,         // Cooldown after another app takes over (seconds)
   recoveryCheckInterval: 10,         // How often to check for recovery (seconds)
@@ -1022,6 +1026,110 @@ async function castMedia(chromecastName, url, retryCount = 0) {
   });
 }
 
+// Refresh URL on already running receiver (for when receiver did auto-refresh)
+async function refreshMediaOnReceiver(chromecastName, url) {
+  const device = findDevice(chromecastName);
+  if (!device) {
+    log.warn('⚠️ Refresh: Device not found');
+    return { success: false, error: 'Device not found' };
+  }
+  
+  return new Promise((resolve) => {
+    const refreshClient = new castv2.Client();
+    let resolved = false;
+    
+    const timeout = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        try { refreshClient.close(); } catch(e) {}
+        log.warn('⚠️ Refresh: Timeout');
+        resolve({ success: false, error: 'Timeout' });
+      }
+    }, 10000);
+    
+    refreshClient.on('error', (err) => {
+      if (!resolved) {
+        resolved = true;
+        clearTimeout(timeout);
+        try { refreshClient.close(); } catch(e) {}
+        log.warn(`⚠️ Refresh error: ${err.message}`);
+        resolve({ success: false, error: err.message });
+      }
+    });
+    
+    refreshClient.connect(device.host, () => {
+      const connection = refreshClient.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.tp.connection', 'JSON');
+      const receiver = refreshClient.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.receiver', 'JSON');
+      
+      connection.send({ type: 'CONNECT' });
+      receiver.send({ type: 'GET_STATUS', requestId: 1 });
+      
+      receiver.on('message', (data) => {
+        if (resolved) return;
+        
+        if (data.type === 'RECEIVER_STATUS' && data.status?.applications?.length > 0) {
+          const app = data.status.applications[0];
+          
+          if (app.appId === CUSTOM_APP_ID) {
+            const transportId = app.transportId;
+            const sessionId = app.sessionId;
+            
+            // Connect to the running app
+            const appConnection = refreshClient.createChannel('sender-0', transportId, 'urn:x-cast:com.google.cast.tp.connection', 'JSON');
+            appConnection.send({ type: 'CONNECT' });
+            
+            const media = refreshClient.createChannel('sender-0', transportId, 'urn:x-cast:com.google.cast.media', 'JSON');
+            
+            // Add receiver auto-refresh parameter to URL
+            const config = loadConfig();
+            const refreshMinutes = config.receiverAutoRefresh || 45;
+            const urlWithRefresh = url.includes('?') 
+              ? `${url}&refresh=${refreshMinutes}` 
+              : `${url}?refresh=${refreshMinutes}`;
+            
+            log.info(`🔄 Refreshing URL on receiver: ${urlWithRefresh}`);
+            media.send({
+              type: 'LOAD',
+              requestId: Date.now(),
+              sessionId: sessionId,
+              media: {
+                contentId: urlWithRefresh,
+                contentType: 'text/html',
+                streamType: 'LIVE',
+                metadata: {
+                  type: 0,
+                  metadataType: 0,
+                  title: 'Website Viewer'
+                }
+              },
+              autoplay: true
+            });
+            
+            // Wait a moment then close
+            setTimeout(() => {
+              if (!resolved) {
+                resolved = true;
+                clearTimeout(timeout);
+                connection.send({ type: 'CLOSE' });
+                refreshClient.close();
+                log.info('✅ URL refresh sent to receiver');
+                resolve({ success: true });
+              }
+            }, 1000);
+          } else {
+            // Wrong app running
+            resolved = true;
+            clearTimeout(timeout);
+            refreshClient.close();
+            log.warn(`⚠️ Refresh: Wrong app running (${app.appId})`);
+            resolve({ success: false, error: 'Wrong app running' });
+          }
+        }
+      });
+    });
+  });
+}
+
 // Note: castMediaWithRetry removed - castMedia() already has built-in retry logic
 
 async function stopCast(chromecastName) {
@@ -1156,7 +1264,24 @@ async function checkAndActivateScreensaver() {
     // isChromecastIdleWithRecovery already synced screensaverActive = true
     if (!wasScreensaverActive) {
       log.info('✅ Screensaver resumed (was already running on device)');
+      lastUrlRefreshTime = Date.now(); // Reset refresh timer on resume
     }
+    
+    // Periodically re-send URL to receiver to handle auto-refresh
+    // This ensures the receiver has content even after its auto-refresh
+    const refreshIntervalMs = (config.refreshUrlInterval || 5) * 60 * 1000;
+    const timeSinceRefresh = Date.now() - lastUrlRefreshTime;
+    
+    if (timeSinceRefresh >= refreshIntervalMs) {
+      log.info(`⏰ URL refresh interval reached (${Math.round(timeSinceRefresh / 60000)} min)`);
+      try {
+        await refreshMediaOnReceiver(config.selectedChromecast, config.url);
+        lastUrlRefreshTime = Date.now();
+      } catch (err) {
+        log.warn(`⚠️ URL refresh failed: ${err.message}`);
+      }
+    }
+    
     return;
   }
   
