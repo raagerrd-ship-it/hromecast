@@ -19,10 +19,26 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.29";
+const VERSION = "1.3.30";
 const RELEASED_AT = "2026-01-27";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.30",
+    date: "2026-01-27",
+    changes: {
+      sv: [
+        "Full detaljloggning: Visar alla detaljer (Device apps, status, etc.)",
+        "Smart uppdatering: Om exakt samma info upprepas, uppdateras bara tidsstämplarna",
+        "Nya rader skapas endast vid faktisk ändring",
+      ],
+      en: [
+        "Full detail logging: Shows all details (Device apps, status, etc.)",
+        "Smart update: When same info repeats, only timestamps are updated",
+        "New lines created only on actual change",
+      ],
+    }
+  },
   {
     version: "1.3.29",
     date: "2026-01-27",

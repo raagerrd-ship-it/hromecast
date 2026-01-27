@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.29';
+const BRIDGE_VERSION = '1.3.30';
 
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
@@ -36,7 +36,7 @@ let lastDeviceCheck = {
   status: null,  // 'idle', 'our_app', 'other_app', 'error', 'circuit_open'
   appName: null  // Name of running app if other_app
 };
-let lastLoggedCheckStatus = null;  // Track what we last logged to avoid duplicates
+// lastLoggedCheckStatus removed in v1.3.30 - now using lastCheckMessages array
 
 // Recovery state
 let lastTakeoverTime = 0;
@@ -78,8 +78,8 @@ const activeHeartbeats = new Set();
 const LOG_BUFFER_SIZE = 100;
 let logBuffer = [];
 
-// Note: We no longer track lastStatusCheckIndex - we use findIndex instead
-// (The old index-based approach broke when other logs caused buffer.shift())
+// Track last status check messages for deduplication
+let lastCheckMessages = [];
 
 // Default config with timing settings (all in seconds unless noted)
 // Note: discoveryInterval removed - discovery only runs at start, on reconnect, and manually
@@ -728,16 +728,18 @@ async function isChromecastIdleWithRecovery(deviceName, retryCount = 0) {
           const otherApps = apps.filter(app => app.appId !== BACKDROP_APP_ID && app.appId !== CUSTOM_APP_ID);
           const ourAppRunning = apps.some(app => app.appId === CUSTOM_APP_ID);
           
-          // Silent status check - no logging here, checkAndActivateScreensaver handles it
+          // Build result with app details for logging
+          const appList = apps.length === 0 ? 'none' : apps.map(a => `${a.displayName || 'unknown'}(${a.appId})`).join(', ');
+          
           let result;
           if (ourAppRunning) {
             screensaverActive = true; // Sync local state with device state
-            result = { status: 'our_app' };
+            result = { status: 'our_app', appList };
           } else if (otherApps.length === 0) {
-            result = { status: 'idle' };
+            result = { status: 'idle', appList };
           } else {
             const appNames = otherApps.map(a => a.displayName || a.appId);
-            result = { status: 'busy', apps: appNames };
+            result = { status: 'busy', apps: appNames, appList };
           }
           
           // Update last device check
@@ -1087,47 +1089,57 @@ async function checkAndActivateScreensaver() {
     return;
   }
   
-  // Build current check key for change detection
-  const appName = result.apps?.[0] || null;
-  const currentCheckKey = result.status === 'busy' ? `busy:${appName}` : result.status;
-  const checkTime = new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  // Build detailed log messages for this check
+  const flagText = wasScreensaverActive ? 'active' : 'inactive';
+  const newMessages = [
+    `🔍 Checking device status... (flag: ${flagText})`,
+    `📊 Device apps: ${result.appList || 'none'}`
+  ];
   
-  // Build status text
-  let statusText = '';
+  // Add status-specific message
   switch (result.status) {
     case 'our_app':
-      statusText = '✅ Vår app aktiv';
-      break;
-    case 'busy':
-      statusText = `📺 ${appName || 'okänd app'} kör`;
-      break;
-    case 'error':
-      statusText = '❌ Enhet ej nåbar';
+      newMessages.push('✅ Our custom app confirmed running');
       break;
     case 'idle':
-      statusText = '⏸️ Enhet ledig';
+      newMessages.push('⏸️ Device idle (no apps or only Backdrop)');
+      break;
+    case 'busy':
+      newMessages.push(`📺 Device busy: ${result.apps?.join(', ') || 'unknown'}`);
+      break;
+    case 'error':
+      newMessages.push('❌ Device unreachable');
       break;
   }
   
-  // Simple log logic: overwrite last entry if status unchanged, create new if changed
-  if (currentCheckKey !== lastLoggedCheckStatus) {
-    // Status changed - create new log entry
-    lastLoggedCheckStatus = currentCheckKey;
-    logBuffer.push({
-      timestamp: new Date().toISOString(),
-      level: 'info',
-      message: `📡 Status (${checkTime}): ${statusText}`
-    });
-    
+  // Check if messages are identical to last check (ignoring time)
+  const messagesMatch = lastCheckMessages.length === newMessages.length &&
+    newMessages.every((msg, i) => msg === lastCheckMessages[i]);
+  
+  const now = new Date().toISOString();
+  
+  if (messagesMatch && logBuffer.length >= newMessages.length) {
+    // Same status - update timestamps on last N entries
+    for (let i = 0; i < newMessages.length; i++) {
+      const bufferIndex = logBuffer.length - newMessages.length + i;
+      if (bufferIndex >= 0) {
+        logBuffer[bufferIndex].timestamp = now;
+      }
+    }
+  } else {
+    // Different status - add new log entries
+    lastCheckMessages = newMessages;
+    for (const msg of newMessages) {
+      logBuffer.push({
+        timestamp: now,
+        level: 'info',
+        message: msg
+      });
+    }
     // Trim buffer if needed
-    if (logBuffer.length > LOG_BUFFER_SIZE) {
+    while (logBuffer.length > LOG_BUFFER_SIZE) {
       logBuffer.shift();
     }
-  } else if (logBuffer.length > 0) {
-    // Status unchanged - overwrite last entry with new timestamp
-    const lastEntry = logBuffer[logBuffer.length - 1];
-    lastEntry.timestamp = new Date().toISOString();
-    lastEntry.message = `📡 Status (${checkTime}): ${statusText}`;
   }
 
   
