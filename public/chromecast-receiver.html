@@ -199,6 +199,35 @@
     let iframeLoadTime = null;
     let lastHealthCheck = Date.now();
     let healthCheckFailures = 0;
+    let loadRetryCount = 0;
+    const MAX_LOAD_RETRIES = 5;
+    const RETRY_DELAYS = [5000, 10000, 20000, 30000, 60000]; // Progressive delays
+    
+    function scheduleRetry(reason) {
+      if (!currentUrl) {
+        log('warn', 'No URL to retry');
+        return;
+      }
+      
+      if (loadRetryCount >= MAX_LOAD_RETRIES) {
+        log('error', `❌ Max retries (${MAX_LOAD_RETRIES}) reached - giving up`);
+        setStatus('Connection failed - max retries reached', 'error');
+        return;
+      }
+      
+      const delay = RETRY_DELAYS[Math.min(loadRetryCount, RETRY_DELAYS.length - 1)];
+      loadRetryCount++;
+      
+      log('warn', `🔄 Retry #${loadRetryCount} in ${delay/1000}s (${reason})`);
+      setStatus(`Reconnecting in ${delay/1000}s... (attempt ${loadRetryCount})`, 'warning');
+      
+      setTimeout(() => {
+        if (currentUrl && !contentLoaded) {
+          log('info', `🔄 Attempting reconnection #${loadRetryCount}...`);
+          loadWebsite(currentUrl, true); // true = is retry
+        }
+      }, delay);
+    }
     
     // Set iframe to fill screen exactly
     function setupIframe() {
@@ -270,24 +299,38 @@
       }
     );
     
-    function loadWebsite(url) {
-      log('info', `Loading: ${url}`);
+    function loadWebsite(url, isRetry = false) {
+      log('info', `Loading: ${url}${isRetry ? ' (retry)' : ''}`);
       
       currentUrl = url;
       contentLoaded = false;
       iframeLoadTime = null;
       healthCheckFailures = 0;
       
+      // Reset retry counter on fresh load (not a retry)
+      if (!isRetry) {
+        loadRetryCount = 0;
+      }
+      
       setStatus('Loading: ' + url, 'warning');
       loadingEl.style.display = 'block';
       contentEl.style.display = 'none';
       
+      // Set a load timeout - if iframe doesn't load within 30s, retry
+      const loadTimeout = setTimeout(() => {
+        if (!contentLoaded && currentUrl === url) {
+          log('warn', '⏱️ Load timeout (30s)');
+          scheduleRetry('load timeout');
+        }
+      }, 30000);
+      
       contentEl.src = url;
       
       contentEl.onload = () => {
-        const loadDuration = iframeLoadTime ? 'N/A' : 'first load';
+        clearTimeout(loadTimeout);
         iframeLoadTime = Date.now();
         contentLoaded = true;
+        loadRetryCount = 0; // Reset on successful load
         
         log('info', `✅ Iframe loaded successfully`);
         setStatus('Connected', 'connected');
@@ -304,10 +347,14 @@
       };
       
       contentEl.onerror = (error) => {
+        clearTimeout(loadTimeout);
         log('error', `❌ Iframe load error: ${error?.message || 'Unknown error'}`);
         setStatus('Error loading website', 'error');
         loadingEl.style.display = 'none';
         contentLoaded = false;
+        
+        // Schedule retry on error
+        scheduleRetry('load error');
       };
     }
     
@@ -351,13 +398,14 @@
             log('warn', `⚠️ Health check issue #${healthCheckFailures}: src mismatch`);
             
             if (healthCheckFailures >= 3) {
-              log('error', `❌ Multiple health failures - attempting reload`);
-              setStatus('Reconnecting...', 'warning');
-              loadWebsite(currentUrl);
+              log('error', `❌ Multiple health failures - attempting reconnect`);
+              contentLoaded = false; // Mark as not loaded so retry logic works
+              scheduleRetry('health check failures');
             }
           }
         }
-      } else if (!contentLoaded && currentUrl) {
+      } else if (!contentLoaded && currentUrl && loadRetryCount === 0) {
+        // Only warn if we're not already in retry mode
         log('warn', `⏳ Still loading: ${currentUrl}`);
       }
     }
