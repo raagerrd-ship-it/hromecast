@@ -507,8 +507,7 @@ if (elements.toggleSettingsBtn && elements.settingsContent) {
 
 // Settings input handlers - all configurable settings
 const settingsInputs = [
-  // Sökning & Discovery
-  { el: elements.discoveryTimeoutInput, key: 'discoveryTimeout' },
+  // Sökning & Discovery (discoveryTimeout removed - no longer used)
   { el: elements.discoveryEarlyResolveInput, key: 'discoveryEarlyResolve' },
   { el: elements.discoveryRetryDelayInput, key: 'discoveryRetryDelay' },
   { el: elements.discoveryMaxRetriesInput, key: 'discoveryMaxRetries' },
@@ -583,7 +582,6 @@ const DEFAULT_VALUES = {
 if (elements.resetDiscoveryBtn) {
   elements.resetDiscoveryBtn.addEventListener('click', async () => {
     const updates = {
-      discoveryTimeout: DEFAULT_VALUES.discoveryTimeout,
       discoveryEarlyResolve: DEFAULT_VALUES.discoveryEarlyResolve,
       discoveryRetryDelay: DEFAULT_VALUES.discoveryRetryDelay,
       discoveryMaxRetries: DEFAULT_VALUES.discoveryMaxRetries
