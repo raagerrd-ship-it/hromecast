@@ -19,7 +19,7 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.37";
+const VERSION = "1.3.38";
 const RELEASED_AT = "2026-01-27";
 
 const CHANGELOG: ChangelogEntry[] = [
