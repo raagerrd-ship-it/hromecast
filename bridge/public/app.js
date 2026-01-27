@@ -293,6 +293,12 @@ async function loadStatus() {
       elements.versionBadge.textContent = 'v' + data.version;
     }
     
+    // Update receiver version badge (same as bridge version - they're synced)
+    const receiverBadge = document.getElementById('receiver-version-badge');
+    if (data.version && receiverBadge) {
+      receiverBadge.textContent = '📺 v' + data.version;
+    }
+    
     // Update network URL display
     if (data.networkUrl && elements.networkUrl) {
       elements.networkUrl.textContent = data.networkUrl;
