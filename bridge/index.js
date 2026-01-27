@@ -1383,6 +1383,70 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       
+      // POST /api/force-stop - Force stop all Chromecast apps (zombie cleanup)
+      if (req.method === 'POST' && pathname === '/api/force-stop') {
+        log.info('🛑 Force stop requested - clearing zombie sessions...');
+        const config = loadConfig();
+        
+        if (!config.selectedChromecast) {
+          sendJson(res, { success: false, error: 'No Chromecast selected' }, 400);
+          return;
+        }
+        
+        const device = findDevice(config.selectedChromecast);
+        if (!device) {
+          sendJson(res, { success: false, error: 'Device not found' }, 404);
+          return;
+        }
+        
+        try {
+          // Force close any existing connection first
+          cleanupConnection();
+          screensaverActive = false;
+          
+          // Create new connection and send STOP command
+          const forceClient = new castv2.Client();
+          
+          await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              forceClient.close();
+              reject(new Error('Force stop timeout'));
+            }, 10000);
+            
+            forceClient.on('error', (err) => {
+              clearTimeout(timeout);
+              forceClient.close();
+              reject(err);
+            });
+            
+            forceClient.connect(device.host, () => {
+              const connection = forceClient.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.tp.connection', 'JSON');
+              const receiver = forceClient.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.receiver', 'JSON');
+              
+              connection.send({ type: 'CONNECT' });
+              
+              // Send STOP to terminate all apps
+              receiver.send({ type: 'STOP', requestId: Date.now() });
+              
+              // Wait a moment then close
+              setTimeout(() => {
+                connection.send({ type: 'CLOSE' });
+                forceClient.close();
+                clearTimeout(timeout);
+                resolve();
+              }, 1000);
+            });
+          });
+          
+          log.info('✅ Force stop completed - zombie sessions cleared');
+          sendJson(res, { success: true, message: 'Force stop completed' });
+        } catch (error) {
+          log.error(`❌ Force stop failed: ${error.message}`);
+          sendJson(res, { success: false, error: error.message }, 500);
+        }
+        return;
+      }
+      
       // POST /api/prepare-update - gracefully stop for update
       if (req.method === 'POST' && pathname === '/api/prepare-update') {
         log.info('🔄 Preparing for update - pausing all activity...');
