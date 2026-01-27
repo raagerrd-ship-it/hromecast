@@ -53,6 +53,7 @@ const elements = {
   screensaverStatus: document.getElementById('screensaver-status'),
   castBtn: document.getElementById('cast-btn'),
   stopBtn: document.getElementById('stop-btn'),
+  checkBtn: document.getElementById('check-btn'),
   previewContainer: document.getElementById('preview-container'),
   deviceId: document.getElementById('device-id'),
   port: document.getElementById('port'),
@@ -407,6 +408,41 @@ elements.urlInput.addEventListener('change', (e) => {
 elements.refreshBtn.addEventListener('click', refreshDevices);
 elements.castBtn.addEventListener('click', startCast);
 elements.stopBtn.addEventListener('click', stopCast);
+
+// Manual check button
+if (elements.checkBtn) {
+  elements.checkBtn.addEventListener('click', async () => {
+    elements.checkBtn.disabled = true;
+    elements.checkBtn.textContent = '🔍 Kontrollerar...';
+    
+    try {
+      const result = await api('/api/check', { method: 'POST' });
+      
+      if (result.status === 'cast_triggered') {
+        showToast('Cast startad!', 'success');
+        updateScreensaverStatus(true);
+      } else if (result.status === 'already_running') {
+        showToast('Appen körs redan på TV', 'info');
+        updateScreensaverStatus(true);
+      } else if (result.status === 'busy') {
+        showToast('Enheten används av annan app', 'info');
+      } else if (result.status === 'idle') {
+        showToast('Enheten ledig men screensaver ej aktiverat', 'info');
+      } else {
+        showToast(`Status: ${result.status}`, 'info');
+      }
+      
+      // Reload status and logs
+      await loadStatus();
+    } catch (error) {
+      console.error('Check failed:', error);
+      showToast('Kunde inte kontrollera: ' + error.message, 'error');
+    }
+    
+    elements.checkBtn.disabled = false;
+    elements.checkBtn.textContent = '🔍 Kontrollera';
+  });
+}
 
 // Restart bridge with overlay
 const restartBtn = document.getElementById('restart-btn');
