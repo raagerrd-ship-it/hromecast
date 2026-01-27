@@ -167,8 +167,10 @@
         loadingEl.style.display = 'none';
         contentEl.style.display = 'block';
         
+        // Hide status and debug log after successful load
         setTimeout(function() {
           statusEl.style.opacity = '0.3';
+          debugLogEl.style.display = 'none';
         }, 5000);
       };
       
