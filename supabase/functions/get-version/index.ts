@@ -19,10 +19,26 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.27";
+const VERSION = "1.3.28";
 const RELEASED_AT = "2026-01-27";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.28",
+    date: "2026-01-27",
+    changes: {
+      sv: [
+        "Tystare loggning: Status uppdateras nu tyst utan nya loggrader varje minut",
+        "Endast tidsstämpel uppdateras vid oförändrad status",
+        "Renare loggvy utan repetitiv 'Device apps' och 'Checking status' info",
+      ],
+      en: [
+        "Quieter logging: Status now updates silently without new log lines every minute",
+        "Only timestamp updates when status is unchanged",
+        "Cleaner log view without repetitive 'Device apps' and 'Checking status' info",
+      ],
+    }
+  },
   {
     version: "1.3.27",
     date: "2026-01-27",
