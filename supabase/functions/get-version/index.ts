@@ -19,10 +19,30 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.25";
-const RELEASED_AT = "2026-01-26";
+const VERSION = "1.3.26";
+const RELEASED_AT = "2026-01-27";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.26",
+    date: "2026-01-27",
+    changes: {
+      sv: [
+        "Auto zombie-rensning: Rensar automatiskt stale sessions vid ECONNRESET",
+        "Auto-återanslutning: Återansluter automatiskt efter force-stop",
+        "Förbättrad retry-logik: ECONNRESET och EPIPE nu retryable fel",
+        "Diagnostisk loggning: Visar exakt vilka appar som körs på Chromecast",
+        "Förbättrad UI: Tydligare tidsinställningar i dashboarden",
+      ],
+      en: [
+        "Auto zombie cleanup: Automatically clears stale sessions on ECONNRESET",
+        "Auto-reconnect: Automatically reconnects after force-stop",
+        "Improved retry logic: ECONNRESET and EPIPE are now retryable errors",
+        "Diagnostic logging: Shows exactly which apps are running on Chromecast",
+        "Improved UI: Clearer time settings in dashboard",
+      ],
+    }
+  },
   {
     version: "1.3.25",
     date: "2026-01-26",
