@@ -164,10 +164,14 @@ function updateLogs(logs) {
     return;
   }
   
-  // Show newest first
-  const reversedLogs = [...logs].reverse();
+  // Sort by timestamp descending (newest first)
+  const sortedLogs = [...logs].sort((a, b) => {
+    const timeA = new Date(a.timestamp).getTime();
+    const timeB = new Date(b.timestamp).getTime();
+    return timeB - timeA;
+  });
   
-  const html = reversedLogs.map(log => `
+  const html = sortedLogs.map(log => `
     <div class="log-entry ${log.level}">
       <span class="log-time">${formatLogTime(log.timestamp)}</span>
       <span class="log-level">${log.level.toUpperCase()}</span>
