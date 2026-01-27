@@ -859,13 +859,16 @@ async function castMedia(chromecastName, url, retryCount = 0) {
     
     client.connect(device.host, () => {
       log.info('✅ Connected to Chromecast');
+      log.info('📡 [DEBUG] Creating channels...');
       recordCircuitSuccess();
       
       const connection = client.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.tp.connection', 'JSON');
       const heartbeat = client.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.tp.heartbeat', 'JSON');
       const receiver = client.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.receiver', 'JSON');
       
+      log.info('📡 [DEBUG] Channels created, sending CONNECT...');
       connection.send({ type: 'CONNECT' });
+      log.info('📡 [DEBUG] CONNECT sent');
       
       // ============ SIMPLE HEARTBEAT (matching v1.0.19) ============
       // The previous aggressive watchdog implementation was causing false disconnects.
@@ -902,6 +905,20 @@ async function castMedia(chromecastName, url, retryCount = 0) {
       log.info('📡 Getting receiver status...');
       receiver.send({ type: 'GET_STATUS', requestId: 1 });
       
+      // Debug: Log ALL receiver messages (not just RECEIVER_STATUS)
+      receiver.on('message', (data) => {
+        log.info(`📨 [DEBUG] Receiver message type: ${data.type}`);
+        if (data.type === 'RECEIVER_STATUS') {
+          const apps = data.status?.applications || [];
+          log.info(`📨 [DEBUG] RECEIVER_STATUS: ${apps.length} app(s) running`);
+          apps.forEach((app, i) => {
+            log.info(`📨 [DEBUG]   App ${i}: ${app.displayName} (${app.appId})`);
+          });
+        } else {
+          log.info(`📨 [DEBUG] Full message: ${JSON.stringify(data)}`);
+        }
+      });
+      
       launchTimeout = setTimeout(async () => {
         log.error('⏱️ Timeout waiting for receiver response (120s)');
         cleanup();
@@ -922,8 +939,8 @@ async function castMedia(chromecastName, url, retryCount = 0) {
       let appLaunched = false;
       let mediaLoaded = false;
       
+      // Main receiver message handler (debug logging is above)
       receiver.on('message', async (data) => {
-        log.debug('📨 Receiver message:', JSON.stringify(data));
         
         if (data.type === 'LAUNCH_ERROR') {
           cleanup();
