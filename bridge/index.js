@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.38';
+const BRIDGE_VERSION = '1.3.40';
 
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
@@ -1192,68 +1192,53 @@ async function checkAndActivateScreensaver() {
     return;
   }
   
-  // Build detailed log messages for this check
-  const flagText = wasScreensaverActive ? 'active' : 'inactive';
-  const newMessages = [
-    `🔍 Checking device status... (flag: ${flagText})`,
-    `📊 Device apps: ${result.appList || 'none'}`
-  ];
+  // Build compact status message - single sticky log entry (v1.3.40)
+  const statusEmoji = {
+    'our_app': '✅',
+    'idle': '⏸️', 
+    'busy': '📺',
+    'error': '❌'
+  }[result.status] || '❓';
   
-  // Add status-specific message
-  switch (result.status) {
-    case 'our_app':
-      newMessages.push('✅ Our custom app confirmed running');
-      break;
-    case 'idle':
-      newMessages.push('⏸️ Device idle (no apps or only Backdrop)');
-      break;
-    case 'busy':
-      newMessages.push(`📺 Device busy: ${result.apps?.join(', ') || 'unknown'}`);
-      break;
-    case 'error':
-      newMessages.push('❌ Device unreachable');
-      break;
-  }
+  const statusLabel = {
+    'our_app': 'Skärmsläckare aktiv',
+    'idle': 'Inaktiv',
+    'busy': 'Upptagen',
+    'error': 'Ej nåbar'
+  }[result.status] || result.status;
   
-  // Check if messages are identical to last check (ignoring time)
-  const messagesMatch = lastCheckMessages.length === newMessages.length &&
-    newMessages.every((msg, i) => msg === lastCheckMessages[i]);
-  
+  const compactStatus = `${statusEmoji} ${statusLabel} | Apps: ${result.appList || 'none'}`;
   const now = new Date().toISOString();
   
-  if (messagesMatch) {
-    // Same status - find and update only the status check entries (marked with isStatusCheck)
-    // This avoids updating permanent log entries like "Cast successful", "Loading URL", etc.
-    const statusCheckEntries = logBuffer.filter(entry => entry.isStatusCheck);
-    for (const entry of statusCheckEntries) {
-      entry.timestamp = now;
-    }
+  // Find existing sticky status entry
+  const existingSticky = logBuffer.find(entry => entry.isStatusCheck);
+  
+  if (existingSticky) {
+    // Always update timestamp and message (so user sees "pulse")
+    existingSticky.timestamp = now;
+    existingSticky.message = `📊 ${compactStatus}`;
   } else {
-    // Different status - remove old status check entries and add new ones
-    // First, remove any existing status check entries
-    for (let i = logBuffer.length - 1; i >= 0; i--) {
-      if (logBuffer[i].isStatusCheck) {
-        logBuffer.splice(i, 1);
-      }
-    }
-    
-    // Add new status check entries with isStatusCheck flag
-    lastCheckMessages = newMessages;
-    for (const msg of newMessages) {
-      logBuffer.push({
-        timestamp: now,
-        level: 'info',
-        message: msg,
-        isStatusCheck: true  // Mark as status check entry for deduplication
-      });
-    }
+    // Create new sticky entry
+    logBuffer.push({
+      timestamp: now,
+      level: 'info',
+      message: `📊 ${compactStatus}`,
+      isStatusCheck: true
+    });
     // Trim buffer if needed
     while (logBuffer.length > LOG_BUFFER_SIZE) {
       logBuffer.shift();
     }
   }
-
   
+  // Log status change as permanent entry (not sticky)
+  const newStatusKey = `${result.status}|${result.appList || 'none'}`;
+  if (lastCheckMessages.length > 0 && lastCheckMessages[0] !== newStatusKey) {
+    log.info(`🔄 Statusändring: ${compactStatus}`);
+  }
+  lastCheckMessages = [newStatusKey];
+
+
   // Handle different states
   if (result.status === 'our_app') {
     // isChromecastIdleWithRecovery already synced screensaverActive = true
