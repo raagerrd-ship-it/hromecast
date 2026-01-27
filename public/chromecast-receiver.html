@@ -24,12 +24,10 @@
       position: absolute;
       top: 0;
       left: 0;
-      /* GPU Acceleration */
       transform: translate3d(0, 0, 0);
       will-change: transform, contents;
       backface-visibility: hidden;
       -webkit-backface-visibility: hidden;
-      /* Förhindra onödig layout-beräkning */
       contain: strict;
     }
     
@@ -80,11 +78,6 @@
       max-height: 200px;
       overflow-y: auto;
       font-family: monospace;
-      display: none;
-    }
-    
-    #debug-log.visible {
-      display: block;
     }
     
     .log-entry {
@@ -107,438 +100,141 @@
   <script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
 </head>
 <body>
-  <div id="status">Ready to cast...</div>
+  <div id="status">Starting receiver...</div>
   <div id="loading" style="display:none;">Loading website...</div>
-  <div id="debug-log" class="visible"></div>
+  <div id="debug-log"></div>
   <iframe id="content" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" loading="eager" style="display:none;"></iframe>
   
   <script>
-    // ============ GLOBAL ERROR HANDLER ============
-    // Catch any uncaught errors and display them in the debug log
-    window.onerror = function(message, source, lineno, colno, error) {
-      const errorMsg = `🔴 UNCAUGHT ERROR: ${message} at ${source}:${lineno}:${colno}`;
-      console.error(errorMsg, error);
-      // Try to show in debug panel if available
-      const debugEl = document.getElementById('debug-log');
-      if (debugEl) {
-        debugEl.classList.add('visible');
-        const entry = document.createElement('div');
-        entry.className = 'log-entry error';
-        entry.textContent = new Date().toLocaleTimeString('sv-SE') + ' ' + errorMsg;
-        debugEl.insertBefore(entry, debugEl.firstChild);
-      }
-      return false; // Don't suppress the error
-    };
+    // ============ MINIMAL RECEIVER v1.3.38 ============
+    // Simplified to debug initialization issues
     
-    window.onunhandledrejection = function(event) {
-      const errorMsg = `🔴 UNHANDLED PROMISE: ${event.reason}`;
-      console.error(errorMsg);
-      const debugEl = document.getElementById('debug-log');
-      if (debugEl) {
-        debugEl.classList.add('visible');
-        const entry = document.createElement('div');
-        entry.className = 'log-entry error';
-        entry.textContent = new Date().toLocaleTimeString('sv-SE') + ' ' + errorMsg;
-        debugEl.insertBefore(entry, debugEl.firstChild);
-      }
-    };
-    
-    console.log('[RECEIVER] Script starting...');
-    
-    const context = cast.framework.CastReceiverContext.getInstance();
-    
-    console.log('[RECEIVER] Cast context obtained');
+    const RECEIVER_VERSION = '1.3.38';
     
     const statusEl = document.getElementById('status');
     const loadingEl = document.getElementById('loading');
     const contentEl = document.getElementById('content');
     const debugLogEl = document.getElementById('debug-log');
     
-    // Receiver version - used for auto-update check
-    const RECEIVER_VERSION = '1.3.37';
-    
-    // Logging system
-    const logBuffer = [];
-    const MAX_LOGS = 50;
-    let debugLogVisible = true;
-    let debugAutoHideTimer = null;
-    const DEBUG_AUTO_HIDE_DELAY = 30000; // 30 seconds
-    
-    // Auto-update configuration
-    const VERSION_CHECK_INTERVAL = 5 * 60 * 1000; // Check every 5 minutes
-    const VERSION_API_URL = 'https://umxwaxzmoxwasryjibhe.supabase.co/functions/v1/get-version';
-    
-    function showDebugPanel() {
-      debugLogVisible = true;
-      debugLogEl.classList.add('visible');
-      updateDebugDisplay();
-    }
-    
-    function hideDebugPanel() {
-      debugLogVisible = false;
-      debugLogEl.classList.remove('visible');
-    }
-    
-    function scheduleDebugAutoHide() {
-      // Clear any existing timer
-      if (debugAutoHideTimer) {
-        clearTimeout(debugAutoHideTimer);
-      }
-      // Schedule hide after 30 seconds of no issues
-      debugAutoHideTimer = setTimeout(() => {
-        if (contentLoaded && healthCheckFailures === 0) {
-          hideDebugPanel();
-        }
-      }, DEBUG_AUTO_HIDE_DELAY);
-    }
-    
-    function updateDebugDisplay() {
-      if (debugLogVisible) {
-        // Sort newest first (reverse order)
-        const recentLogs = logBuffer.slice(-15).reverse();
-        debugLogEl.innerHTML = recentLogs.map(e => 
-          `<div class="log-entry ${e.level}">${e.timestamp} ${e.message}</div>`
-        ).join('');
-      }
-    }
-    
+    // Simple logging
     function log(level, message) {
       const timestamp = new Date().toLocaleTimeString('sv-SE');
-      const entry = { timestamp, level, message };
-      logBuffer.push(entry);
-      if (logBuffer.length > MAX_LOGS) logBuffer.shift();
-      
-      // Console output
-      const consoleMsg = `[${timestamp}] ${message}`;
-      if (level === 'error') console.error(consoleMsg);
-      else if (level === 'warn') console.warn(consoleMsg);
-      else console.log(consoleMsg);
-      
-      // Show debug panel on errors/warnings
-      if (level === 'error' || level === 'warn') {
-        showDebugPanel();
-        // Don't auto-hide after problems - wait for next successful health check
-        if (debugAutoHideTimer) {
-          clearTimeout(debugAutoHideTimer);
-          debugAutoHideTimer = null;
-        }
-      }
-      
-      // Update display
-      updateDebugDisplay();
+      const entry = document.createElement('div');
+      entry.className = 'log-entry ' + level;
+      entry.textContent = timestamp + ' ' + message;
+      debugLogEl.insertBefore(entry, debugLogEl.firstChild);
+      console.log('[' + level.toUpperCase() + '] ' + message);
     }
     
-    function setStatus(text, type = '') {
+    function setStatus(text, type) {
       statusEl.textContent = text;
-      statusEl.className = type;
-      log('info', `Status: ${text}`);
+      statusEl.className = type || '';
+      log('info', 'Status: ' + text);
     }
     
-    // Connection state tracking
-    let contentLoaded = false;
-    let currentUrl = null;
-    let iframeLoadTime = null;
-    let lastHealthCheck = Date.now();
-    let healthCheckFailures = 0;
-    let loadRetryCount = 0;
-    const MAX_LOAD_RETRIES = 5;
-    const RETRY_DELAYS = [5000, 10000, 20000, 30000, 60000]; // Progressive delays
-    
-    function scheduleRetry(reason) {
-      if (!currentUrl) {
-        log('warn', 'No URL to retry');
-        return;
-      }
-      
-      if (loadRetryCount >= MAX_LOAD_RETRIES) {
-        log('error', `❌ Max retries (${MAX_LOAD_RETRIES}) reached - giving up`);
-        setStatus('Connection failed - max retries reached', 'error');
-        return;
-      }
-      
-      const delay = RETRY_DELAYS[Math.min(loadRetryCount, RETRY_DELAYS.length - 1)];
-      loadRetryCount++;
-      
-      log('warn', `🔄 Retry #${loadRetryCount} in ${delay/1000}s (${reason})`);
-      setStatus(`Reconnecting in ${delay/1000}s... (attempt ${loadRetryCount})`, 'warning');
-      
-      setTimeout(() => {
-        if (currentUrl && !contentLoaded) {
-          log('info', `🔄 Attempting reconnection #${loadRetryCount}...`);
-          loadWebsite(currentUrl, true); // true = is retry
-        }
-      }, delay);
-    }
-    
-    // Set iframe to fill screen exactly
+    // Setup iframe
     function setupIframe() {
-      const screenWidth = window.innerWidth;
-      const screenHeight = window.innerHeight;
-      
-      contentEl.width = screenWidth;
-      contentEl.height = screenHeight;
-      contentEl.style.width = screenWidth + 'px';
-      contentEl.style.height = screenHeight + 'px';
-      
-      log('info', `Viewport: ${screenWidth}x${screenHeight}`);
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      contentEl.width = w;
+      contentEl.height = h;
+      contentEl.style.width = w + 'px';
+      contentEl.style.height = h + 'px';
+      log('info', 'Viewport: ' + w + 'x' + h);
     }
     
-    setupIframe();
-    window.addEventListener('resize', () => {
-      setupIframe();
-      log('info', 'Window resized');
-    });
+    // Load website into iframe
+    let currentUrl = null;
     
-    // Custom message handler for loading websites
-    context.addCustomMessageListener('urn:x-cast:com.website.cast', (customEvent) => {
-      const data = customEvent.data;
-      log('info', `Custom message: ${JSON.stringify(data)}`);
-      
-      if (data.type === 'LOAD_WEBSITE') {
-        loadWebsite(data.url);
-      } else if (data.type === 'PING') {
-        // Respond to ping from bridge
-        log('info', 'PING received from bridge');
-      } else if (data.type === 'TOGGLE_DEBUG') {
-        if (debugLogVisible) {
-          hideDebugPanel();
-        } else {
-          showDebugPanel();
-        }
-        log('info', `Debug log: ${debugLogVisible ? 'visible' : 'hidden'}`);
-      }
-    });
-    
-    function loadWebsite(url, isRetry = false) {
-      // Skip reload if same URL is already loaded and working
-      if (!isRetry && url === currentUrl && contentLoaded && healthCheckFailures === 0) {
-        log('info', `📩 URL refresh received - already loaded, skipping reload`);
+    function loadWebsite(url) {
+      if (url === currentUrl) {
+        log('info', 'Same URL, skipping reload');
         return;
       }
       
-      log('info', `Loading: ${url}${isRetry ? ' (retry)' : ''}`);
-      
+      log('info', 'Loading: ' + url);
       currentUrl = url;
-      contentLoaded = false;
-      iframeLoadTime = null;
-      healthCheckFailures = 0;
-      
-      // Reset retry counter on fresh load (not a retry)
-      if (!isRetry) {
-        loadRetryCount = 0;
-      }
       
       setStatus('Loading: ' + url, 'warning');
       loadingEl.style.display = 'block';
       contentEl.style.display = 'none';
       
-      // Set a load timeout - if iframe doesn't load within 30s, retry
-      const loadTimeout = setTimeout(() => {
-        if (!contentLoaded && currentUrl === url) {
-          log('warn', '⏱️ Load timeout (30s)');
-          scheduleRetry('load timeout');
-        }
-      }, 30000);
-      
       contentEl.src = url;
       
-      contentEl.onload = () => {
-        clearTimeout(loadTimeout);
-        iframeLoadTime = Date.now();
-        contentLoaded = true;
-        loadRetryCount = 0; // Reset on successful load
-        
-        log('info', `✅ Iframe loaded successfully`);
+      contentEl.onload = function() {
+        log('info', 'Iframe loaded successfully');
         setStatus('Connected', 'connected');
         loadingEl.style.display = 'none';
         contentEl.style.display = 'block';
         
-        // Schedule debug panel auto-hide after successful load
-        scheduleDebugAutoHide();
-        
-        // Hide status after 5 seconds
-        setTimeout(() => {
+        setTimeout(function() {
           statusEl.style.opacity = '0.3';
         }, 5000);
       };
       
-      contentEl.onerror = (error) => {
-        clearTimeout(loadTimeout);
-        const errorDetails = error?.message || error?.type || 'Unknown error';
-        log('error', `❌ IFRAME LOAD ERROR: ${errorDetails}`);
-        log('error', `❌ Failed URL: ${url}`);
+      contentEl.onerror = function(error) {
+        log('error', 'Iframe load error');
         setStatus('Error loading website', 'error');
         loadingEl.style.display = 'none';
-        contentLoaded = false;
-        
-        // Schedule retry on error
-        scheduleRetry('load error');
       };
     }
     
-    // Health check - verify iframe is still responsive (silent when OK)
-    let lastHealthStatus = null;
+    // ============ INITIALIZATION ============
     
-    function performHealthCheck() {
-      const now = Date.now();
-      const timeSinceLoad = iframeLoadTime ? Math.round((now - iframeLoadTime) / 1000) : 0;
+    log('info', 'Receiver v' + RECEIVER_VERSION + ' starting...');
+    setupIframe();
+    
+    try {
+      log('info', 'Getting Cast context...');
+      const context = cast.framework.CastReceiverContext.getInstance();
+      log('info', 'Cast context obtained');
       
-      if (contentLoaded && currentUrl) {
-        try {
-          // Check if iframe still has a valid document
-          const iframeDoc = contentEl.contentDocument || contentEl.contentWindow?.document;
-          
-          if (iframeDoc) {
-            // Reset failure counter on success
-            if (healthCheckFailures > 0) {
-              log('info', `Health check recovered after ${healthCheckFailures} failures`);
-            }
-            healthCheckFailures = 0;
-            lastHealthCheck = now;
-            
-            // Only log on status change, not every check
-            if (lastHealthStatus !== 'ok') {
-              log('info', `💚 Health OK`);
-              lastHealthStatus = 'ok';
-            }
-            scheduleDebugAutoHide();
-          } else {
-            throw new Error('No document access');
-          }
-        } catch (e) {
-          // Cross-origin restrictions prevent document access - this is normal for external sites
-          if (contentEl.src === currentUrl) {
-            healthCheckFailures = 0;
-            lastHealthCheck = now;
-            
-            // Only log on status change
-            if (lastHealthStatus !== 'ok-crossorigin') {
-              log('info', `💚 Iframe OK (cross-origin)`);
-              lastHealthStatus = 'ok-crossorigin';
-            }
-            scheduleDebugAutoHide();
-          } else {
-            healthCheckFailures++;
-            log('warn', `⚠️ HEALTH CHECK ISSUE #${healthCheckFailures}: src mismatch`);
-            log('warn', `⚠️ Expected: ${currentUrl}`);
-            log('warn', `⚠️ Actual: ${contentEl.src}`);
-            lastHealthStatus = 'mismatch';
-            
-            if (healthCheckFailures >= 3) {
-              log('error', `❌ MULTIPLE HEALTH FAILURES - attempting reconnect`);
-              log('error', `❌ This will show "Ready to cast..." until bridge re-casts`);
-              contentLoaded = false;
-              scheduleRetry('health check failures');
-            }
-          }
+      // Listen for custom messages (URL from bridge)
+      log('info', 'Adding custom message listener...');
+      context.addCustomMessageListener('urn:x-cast:com.website.cast', function(event) {
+        log('info', 'Custom message received: ' + JSON.stringify(event.data));
+        
+        if (event.data && event.data.type === 'LOAD_WEBSITE' && event.data.url) {
+          loadWebsite(event.data.url);
         }
-      } else if (!contentLoaded && currentUrl && loadRetryCount === 0) {
-        log('warn', `⏳ Still loading: ${currentUrl}`);
-      }
+      });
+      log('info', 'Custom message listener added');
+      
+      // Sender events
+      context.addEventListener(cast.framework.system.EventType.SENDER_CONNECTED, function(e) {
+        log('info', 'Sender connected');
+      });
+      
+      context.addEventListener(cast.framework.system.EventType.SENDER_DISCONNECTED, function(e) {
+        log('warn', 'Sender disconnected');
+      });
+      
+      // Start receiver
+      log('info', 'Starting receiver context...');
+      const options = new cast.framework.CastReceiverOptions();
+      options.disableIdleTimeout = true;
+      options.maxInactivity = 0;
+      
+      context.start(options);
+      log('info', 'Receiver started successfully');
+      setStatus('Ready to cast...', '');
+      
+    } catch (err) {
+      log('error', 'INIT ERROR: ' + err.message);
+      setStatus('Initialization error: ' + err.message, 'error');
     }
     
-    // Run health check every 30 seconds
-    setInterval(performHealthCheck, 30000);
-    
-    // Silent heartbeat - only logs to console, not to debug panel
-    setInterval(() => {
-      const uptime = iframeLoadTime ? Math.round((Date.now() - iframeLoadTime) / 1000) : 0;
-      console.log(`[Heartbeat] uptime: ${uptime}s, loaded: ${contentLoaded}`);
-    }, 30000);
-    
-    // Auto-refresh to clear memory (configurable via URL param)
+    // Auto-refresh every 45 minutes
     const urlParams = new URLSearchParams(window.location.search);
     const refreshMinutes = parseInt(urlParams.get('refresh') || '45', 10);
-    const refreshMs = refreshMinutes * 60 * 1000;
-    const startTime = Date.now();
-    log('info', `⏰ Auto-refresh scheduled: every ${refreshMinutes} min`);
+    log('info', 'Auto-refresh: ' + refreshMinutes + ' min');
     
-    // Log time until next refresh every 5 minutes
-    setInterval(() => {
-      const elapsed = Math.round((Date.now() - startTime) / 60000);
-      const remaining = refreshMinutes - elapsed;
-      if (remaining > 0 && remaining % 5 === 0) {
-        log('info', `⏰ Auto-refresh in ${remaining} min`);
-      }
-    }, 60000);
-    
-    setInterval(() => {
-      const uptime = iframeLoadTime ? Math.round((Date.now() - iframeLoadTime) / 1000) : 0;
-      log('warn', `🔄 AUTO-REFRESH TRIGGERED after ${refreshMinutes} min (iframe uptime: ${uptime}s)`);
-      log('warn', '🔄 Receiver will reload - bridge must re-cast!');
+    setTimeout(function() {
+      log('warn', 'Auto-refresh triggered');
       window.location.reload();
-    }, refreshMs);
+    }, refreshMinutes * 60 * 1000);
     
-    // Monitor for Cast connection state
-    context.addEventListener(cast.framework.system.EventType.SENDER_CONNECTED, (event) => {
-      log('info', `📱 Sender connected: ${event.senderId || 'unknown'}`);
-    });
-    
-    context.addEventListener(cast.framework.system.EventType.SENDER_DISCONNECTED, (event) => {
-      log('warn', `📱 Sender disconnected: ${event.senderId || 'unknown'}`);
-      log('info', '📱 Content will persist - waiting for sender to reconnect');
-      // Don't do anything - keep showing content, bridge will reconnect
-    });
-    
-    context.addEventListener(cast.framework.system.EventType.SHUTDOWN, () => {
-      log('error', '🛑 Receiver shutdown requested by system');
-    });
-    
-    context.addEventListener(cast.framework.system.EventType.ERROR, (event) => {
-      log('error', `❌ Cast error: ${JSON.stringify(event)}`);
-    });
-    
-    // Start the receiver with maximum persistence settings
-    const options = new cast.framework.CastReceiverOptions();
-    options.disableIdleTimeout = true;
-    options.maxInactivity = 0; // Prevent shutdown on sender disconnect
-    
-    context.start(options);
-    log('info', `🚀 Chromecast receiver v${RECEIVER_VERSION} started`);
-    log('info', '⏳ Waiting for LOAD command from bridge...');
-    setStatus('Ready to cast...', '');
-    
-    // Show debug panel initially so user can see startup logs
-    showDebugPanel();
-    
-    // Add a periodic "still waiting" log if no URL loaded after 30s
-    let waitingLogInterval = setInterval(() => {
-      if (!currentUrl) {
-        log('warn', '⏳ Still waiting for URL from bridge - check bridge dashboard');
-      } else {
-        clearInterval(waitingLogInterval);
-      }
-    }, 30000);
-    
-    // Auto-update check - periodically check for new receiver version
-    async function checkForUpdate() {
-      try {
-        const response = await fetch(VERSION_API_URL);
-        if (!response.ok) return;
-        
-        const data = await response.json();
-        const serverVersion = data.version;
-        
-        if (serverVersion && serverVersion !== RECEIVER_VERSION) {
-          log('warn', `🔄 New version available: ${serverVersion} (current: ${RECEIVER_VERSION})`);
-          log('info', '🔄 Auto-updating receiver in 5 seconds...');
-          
-          setTimeout(() => {
-            log('info', '🔄 Reloading receiver for update...');
-            window.location.reload();
-          }, 5000);
-        }
-      } catch (e) {
-        // Silent fail - network issues shouldn't spam logs
-        console.log('Version check failed:', e.message);
-      }
-    }
-    
-    // Initial check after 30 seconds, then every 5 minutes
-    setTimeout(() => {
-      checkForUpdate();
-      setInterval(checkForUpdate, VERSION_CHECK_INTERVAL);
-    }, 30000);
+    window.addEventListener('resize', setupIframe);
   </script>
 </body>
 </html>
