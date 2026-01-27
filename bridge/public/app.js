@@ -164,36 +164,13 @@ function updateLogs(logs) {
     return;
   }
   
-  // Find the latest status check entry (the one that gets its timestamp updated)
-  const statusCheckEntries = logs.filter(log => log.isStatusCheck);
-  const latestStatusCheck = statusCheckEntries.length > 0 
-    ? statusCheckEntries[statusCheckEntries.length - 1] 
-    : null;
+  // Show newest first
+  const reversedLogs = [...logs].reverse();
   
-  // Get all other logs
-  const otherLogs = logs.filter(log => log !== latestStatusCheck);
-  
-  // Show newest first for other logs
-  const reversedOtherLogs = [...otherLogs].reverse();
-  
-  let html = '';
-  
-  // Always show latest status check at top with special styling
-  if (latestStatusCheck) {
-    html += `
-      <div class="log-entry info last-check-entry">
-        <span class="log-time">${formatLogTime(latestStatusCheck.timestamp)}</span>
-        <span class="log-level">CHECK</span>
-        <span class="log-message">${latestStatusCheck.message}</span>
-      </div>
-    `;
-  }
-  
-  // Add other logs
-  html += reversedOtherLogs.map(log => `
+  const html = reversedLogs.map(log => `
     <div class="log-entry ${log.level}">
       <span class="log-time">${formatLogTime(log.timestamp)}</span>
-      <span class="log-level">${log.level}</span>
+      <span class="log-level">${log.level.toUpperCase()}</span>
       <span class="log-message">${log.message}</span>
     </div>
   `).join('');

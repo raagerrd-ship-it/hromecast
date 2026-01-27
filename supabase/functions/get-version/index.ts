@@ -19,10 +19,26 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.28";
+const VERSION = "1.3.29";
 const RELEASED_AT = "2026-01-27";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.29",
+    date: "2026-01-27",
+    changes: {
+      sv: [
+        "Förenklad loggning: Skriver över senaste raden om status är oförändrad",
+        "Borttagen sticky-funktion - enklare och renare loggvy",
+        "Ny loggpost skapas endast vid faktisk statusändring",
+      ],
+      en: [
+        "Simplified logging: Overwrites last line when status unchanged",
+        "Removed sticky function - simpler and cleaner log view",
+        "New log entry created only on actual status change",
+      ],
+    }
+  },
   {
     version: "1.3.28",
     date: "2026-01-27",

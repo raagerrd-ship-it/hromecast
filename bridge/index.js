@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.28';
+const BRIDGE_VERSION = '1.3.29';
 
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
@@ -1109,35 +1109,25 @@ async function checkAndActivateScreensaver() {
       break;
   }
   
-  // Find existing status check entry (robust against buffer rotation)
-  const existingIndex = logBuffer.findIndex(e => e.isStatusCheck);
-  
-  // Create/update status log entry
-  if (currentCheckKey !== lastLoggedCheckStatus || existingIndex === -1) {
-    // Status changed OR no entry exists yet - create new entry
+  // Simple log logic: overwrite last entry if status unchanged, create new if changed
+  if (currentCheckKey !== lastLoggedCheckStatus) {
+    // Status changed - create new log entry
     lastLoggedCheckStatus = currentCheckKey;
-    
-    // Remove old status entry if it exists
-    if (existingIndex >= 0) {
-      logBuffer.splice(existingIndex, 1);
-    }
-    
-    // Add new entry
     logBuffer.push({
       timestamp: new Date().toISOString(),
       level: 'info',
-      message: `📡 Statusändring (${checkTime}): ${statusText}`,
-      isStatusCheck: true
+      message: `📡 Status (${checkTime}): ${statusText}`
     });
     
     // Trim buffer if needed
     if (logBuffer.length > LOG_BUFFER_SIZE) {
       logBuffer.shift();
     }
-  } else {
-    // Status unchanged - just update timestamp on existing entry
-    logBuffer[existingIndex].timestamp = new Date().toISOString();
-    logBuffer[existingIndex].message = `📡 Senaste kontroll (${checkTime}): ${statusText}`;
+  } else if (logBuffer.length > 0) {
+    // Status unchanged - overwrite last entry with new timestamp
+    const lastEntry = logBuffer[logBuffer.length - 1];
+    lastEntry.timestamp = new Date().toISOString();
+    lastEntry.message = `📡 Status (${checkTime}): ${statusText}`;
   }
 
   
