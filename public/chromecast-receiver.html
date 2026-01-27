@@ -124,7 +124,42 @@
     // Logging system
     const logBuffer = [];
     const MAX_LOGS = 50;
-    let showDebugLog = true; // Enable debug log display
+    let debugLogVisible = true;
+    let debugAutoHideTimer = null;
+    const DEBUG_AUTO_HIDE_DELAY = 30000; // 30 seconds
+    
+    function showDebugPanel() {
+      debugLogVisible = true;
+      debugLogEl.classList.add('visible');
+      updateDebugDisplay();
+    }
+    
+    function hideDebugPanel() {
+      debugLogVisible = false;
+      debugLogEl.classList.remove('visible');
+    }
+    
+    function scheduleDebugAutoHide() {
+      // Clear any existing timer
+      if (debugAutoHideTimer) {
+        clearTimeout(debugAutoHideTimer);
+      }
+      // Schedule hide after 30 seconds of no issues
+      debugAutoHideTimer = setTimeout(() => {
+        if (contentLoaded && healthCheckFailures === 0) {
+          hideDebugPanel();
+        }
+      }, DEBUG_AUTO_HIDE_DELAY);
+    }
+    
+    function updateDebugDisplay() {
+      if (debugLogVisible) {
+        debugLogEl.innerHTML = logBuffer.slice(-15).map(e => 
+          `<div class="log-entry ${e.level}">${e.timestamp} ${e.message}</div>`
+        ).join('');
+        debugLogEl.scrollTop = debugLogEl.scrollHeight;
+      }
+    }
     
     function log(level, message) {
       const timestamp = new Date().toLocaleTimeString('sv-SE');
@@ -138,14 +173,18 @@
       else if (level === 'warn') console.warn(consoleMsg);
       else console.log(consoleMsg);
       
-      // Update debug display
-      if (showDebugLog) {
-        debugLogEl.classList.add('visible');
-        debugLogEl.innerHTML = logBuffer.slice(-15).map(e => 
-          `<div class="log-entry ${e.level}">${e.timestamp} ${e.message}</div>`
-        ).join('');
-        debugLogEl.scrollTop = debugLogEl.scrollHeight;
+      // Show debug panel on errors/warnings
+      if (level === 'error' || level === 'warn') {
+        showDebugPanel();
+        // Don't auto-hide after problems - wait for next successful health check
+        if (debugAutoHideTimer) {
+          clearTimeout(debugAutoHideTimer);
+          debugAutoHideTimer = null;
+        }
       }
+      
+      // Update display
+      updateDebugDisplay();
     }
     
     function setStatus(text, type = '') {
@@ -191,9 +230,12 @@
         // Respond to ping from bridge
         log('info', 'PING received from bridge');
       } else if (data.type === 'TOGGLE_DEBUG') {
-        showDebugLog = !showDebugLog;
-        debugLogEl.classList.toggle('visible', showDebugLog);
-        log('info', `Debug log: ${showDebugLog ? 'visible' : 'hidden'}`);
+        if (debugLogVisible) {
+          hideDebugPanel();
+        } else {
+          showDebugPanel();
+        }
+        log('info', `Debug log: ${debugLogVisible ? 'visible' : 'hidden'}`);
       }
     });
     
@@ -252,6 +294,9 @@
         loadingEl.style.display = 'none';
         contentEl.style.display = 'block';
         
+        // Schedule debug panel auto-hide after successful load
+        scheduleDebugAutoHide();
+        
         // Hide status after 5 seconds
         setTimeout(() => {
           statusEl.style.opacity = '0.3';
@@ -280,11 +325,15 @@
             // Reset failure counter on success
             if (healthCheckFailures > 0) {
               log('info', `Health check recovered after ${healthCheckFailures} failures`);
+              // Re-schedule auto-hide after recovery
+              scheduleDebugAutoHide();
             }
             healthCheckFailures = 0;
             lastHealthCheck = now;
             
             log('info', `💚 Health OK (uptime: ${timeSinceLoad}s)`);
+            // Re-schedule auto-hide on successful checks
+            scheduleDebugAutoHide();
           } else {
             throw new Error('No document access');
           }
@@ -295,6 +344,8 @@
             healthCheckFailures = 0;
             lastHealthCheck = now;
             log('info', `💚 Iframe present (uptime: ${timeSinceLoad}s, cross-origin)`);
+            // Re-schedule auto-hide on successful checks
+            scheduleDebugAutoHide();
           } else {
             healthCheckFailures++;
             log('warn', `⚠️ Health check issue #${healthCheckFailures}: src mismatch`);
