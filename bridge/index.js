@@ -635,8 +635,15 @@ async function isChromecastIdleWithRecovery(deviceName, retryCount = 0) {
       checkClient.close();
       recordCircuitFailure();
       
-      // Retry with backoff on connection errors
-      if (retryCount < MAX_RETRIES && (err.message.includes('ETIMEDOUT') || err.message.includes('ECONNREFUSED'))) {
+      // Retry with backoff on connection errors (including ECONNRESET)
+      const isRetryableError = 
+        err.message.includes('ETIMEDOUT') || 
+        err.message.includes('ECONNREFUSED') ||
+        err.message.includes('ECONNRESET') ||
+        err.message.includes('EPIPE');
+      
+      if (retryCount < MAX_RETRIES && isRetryableError) {
+        log.info(`🔄 Retryable network error, will retry (${retryCount + 1}/${MAX_RETRIES})...`);
         const result = await isChromecastIdleWithRecovery(deviceName, retryCount + 1);
         resolve(result);
         return;
@@ -663,17 +670,20 @@ async function isChromecastIdleWithRecovery(deviceName, retryCount = 0) {
           const otherApps = apps.filter(app => app.appId !== BACKDROP_APP_ID && app.appId !== CUSTOM_APP_ID);
           const ourAppRunning = apps.some(app => app.appId === CUSTOM_APP_ID);
           
+          // Enhanced diagnostics - log raw app data
+          log.info(`📊 Device apps: ${apps.length === 0 ? 'none' : apps.map(a => `${a.displayName || 'unknown'}(${a.appId})`).join(', ')}`);
+          
           let result;
           if (ourAppRunning) {
-            log.debug('Our app is running');
+            log.info('✅ Our custom app confirmed running');
             screensaverActive = true; // Sync local state with device state
             result = { status: 'our_app' };
           } else if (otherApps.length === 0) {
-            log.debug('Device is idle');
+            log.info('⏸️ Device idle (no apps or only Backdrop)');
             result = { status: 'idle' };
           } else {
             const appNames = otherApps.map(a => a.displayName || a.appId);
-            log.debug(`Device busy with: ${appNames.join(', ')}`);
+            log.info(`📺 Device busy: ${appNames.join(', ')}`);
             result = { status: 'busy', apps: appNames };
           }
           
