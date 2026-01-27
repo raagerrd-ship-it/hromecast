@@ -461,19 +461,22 @@
     
     context.addEventListener(cast.framework.system.EventType.SENDER_DISCONNECTED, (event) => {
       log('warn', `📱 Sender disconnected: ${event.senderId || 'unknown'}`);
+      log('info', '📱 Content will persist - waiting for sender to reconnect');
+      // Don't do anything - keep showing content, bridge will reconnect
     });
     
     context.addEventListener(cast.framework.system.EventType.SHUTDOWN, () => {
-      log('error', '🛑 Receiver shutdown requested');
+      log('error', '🛑 Receiver shutdown requested by system');
     });
     
     context.addEventListener(cast.framework.system.EventType.ERROR, (event) => {
       log('error', `❌ Cast error: ${JSON.stringify(event)}`);
     });
     
-    // Start the receiver
+    // Start the receiver with maximum persistence settings
     const options = new cast.framework.CastReceiverOptions();
     options.disableIdleTimeout = true;
+    options.maxInactivity = 0; // Prevent shutdown on sender disconnect
     
     context.start(options);
     log('info', '🚀 Chromecast receiver started');
