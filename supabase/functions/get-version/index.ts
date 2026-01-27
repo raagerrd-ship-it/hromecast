@@ -19,10 +19,28 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.34";
+const VERSION = "1.3.35";
 const RELEASED_AT = "2026-01-27";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.35",
+    date: "2026-01-27",
+    changes: {
+      sv: [
+        "Auto-update: Receiver uppdaterar sig själv automatiskt vid ny version",
+        "Versionskontroll var 5:e minut mot server",
+        "Tystare loggning: Health check och heartbeat loggar endast vid ändring",
+        "maxInactivity=0: Receiver stängs inte vid sender disconnect",
+      ],
+      en: [
+        "Auto-update: Receiver now updates itself automatically on new version",
+        "Version check every 5 minutes against server",
+        "Quieter logging: Health check and heartbeat only log on change",
+        "maxInactivity=0: Receiver doesn't close on sender disconnect",
+      ],
+    }
+  },
   {
     version: "1.3.34",
     date: "2026-01-27",
@@ -30,12 +48,10 @@ const CHANGELOG: ChangelogEntry[] = [
       sv: [
         "Smart URL-refresh: Receiver laddar inte om sidan om samma URL redan är aktiv",
         "Ändrat standardvärde för URL-refresh från 5 till 30 minuter",
-        "Bridge skickar URL som backup - receiver ignorerar om redan laddad",
       ],
       en: [
         "Smart URL refresh: Receiver no longer reloads page if same URL is already active",
         "Changed default URL refresh interval from 5 to 30 minutes",
-        "Bridge sends URL as backup - receiver ignores if already loaded",
       ],
     }
   },

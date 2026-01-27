@@ -121,12 +121,19 @@
     const contentEl = document.getElementById('content');
     const debugLogEl = document.getElementById('debug-log');
     
+    // Receiver version - used for auto-update check
+    const RECEIVER_VERSION = '1.3.35';
+    
     // Logging system
     const logBuffer = [];
     const MAX_LOGS = 50;
     let debugLogVisible = true;
     let debugAutoHideTimer = null;
     const DEBUG_AUTO_HIDE_DELAY = 30000; // 30 seconds
+    
+    // Auto-update configuration
+    const VERSION_CHECK_INTERVAL = 5 * 60 * 1000; // Check every 5 minutes
+    const VERSION_API_URL = 'https://umxwaxzmoxwasryjibhe.supabase.co/functions/v1/get-version';
     
     function showDebugPanel() {
       debugLogVisible = true;
@@ -485,8 +492,38 @@
     options.maxInactivity = 0; // Prevent shutdown on sender disconnect
     
     context.start(options);
-    log('info', '🚀 Chromecast receiver started');
+    log('info', `🚀 Chromecast receiver v${RECEIVER_VERSION} started`);
     setStatus('Ready to cast...', '');
+    
+    // Auto-update check - periodically check for new receiver version
+    async function checkForUpdate() {
+      try {
+        const response = await fetch(VERSION_API_URL);
+        if (!response.ok) return;
+        
+        const data = await response.json();
+        const serverVersion = data.version;
+        
+        if (serverVersion && serverVersion !== RECEIVER_VERSION) {
+          log('warn', `🔄 New version available: ${serverVersion} (current: ${RECEIVER_VERSION})`);
+          log('info', '🔄 Auto-updating receiver in 5 seconds...');
+          
+          setTimeout(() => {
+            log('info', '🔄 Reloading receiver for update...');
+            window.location.reload();
+          }, 5000);
+        }
+      } catch (e) {
+        // Silent fail - network issues shouldn't spam logs
+        console.log('Version check failed:', e.message);
+      }
+    }
+    
+    // Initial check after 30 seconds, then every 5 minutes
+    setTimeout(() => {
+      checkForUpdate();
+      setInterval(checkForUpdate, VERSION_CHECK_INTERVAL);
+    }, 30000);
   </script>
 </body>
 </html>
