@@ -177,9 +177,9 @@
         loadingEl.style.display = 'none';
         contentEl.style.display = 'block';
         
-        // Hide status after successful load (debug log only shows on errors)
+        // Hide status completely after successful load
         setTimeout(function() {
-          statusEl.style.opacity = '0.3';
+          statusEl.style.display = 'none';
         }, 5000);
       };
       
