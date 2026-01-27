@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.36';
+const BRIDGE_VERSION = '1.3.37';
 
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
@@ -997,7 +997,8 @@ async function castMedia(chromecastName, url, retryCount = 0) {
             const appConnection = client.createChannel('sender-0', transportId, 'urn:x-cast:com.google.cast.tp.connection', 'JSON');
             appConnection.send({ type: 'CONNECT' });
             
-            const media = client.createChannel('sender-0', transportId, 'urn:x-cast:com.google.cast.media', 'JSON');
+            // Use custom message channel that receiver listens on
+            const customChannel = client.createChannel('sender-0', transportId, 'urn:x-cast:com.website.cast', 'JSON');
             
             // Add receiver auto-refresh parameter to URL
             const config = loadConfig();
@@ -1006,22 +1007,10 @@ async function castMedia(chromecastName, url, retryCount = 0) {
               ? `${url}&refresh=${refreshMinutes}` 
               : `${url}?refresh=${refreshMinutes}`;
             
-            log.info(`📺 Loading URL: ${urlWithRefresh}`);
-            media.send({
-              type: 'LOAD',
-              requestId: 5,
-              sessionId: sessionId,
-              media: {
-                contentId: urlWithRefresh,
-                contentType: 'text/html',
-                streamType: 'LIVE',
-                metadata: {
-                  type: 0,
-                  metadataType: 0,
-                  title: 'Website Viewer'
-                }
-              },
-              autoplay: true
+            log.info(`📺 Sending URL via custom channel: ${urlWithRefresh}`);
+            customChannel.send({
+              type: 'LOAD_WEBSITE',
+              url: urlWithRefresh
             });
             
             log.info('✅ Cast successful - keeping connection alive indefinitely');
@@ -1033,8 +1022,8 @@ async function castMedia(chromecastName, url, retryCount = 0) {
             
             resolve({ success: true });
             
-            media.on('message', (data) => {
-              log.debug('📨 Media message:', JSON.stringify(data));
+            customChannel.on('message', (data) => {
+              log.debug('📨 Custom channel message:', JSON.stringify(data));
             });
           }
         }
@@ -1095,7 +1084,8 @@ async function refreshMediaOnReceiver(chromecastName, url) {
             const appConnection = refreshClient.createChannel('sender-0', transportId, 'urn:x-cast:com.google.cast.tp.connection', 'JSON');
             appConnection.send({ type: 'CONNECT' });
             
-            const media = refreshClient.createChannel('sender-0', transportId, 'urn:x-cast:com.google.cast.media', 'JSON');
+            // Use custom message channel that receiver listens on
+            const customChannel = refreshClient.createChannel('sender-0', transportId, 'urn:x-cast:com.website.cast', 'JSON');
             
             // Add receiver auto-refresh parameter to URL
             const config = loadConfig();
@@ -1104,22 +1094,10 @@ async function refreshMediaOnReceiver(chromecastName, url) {
               ? `${url}&refresh=${refreshMinutes}` 
               : `${url}?refresh=${refreshMinutes}`;
             
-            log.info(`🔄 Refreshing URL on receiver: ${urlWithRefresh}`);
-            media.send({
-              type: 'LOAD',
-              requestId: Date.now(),
-              sessionId: sessionId,
-              media: {
-                contentId: urlWithRefresh,
-                contentType: 'text/html',
-                streamType: 'LIVE',
-                metadata: {
-                  type: 0,
-                  metadataType: 0,
-                  title: 'Website Viewer'
-                }
-              },
-              autoplay: true
+            log.info(`🔄 Refreshing URL via custom channel: ${urlWithRefresh}`);
+            customChannel.send({
+              type: 'LOAD_WEBSITE',
+              url: urlWithRefresh
             });
             
             // Wait a moment then close
