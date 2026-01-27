@@ -19,10 +19,26 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.26";
+const VERSION = "1.3.27";
 const RELEASED_AT = "2026-01-27";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.27",
+    date: "2026-01-27",
+    changes: {
+      sv: [
+        "Buggfix: Återställd discoveryTimeout-inställning i dashboard",
+        "Buggfix: Alla inställningsfält synkade mellan HTML och JavaScript",
+        "Förbättrad reset-funktion för sökningsinställningar",
+      ],
+      en: [
+        "Bugfix: Restored discoveryTimeout setting in dashboard",
+        "Bugfix: All settings fields synced between HTML and JavaScript",
+        "Improved reset function for discovery settings",
+      ],
+    }
+  },
   {
     version: "1.3.26",
     date: "2026-01-27",
