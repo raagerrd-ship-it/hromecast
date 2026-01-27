@@ -146,7 +146,6 @@
     console.log('[RECEIVER] Script starting...');
     
     const context = cast.framework.CastReceiverContext.getInstance();
-    const playerManager = context.getPlayerManager();
     
     console.log('[RECEIVER] Cast context obtained');
     
@@ -156,7 +155,7 @@
     const debugLogEl = document.getElementById('debug-log');
     
     // Receiver version - used for auto-update check
-    const RECEIVER_VERSION = '1.3.36';
+    const RECEIVER_VERSION = '1.3.37';
     
     // Logging system
     const logBuffer = [];
@@ -309,37 +308,6 @@
         log('info', `Debug log: ${debugLogVisible ? 'visible' : 'hidden'}`);
       }
     });
-    
-    // Override default media load behavior
-    playerManager.setMessageInterceptor(
-      cast.framework.messages.MessageType.LOAD,
-      (loadRequestData) => {
-        log('info', 'LOAD request received');
-        
-        let url = null;
-        
-        if (loadRequestData.media) {
-          url = loadRequestData.media.contentId || loadRequestData.media.contentUrl;
-          log('info', `Media URL: ${url}`);
-          log('info', `Content type: ${loadRequestData.media.contentType}`);
-        }
-        
-        if (url) {
-          const isWebsite = 
-            loadRequestData.media.contentType === 'text/html' ||
-            url.endsWith('.html') ||
-            (!url.match(/\.(mp4|mp3|webm|mkv|avi|mov|m3u8|mpd)$/i) && 
-             (url.startsWith('http://') || url.startsWith('https://')));
-          
-          if (isWebsite) {
-            loadWebsite(url);
-            return null;
-          }
-        }
-        
-        return loadRequestData;
-      }
-    );
     
     function loadWebsite(url, isRetry = false) {
       // Skip reload if same URL is already loaded and working
