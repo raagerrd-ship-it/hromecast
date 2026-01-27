@@ -102,7 +102,7 @@ const DEFAULT_CONFIG = {
   castRetryDelay: 2,                 // Base delay for retry backoff (seconds)
   castMaxRetries: 3,                 // Max cast retry attempts
   receiverAutoRefresh: 45,           // Auto-refresh receiver (minutes)
-  refreshUrlInterval: 5,             // How often to re-send URL to receiver (minutes) - ensures receiver has content after auto-refresh
+  refreshUrlInterval: 30,            // How often to re-send URL to receiver (minutes) - ensures receiver has content after auto-refresh
   // Återhämtning & Skydd
   cooldownAfterTakeover: 30,         // Cooldown after another app takes over (seconds)
   recoveryCheckInterval: 10,         // How often to check for recovery (seconds)
@@ -1269,7 +1269,7 @@ async function checkAndActivateScreensaver() {
     
     // Periodically re-send URL to receiver to handle auto-refresh
     // This ensures the receiver has content even after its auto-refresh
-    const refreshIntervalMs = (config.refreshUrlInterval || 5) * 60 * 1000;
+    const refreshIntervalMs = (config.refreshUrlInterval || 30) * 60 * 1000;
     const timeSinceRefresh = Date.now() - lastUrlRefreshTime;
     
     if (timeSinceRefresh >= refreshIntervalMs) {
