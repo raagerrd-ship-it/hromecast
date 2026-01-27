@@ -156,11 +156,11 @@ function getBackoffDelay(attempt) {
   return Math.min(delay + jitter, 30000); // Cap at 30 seconds
 }
 
-// Automatic zombie session cleanup - sends STOP to Chromecast
-async function autoForceStop(deviceHost, reason = 'zombie cleanup') {
+// Automatic zombie session cleanup - sends STOP to Chromecast, then optionally reconnects
+async function autoForceStop(deviceHost, reason = 'zombie cleanup', autoReconnect = true) {
   log.info(`🛑 Auto force-stop: ${reason}`);
   
-  return new Promise((resolve) => {
+  const success = await new Promise((resolve) => {
     const forceClient = new castv2.Client();
     const timeout = setTimeout(() => {
       try { forceClient.close(); } catch(e) {}
@@ -191,6 +191,20 @@ async function autoForceStop(deviceHost, reason = 'zombie cleanup') {
       }, 1000);
     });
   });
+  
+  // Auto-reconnect after successful force-stop
+  if (success && autoReconnect) {
+    log.info('🔄 Auto-reconnecting after force-stop...');
+    // Small delay to let Chromecast settle
+    await sleep(2000);
+    const config = loadConfig();
+    if (config.enabled && config.url && config.selectedChromecast) {
+      // Trigger screensaver activation
+      checkAndActivateScreensaver();
+    }
+  }
+  
+  return success;
 }
 
 // ============ Circuit Breaker ============
