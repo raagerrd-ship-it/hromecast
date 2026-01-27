@@ -349,7 +349,9 @@
       
       contentEl.onerror = (error) => {
         clearTimeout(loadTimeout);
-        log('error', `❌ Iframe load error: ${error?.message || 'Unknown error'}`);
+        const errorDetails = error?.message || error?.type || 'Unknown error';
+        log('error', `❌ IFRAME LOAD ERROR: ${errorDetails}`);
+        log('error', `❌ Failed URL: ${url}`);
         setStatus('Error loading website', 'error');
         loadingEl.style.display = 'none';
         contentLoaded = false;
@@ -396,10 +398,13 @@
             scheduleDebugAutoHide();
           } else {
             healthCheckFailures++;
-            log('warn', `⚠️ Health check issue #${healthCheckFailures}: src mismatch`);
+            log('warn', `⚠️ HEALTH CHECK ISSUE #${healthCheckFailures}: src mismatch`);
+            log('warn', `⚠️ Expected: ${currentUrl}`);
+            log('warn', `⚠️ Actual: ${contentEl.src}`);
             
             if (healthCheckFailures >= 3) {
-              log('error', `❌ Multiple health failures - attempting reconnect`);
+              log('error', `❌ MULTIPLE HEALTH FAILURES - attempting reconnect`);
+              log('error', `❌ This will show "Ready to cast..." until bridge re-casts`);
               contentLoaded = false; // Mark as not loaded so retry logic works
               scheduleRetry('health check failures');
             }
@@ -424,10 +429,22 @@
     const urlParams = new URLSearchParams(window.location.search);
     const refreshMinutes = parseInt(urlParams.get('refresh') || '45', 10);
     const refreshMs = refreshMinutes * 60 * 1000;
-    log('info', `Auto-refresh: every ${refreshMinutes} min`);
+    const startTime = Date.now();
+    log('info', `⏰ Auto-refresh scheduled: every ${refreshMinutes} min`);
+    
+    // Log time until next refresh every 5 minutes
+    setInterval(() => {
+      const elapsed = Math.round((Date.now() - startTime) / 60000);
+      const remaining = refreshMinutes - elapsed;
+      if (remaining > 0 && remaining % 5 === 0) {
+        log('info', `⏰ Auto-refresh in ${remaining} min`);
+      }
+    }, 60000);
     
     setInterval(() => {
-      log('warn', '🔄 Auto-refresh triggered');
+      const uptime = iframeLoadTime ? Math.round((Date.now() - iframeLoadTime) / 1000) : 0;
+      log('warn', `🔄 AUTO-REFRESH TRIGGERED after ${refreshMinutes} min (iframe uptime: ${uptime}s)`);
+      log('warn', '🔄 Receiver will reload - bridge must re-cast!');
       window.location.reload();
     }, refreshMs);
     
