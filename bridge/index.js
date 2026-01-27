@@ -753,7 +753,6 @@ async function isChromecastIdleWithRecovery(deviceName, retryCount = 0) {
           };
           
           resolve(result);
-          }
         }
       });
     });
