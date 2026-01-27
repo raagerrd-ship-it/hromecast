@@ -19,10 +19,26 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.30";
+const VERSION = "1.3.31";
 const RELEASED_AT = "2026-01-27";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.31",
+    date: "2026-01-27",
+    changes: {
+      sv: [
+        "Buggfix: Permanenta loggar (Cast successful, Loading URL) uppdateras inte längre varje minut",
+        "Förbättrad deduplicering: Endast status-check-poster får sin tidsstämpel uppdaterad",
+        "Ny isStatusCheck-flagga skiljer på historik och löpande statusloggar",
+      ],
+      en: [
+        "Bugfix: Permanent logs (Cast successful, Loading URL) no longer update every minute",
+        "Improved deduplication: Only status-check entries get their timestamp updated",
+        "New isStatusCheck flag distinguishes history from ongoing status logs",
+      ],
+    }
+  },
   {
     version: "1.3.30",
     date: "2026-01-27",
