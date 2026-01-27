@@ -1118,22 +1118,30 @@ async function checkAndActivateScreensaver() {
   
   const now = new Date().toISOString();
   
-  if (messagesMatch && logBuffer.length >= newMessages.length) {
-    // Same status - update timestamps on last N entries
-    for (let i = 0; i < newMessages.length; i++) {
-      const bufferIndex = logBuffer.length - newMessages.length + i;
-      if (bufferIndex >= 0) {
-        logBuffer[bufferIndex].timestamp = now;
-      }
+  if (messagesMatch) {
+    // Same status - find and update only the status check entries (marked with isStatusCheck)
+    // This avoids updating permanent log entries like "Cast successful", "Loading URL", etc.
+    const statusCheckEntries = logBuffer.filter(entry => entry.isStatusCheck);
+    for (const entry of statusCheckEntries) {
+      entry.timestamp = now;
     }
   } else {
-    // Different status - add new log entries
+    // Different status - remove old status check entries and add new ones
+    // First, remove any existing status check entries
+    for (let i = logBuffer.length - 1; i >= 0; i--) {
+      if (logBuffer[i].isStatusCheck) {
+        logBuffer.splice(i, 1);
+      }
+    }
+    
+    // Add new status check entries with isStatusCheck flag
     lastCheckMessages = newMessages;
     for (const msg of newMessages) {
       logBuffer.push({
         timestamp: now,
         level: 'info',
-        message: msg
+        message: msg,
+        isStatusCheck: true  // Mark as status check entry for deduplication
       });
     }
     // Trim buffer if needed
