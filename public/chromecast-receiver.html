@@ -109,7 +109,7 @@
 <body>
   <div id="status">Ready to cast...</div>
   <div id="loading" style="display:none;">Loading website...</div>
-  <div id="debug-log"></div>
+  <div id="debug-log" class="visible"></div>
   <iframe id="content" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" loading="eager" style="display:none;"></iframe>
   
   <script>
@@ -493,7 +493,20 @@
     
     context.start(options);
     log('info', `🚀 Chromecast receiver v${RECEIVER_VERSION} started`);
+    log('info', '⏳ Waiting for LOAD command from bridge...');
     setStatus('Ready to cast...', '');
+    
+    // Show debug panel initially so user can see startup logs
+    showDebugPanel();
+    
+    // Add a periodic "still waiting" log if no URL loaded after 30s
+    let waitingLogInterval = setInterval(() => {
+      if (!currentUrl) {
+        log('warn', '⏳ Still waiting for URL from bridge - check bridge dashboard');
+      } else {
+        clearInterval(waitingLogInterval);
+      }
+    }, 30000);
     
     // Auto-update check - periodically check for new receiver version
     async function checkForUpdate() {
