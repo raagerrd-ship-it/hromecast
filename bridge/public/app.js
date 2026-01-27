@@ -424,37 +424,6 @@ elements.refreshBtn.addEventListener('click', refreshDevices);
 elements.castBtn.addEventListener('click', startCast);
 elements.stopBtn.addEventListener('click', stopCast);
 
-// Force stop button - clears zombie sessions
-const forceStopBtn = document.getElementById('force-stop-btn');
-if (forceStopBtn) {
-  forceStopBtn.addEventListener('click', async () => {
-    if (!confirm('🛑 Tvinga stopp?\n\nDetta skickar ett STOP-kommando till Chromecast för att rensa eventuella zombie-sessioner.\n\nAnvänd detta om dashboarden visar "Vår app aktiv" men TV:n är idle.')) {
-      return;
-    }
-    
-    forceStopBtn.disabled = true;
-    forceStopBtn.textContent = '⏳ Rensar...';
-    
-    try {
-      const result = await api('/api/force-stop', { method: 'POST' });
-      if (result.success) {
-        showToast('Zombie-sessioner rensade', 'success');
-        updateScreensaverStatus(false);
-        // Reload status after a moment
-        setTimeout(loadStatus, 2000);
-      } else {
-        showToast(result.error || 'Kunde inte rensa sessioner', 'error');
-      }
-    } catch (error) {
-      console.error('Force stop failed:', error);
-      showToast('Fel vid tvingad stopp', 'error');
-    }
-    
-    forceStopBtn.disabled = false;
-    forceStopBtn.textContent = '🛑 Tvinga stopp';
-  });
-}
-
 // Restart bridge with overlay
 const restartBtn = document.getElementById('restart-btn');
 if (restartBtn) {

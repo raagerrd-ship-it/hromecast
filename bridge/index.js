@@ -156,6 +156,43 @@ function getBackoffDelay(attempt) {
   return Math.min(delay + jitter, 30000); // Cap at 30 seconds
 }
 
+// Automatic zombie session cleanup - sends STOP to Chromecast
+async function autoForceStop(deviceHost, reason = 'zombie cleanup') {
+  log.info(`🛑 Auto force-stop: ${reason}`);
+  
+  return new Promise((resolve) => {
+    const forceClient = new castv2.Client();
+    const timeout = setTimeout(() => {
+      try { forceClient.close(); } catch(e) {}
+      log.warn('⚠️ Force-stop timeout');
+      resolve(false);
+    }, 8000);
+    
+    forceClient.on('error', (err) => {
+      clearTimeout(timeout);
+      try { forceClient.close(); } catch(e) {}
+      log.warn(`⚠️ Force-stop error: ${err.message}`);
+      resolve(false);
+    });
+    
+    forceClient.connect(deviceHost, () => {
+      const connection = forceClient.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.tp.connection', 'JSON');
+      const receiver = forceClient.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.receiver', 'JSON');
+      
+      connection.send({ type: 'CONNECT' });
+      receiver.send({ type: 'STOP', requestId: Date.now() });
+      
+      setTimeout(() => {
+        connection.send({ type: 'CLOSE' });
+        forceClient.close();
+        clearTimeout(timeout);
+        log.info('✅ Force-stop completed');
+        resolve(true);
+      }, 1000);
+    });
+  });
+}
+
 // ============ Circuit Breaker ============
 
 function checkCircuitBreaker() {
@@ -649,6 +686,13 @@ async function isChromecastIdleWithRecovery(deviceName, retryCount = 0) {
         return;
       }
       
+      // If we thought app was running but got connection reset, auto force-stop
+      if (screensaverActive && (err.message.includes('ECONNRESET') || err.message.includes('EPIPE'))) {
+        log.warn('⚠️ Connection reset while app was "active" - likely zombie session');
+        screensaverActive = false;
+        await autoForceStop(device.host, 'ECONNRESET during active session');
+      }
+      
       resolve({ status: 'error' });
     });
     
@@ -748,6 +792,13 @@ async function castMedia(chromecastName, url, retryCount = 0) {
       log.error(`❌ Connection error: ${err.message}`);
       cleanup();
       recordCircuitFailure();
+      
+      // If ECONNRESET while supposedly active, trigger auto force-stop first
+      if (screensaverActive && (err.message.includes('ECONNRESET') || err.message.includes('EPIPE'))) {
+        log.warn('⚠️ Connection reset - clearing potential zombie session');
+        screensaverActive = false;
+        await autoForceStop(device.host, 'ECONNRESET during cast');
+      }
       
       // Retry with backoff
       if (retryCount < MAX_RETRIES) {
