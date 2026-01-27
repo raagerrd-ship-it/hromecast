@@ -37,11 +37,25 @@
       position: fixed;
       top: 20px;
       left: 20px;
-      background: rgba(0, 0, 0, 0.7);
-      padding: 10px 20px;
+      background: rgba(0, 0, 0, 0.85);
+      padding: 12px 20px;
       border-radius: 8px;
-      font-size: 14px;
+      font-size: 13px;
       z-index: 1000;
+      max-width: 400px;
+      line-height: 1.4;
+    }
+    
+    #status.connected {
+      background: rgba(0, 100, 0, 0.85);
+    }
+    
+    #status.error {
+      background: rgba(150, 0, 0, 0.85);
+    }
+    
+    #status.warning {
+      background: rgba(150, 100, 0, 0.85);
     }
     
     #loading {
@@ -52,12 +66,50 @@
       font-size: 24px;
       z-index: 999;
     }
+    
+    #debug-log {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 10px 15px;
+      border-radius: 8px;
+      font-size: 11px;
+      z-index: 1000;
+      max-width: 500px;
+      max-height: 200px;
+      overflow-y: auto;
+      font-family: monospace;
+      display: none;
+    }
+    
+    #debug-log.visible {
+      display: block;
+    }
+    
+    .log-entry {
+      margin: 2px 0;
+      opacity: 0.9;
+    }
+    
+    .log-entry.error {
+      color: #ff6b6b;
+    }
+    
+    .log-entry.warn {
+      color: #ffd93d;
+    }
+    
+    .log-entry.info {
+      color: #6bcb77;
+    }
   </style>
   <script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
 </head>
 <body>
   <div id="status">Ready to cast...</div>
   <div id="loading" style="display:none;">Loading website...</div>
+  <div id="debug-log"></div>
   <iframe id="content" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" loading="eager" style="display:none;"></iframe>
   
   <script>
@@ -67,34 +119,81 @@
     const statusEl = document.getElementById('status');
     const loadingEl = document.getElementById('loading');
     const contentEl = document.getElementById('content');
+    const debugLogEl = document.getElementById('debug-log');
     
-    // No fallback - wait for explicit content from bridge
+    // Logging system
+    const logBuffer = [];
+    const MAX_LOGS = 50;
+    let showDebugLog = true; // Enable debug log display
+    
+    function log(level, message) {
+      const timestamp = new Date().toLocaleTimeString('sv-SE');
+      const entry = { timestamp, level, message };
+      logBuffer.push(entry);
+      if (logBuffer.length > MAX_LOGS) logBuffer.shift();
+      
+      // Console output
+      const consoleMsg = `[${timestamp}] ${message}`;
+      if (level === 'error') console.error(consoleMsg);
+      else if (level === 'warn') console.warn(consoleMsg);
+      else console.log(consoleMsg);
+      
+      // Update debug display
+      if (showDebugLog) {
+        debugLogEl.classList.add('visible');
+        debugLogEl.innerHTML = logBuffer.slice(-15).map(e => 
+          `<div class="log-entry ${e.level}">${e.timestamp} ${e.message}</div>`
+        ).join('');
+        debugLogEl.scrollTop = debugLogEl.scrollHeight;
+      }
+    }
+    
+    function setStatus(text, type = '') {
+      statusEl.textContent = text;
+      statusEl.className = type;
+      log('info', `Status: ${text}`);
+    }
+    
+    // Connection state tracking
     let contentLoaded = false;
+    let currentUrl = null;
+    let iframeLoadTime = null;
+    let lastHealthCheck = Date.now();
+    let healthCheckFailures = 0;
     
     // Set iframe to fill screen exactly
     function setupIframe() {
       const screenWidth = window.innerWidth;
       const screenHeight = window.innerHeight;
       
-      // Set iframe to screen size - website will see this viewport
       contentEl.width = screenWidth;
       contentEl.height = screenHeight;
       contentEl.style.width = screenWidth + 'px';
       contentEl.style.height = screenHeight + 'px';
       
-      console.log(`Iframe set to: ${screenWidth}x${screenHeight}`);
+      log('info', `Viewport: ${screenWidth}x${screenHeight}`);
     }
     
     setupIframe();
-    window.addEventListener('resize', setupIframe);
+    window.addEventListener('resize', () => {
+      setupIframe();
+      log('info', 'Window resized');
+    });
     
     // Custom message handler for loading websites
     context.addCustomMessageListener('urn:x-cast:com.website.cast', (customEvent) => {
       const data = customEvent.data;
-      console.log('Received custom message:', data);
+      log('info', `Custom message: ${JSON.stringify(data)}`);
       
       if (data.type === 'LOAD_WEBSITE') {
         loadWebsite(data.url);
+      } else if (data.type === 'PING') {
+        // Respond to ping from bridge
+        log('info', 'PING received from bridge');
+      } else if (data.type === 'TOGGLE_DEBUG') {
+        showDebugLog = !showDebugLog;
+        debugLogEl.classList.toggle('visible', showDebugLog);
+        log('info', `Debug log: ${showDebugLog ? 'visible' : 'hidden'}`);
       }
     });
     
@@ -102,31 +201,26 @@
     playerManager.setMessageInterceptor(
       cast.framework.messages.MessageType.LOAD,
       (loadRequestData) => {
-        console.log('Load request received:', JSON.stringify(loadRequestData, null, 2));
+        log('info', 'LOAD request received');
         
         let url = null;
         
-        // Try multiple ways to extract the URL
         if (loadRequestData.media) {
           url = loadRequestData.media.contentId || loadRequestData.media.contentUrl;
-          console.log('Media contentId:', loadRequestData.media.contentId);
-          console.log('Media contentUrl:', loadRequestData.media.contentUrl);
-          console.log('Media contentType:', loadRequestData.media.contentType);
+          log('info', `Media URL: ${url}`);
+          log('info', `Content type: ${loadRequestData.media.contentType}`);
         }
         
         if (url) {
-          // Check if this is a website URL (not a video/audio file)
           const isWebsite = 
             loadRequestData.media.contentType === 'text/html' ||
             url.endsWith('.html') ||
             (!url.match(/\.(mp4|mp3|webm|mkv|avi|mov|m3u8|mpd)$/i) && 
              (url.startsWith('http://') || url.startsWith('https://')));
           
-          console.log('Is website:', isWebsite, 'URL:', url);
-          
           if (isWebsite) {
             loadWebsite(url);
-            return null; // Block default media handling
+            return null;
           }
         }
         
@@ -135,59 +229,132 @@
     );
     
     function loadWebsite(url) {
-      console.log('Loading website:', url);
+      log('info', `Loading: ${url}`);
       
-      // Mark content as loaded
-      contentLoaded = true;
+      currentUrl = url;
+      contentLoaded = false;
+      iframeLoadTime = null;
+      healthCheckFailures = 0;
       
-      statusEl.textContent = 'Loading: ' + url;
+      setStatus('Loading: ' + url, 'warning');
       loadingEl.style.display = 'block';
       contentEl.style.display = 'none';
       
-      // Load the URL in the iframe
       contentEl.src = url;
       
       contentEl.onload = () => {
-        console.log('Website loaded successfully');
-        statusEl.textContent = 'Connected';
+        const loadDuration = iframeLoadTime ? 'N/A' : 'first load';
+        iframeLoadTime = Date.now();
+        contentLoaded = true;
+        
+        log('info', `✅ Iframe loaded successfully`);
+        setStatus('Connected', 'connected');
         loadingEl.style.display = 'none';
         contentEl.style.display = 'block';
         
-        // Hide status after 3 seconds
+        // Hide status after 5 seconds
         setTimeout(() => {
-          statusEl.style.display = 'none';
-        }, 3000);
+          statusEl.style.opacity = '0.3';
+        }, 5000);
       };
       
-      contentEl.onerror = () => {
-        console.error('Failed to load website');
-        statusEl.textContent = 'Error loading website';
+      contentEl.onerror = (error) => {
+        log('error', `❌ Iframe load error: ${error?.message || 'Unknown error'}`);
+        setStatus('Error loading website', 'error');
         loadingEl.style.display = 'none';
+        contentLoaded = false;
       };
     }
     
-    // Keep connection alive (every 10 seconds)
+    // Health check - verify iframe is still responsive
+    function performHealthCheck() {
+      const now = Date.now();
+      const timeSinceLoad = iframeLoadTime ? Math.round((now - iframeLoadTime) / 1000) : 0;
+      
+      if (contentLoaded && currentUrl) {
+        try {
+          // Check if iframe still has a valid document
+          const iframeDoc = contentEl.contentDocument || contentEl.contentWindow?.document;
+          
+          if (iframeDoc) {
+            // Reset failure counter on success
+            if (healthCheckFailures > 0) {
+              log('info', `Health check recovered after ${healthCheckFailures} failures`);
+            }
+            healthCheckFailures = 0;
+            lastHealthCheck = now;
+            
+            log('info', `💚 Health OK (uptime: ${timeSinceLoad}s)`);
+          } else {
+            throw new Error('No document access');
+          }
+        } catch (e) {
+          // Cross-origin restrictions prevent document access - this is normal for external sites
+          // We can only detect if the iframe element itself is gone
+          if (contentEl.src === currentUrl) {
+            healthCheckFailures = 0;
+            lastHealthCheck = now;
+            log('info', `💚 Iframe present (uptime: ${timeSinceLoad}s, cross-origin)`);
+          } else {
+            healthCheckFailures++;
+            log('warn', `⚠️ Health check issue #${healthCheckFailures}: src mismatch`);
+            
+            if (healthCheckFailures >= 3) {
+              log('error', `❌ Multiple health failures - attempting reload`);
+              setStatus('Reconnecting...', 'warning');
+              loadWebsite(currentUrl);
+            }
+          }
+        }
+      } else if (!contentLoaded && currentUrl) {
+        log('warn', `⏳ Still loading: ${currentUrl}`);
+      }
+    }
+    
+    // Run health check every 30 seconds
+    setInterval(performHealthCheck, 30000);
+    
+    // Keep-alive heartbeat (every 10 seconds)
     setInterval(() => {
-      console.log('Keep-alive:', new Date().toISOString());
+      const uptime = iframeLoadTime ? Math.round((Date.now() - iframeLoadTime) / 1000) : 0;
+      log('info', `♥ Heartbeat (uptime: ${uptime}s, loaded: ${contentLoaded})`);
     }, 10000);
     
     // Auto-refresh to clear memory (configurable via URL param)
     const urlParams = new URLSearchParams(window.location.search);
     const refreshMinutes = parseInt(urlParams.get('refresh') || '45', 10);
     const refreshMs = refreshMinutes * 60 * 1000;
-    console.log(`Auto-refresh configured: every ${refreshMinutes} minutes`);
+    log('info', `Auto-refresh: every ${refreshMinutes} min`);
     
     setInterval(() => {
-      console.log('Auto-refresh to clear memory');
+      log('warn', '🔄 Auto-refresh triggered');
       window.location.reload();
     }, refreshMs);
+    
+    // Monitor for Cast connection state
+    context.addEventListener(cast.framework.system.EventType.SENDER_CONNECTED, (event) => {
+      log('info', `📱 Sender connected: ${event.senderId || 'unknown'}`);
+    });
+    
+    context.addEventListener(cast.framework.system.EventType.SENDER_DISCONNECTED, (event) => {
+      log('warn', `📱 Sender disconnected: ${event.senderId || 'unknown'}`);
+    });
+    
+    context.addEventListener(cast.framework.system.EventType.SHUTDOWN, () => {
+      log('error', '🛑 Receiver shutdown requested');
+    });
+    
+    context.addEventListener(cast.framework.system.EventType.ERROR, (event) => {
+      log('error', `❌ Cast error: ${JSON.stringify(event)}`);
+    });
     
     // Start the receiver
     const options = new cast.framework.CastReceiverOptions();
     options.disableIdleTimeout = true;
     
     context.start(options);
-    console.log('Chromecast receiver started');
+    log('info', '🚀 Chromecast receiver started');
+    setStatus('Ready to cast...', '');
   </script>
 </body>
 </html>
