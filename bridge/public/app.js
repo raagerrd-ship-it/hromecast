@@ -229,7 +229,6 @@ async function loadSettings() {
     }
     
     // Load timing settings - Sökning & Discovery
-    if (elements.discoveryTimeoutInput) {
     if (elements.discoveryEarlyResolveInput) {
       elements.discoveryEarlyResolveInput.value = data.discoveryEarlyResolve || 4;
     }
