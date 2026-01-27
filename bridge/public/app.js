@@ -246,7 +246,7 @@ async function loadSettings() {
       elements.receiverAutoRefreshInput.value = data.receiverAutoRefresh || 45;
     }
     if (elements.refreshUrlIntervalInput) {
-      elements.refreshUrlIntervalInput.value = data.refreshUrlInterval || 5;
+      elements.refreshUrlIntervalInput.value = data.refreshUrlInterval || 30;
     }
     
     // Load timing settings - Återhämtning & Skydd
@@ -599,7 +599,7 @@ const DEFAULT_VALUES = {
   castRetryDelay: 2,
   castMaxRetries: 3,
   receiverAutoRefresh: 45,
-  refreshUrlInterval: 5,
+  refreshUrlInterval: 30,
   // Återhämtning & Skydd
   cooldownAfterTakeover: 30,
   recoveryCheckInterval: 10,
