@@ -19,27 +19,39 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.33";
+const VERSION = "1.3.34";
 const RELEASED_AT = "2026-01-27";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.34",
+    date: "2026-01-27",
+    changes: {
+      sv: [
+        "Smart URL-refresh: Receiver laddar inte om sidan om samma URL redan är aktiv",
+        "Ändrat standardvärde för URL-refresh från 5 till 30 minuter",
+        "Bridge skickar URL som backup - receiver ignorerar om redan laddad",
+      ],
+      en: [
+        "Smart URL refresh: Receiver no longer reloads page if same URL is already active",
+        "Changed default URL refresh interval from 5 to 30 minutes",
+        "Bridge sends URL as backup - receiver ignores if already loaded",
+      ],
+    }
+  },
   {
     version: "1.3.33",
     date: "2026-01-27",
     changes: {
       sv: [
-        "Kritisk fix: URL skickas nu automatiskt till receiver var 5:e minut",
-        "Ny funktion refreshMediaOnReceiver(): Skickar URL till redan körande receiver",
+        "URL skickas automatiskt till receiver (konfigurerbart intervall)",
+        "Ny funktion refreshMediaOnReceiver()",
         "Förhindrar 'Ready to cast...' efter receivers auto-refresh",
-        "Ny inställning 'URL-refresh' i dashboard (default 5 min)",
-        "Förbättrad receiver-loggning: Visar exakt orsak till 'Ready to cast...'",
       ],
       en: [
-        "Critical fix: URL now sent automatically to receiver every 5 minutes",
-        "New function refreshMediaOnReceiver(): Sends URL to already running receiver",
+        "URL sent automatically to receiver (configurable interval)",
+        "New function refreshMediaOnReceiver()",
         "Prevents 'Ready to cast...' after receiver auto-refresh",
-        "New 'URL refresh' setting in dashboard (default 5 min)",
-        "Improved receiver logging: Shows exact reason for 'Ready to cast...'",
       ],
     }
   },
