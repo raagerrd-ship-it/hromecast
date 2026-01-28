@@ -873,16 +873,16 @@ async function castMedia(chromecastName, url, retryCount = 0) {
     
     client.connect(device.host, () => {
       log.info('✅ Connected to Chromecast');
-      log.info('📡 [DEBUG] Creating channels...');
+      log.debug('📡 [DEBUG] Creating channels...');
       recordCircuitSuccess();
       
       const connection = client.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.tp.connection', 'JSON');
       const heartbeat = client.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.tp.heartbeat', 'JSON');
       const receiver = client.createChannel('sender-0', 'receiver-0', 'urn:x-cast:com.google.cast.receiver', 'JSON');
       
-      log.info('📡 [DEBUG] Channels created, sending CONNECT...');
+      log.debug('📡 [DEBUG] Channels created, sending CONNECT...');
       connection.send({ type: 'CONNECT' });
-      log.info('📡 [DEBUG] CONNECT sent');
+      log.debug('📡 [DEBUG] CONNECT sent');
       
       // ============ SIMPLE HEARTBEAT (matching v1.0.19) ============
       // The previous aggressive watchdog implementation was causing false disconnects.
@@ -921,15 +921,15 @@ async function castMedia(chromecastName, url, retryCount = 0) {
       
       // Debug: Log ALL receiver messages (not just RECEIVER_STATUS)
       receiver.on('message', (data) => {
-        log.info(`📨 [DEBUG] Receiver message type: ${data.type}`);
+        log.debug(`📨 [DEBUG] Receiver message type: ${data.type}`);
         if (data.type === 'RECEIVER_STATUS') {
           const apps = data.status?.applications || [];
-          log.info(`📨 [DEBUG] RECEIVER_STATUS: ${apps.length} app(s) running`);
+          log.debug(`📨 [DEBUG] RECEIVER_STATUS: ${apps.length} app(s) running`);
           apps.forEach((app, i) => {
-            log.info(`📨 [DEBUG]   App ${i}: ${app.displayName} (${app.appId})`);
+            log.debug(`📨 [DEBUG]   App ${i}: ${app.displayName} (${app.appId})`);
           });
         } else {
-          log.info(`📨 [DEBUG] Full message: ${JSON.stringify(data)}`);
+          log.debug(`📨 [DEBUG] Full message: ${JSON.stringify(data)}`);
         }
       });
       
