@@ -114,22 +114,27 @@ Write-Host "  Node.js $nodeVersion OK" -ForegroundColor Green
 # 2. Forbereda uppdatering - pausa aktiv bridge
 Write-Host "[2/8] Forbereder uppdatering..." -ForegroundColor Yellow
 
-# Forsok pausa befintlig bridge gracefully
+# Kolla om task finns och bridge kors
 $existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-if ($existingTask -and $existingTask.State -eq "Running") {
-    Write-Host "  Pausar befintlig bridge..." -ForegroundColor Gray
+if ($existingTask) {
+    Write-Host "  Befintlig installation hittad" -ForegroundColor Gray
     
-    # Anropa prepare-update endpoint
+    # Forsok anropa prepare-update (fungerar om bridge kors oavsett task-state)
     try {
+        Write-Host "  Pausar bridge gracefully..." -ForegroundColor Gray
         $response = Invoke-RestMethod -Uri "http://localhost:$Port/api/prepare-update" -Method Post -TimeoutSec 5 -ErrorAction Stop
-        Write-Host "  Bridge pausad gracefully" -ForegroundColor Green
+        Write-Host "  Bridge pausad" -ForegroundColor Green
         Start-Sleep -Seconds 2
     } catch {
-        Write-Host "  Kunde inte pausa gracefully, fortsatter anda..." -ForegroundColor Yellow
+        Write-Host "  Bridge svarar inte (kanske inte startad), fortsatter..." -ForegroundColor Yellow
     }
     
-    Write-Host "  Stoppar befintlig task..." -ForegroundColor Gray
+    # Stoppa task oavsett state
+    Write-Host "  Stoppar scheduled task..." -ForegroundColor Gray
     Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 1
+} else {
+    Write-Host "  Ny installation" -ForegroundColor Gray
 }
 
 # 3. Skapa app-mapp (bevara config.json)
