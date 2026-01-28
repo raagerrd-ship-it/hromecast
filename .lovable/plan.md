@@ -1,36 +1,33 @@
 
-# Plan: Fixa URL Refresh Timer vid Ny Cast
+# Plan: URL Refresh Timer Fix ✅ KLAR
 
-## Problem
-När en ny cast startas i `castMedia()` uppdateras inte `lastUrlRefreshTime`. Detta gör att URL refresh-intervallet beräknas från bridge-starttiden istället för från när casten faktiskt startade.
+## Problem (löst)
+När en ny cast startades i `castMedia()` uppdaterades inte `lastUrlRefreshTime`. Detta gjorde att URL refresh-intervallet beräknades från bridge-starttiden istället för från när casten faktiskt startade.
 
-**Symptom i loggen:**
-```
-19:50:29 ✅ Cast successful
-19:50:31 ⏰ URL refresh interval reached (127 min)  ← FEL!
-```
+## Lösning (implementerad)
 
-## Lösning
-Lägg till `lastUrlRefreshTime = Date.now()` i `castMedia()` direkt efter att URL:en skickats till receivern.
+### 1. Reset timer vid cast ✅
+Lagt till `lastUrlRefreshTime = Date.now()` i `castMedia()` efter lyckad cast.
 
-## Tekniska ändringar
+### 2. Förenklad URL-refresh logik ✅
+- Borttagen: Separat `refreshUrlInterval` setting (30 min default)
+- Ny logik: URL skickas automatiskt 2 minuter innan `receiverAutoRefresh` (45 min default)
+- Resultat: URL skickas vid ~43 min, receiver laddar om vid 45 min
 
-### `bridge/index.js`
-**Rad ~1030-1032** - Efter "Cast successful":
+### 3. Städat debug-loggar ✅
+- Flyttat `[DEBUG]` receiver-meddelanden till `log.debug()`
+- Flyttat `[RECOVERY] Checking device status...` till `log.debug()`
+- Debug-loggar sparas alltid i buffer men visas bara om debug-filtret är aktivt
 
-```javascript
-log.info('✅ Cast successful - keeping connection alive indefinitely');
-screensaverActive = true;
-lastUrlRefreshTime = Date.now(); // <-- LÄGG TILL: Reset URL refresh timer
-stopRecoveryCheck();
-```
+## Filer ändrade
+- `bridge/index.js` - Timer-fix, förenklad refresh-logik, debug-loggar
+- `bridge/public/index.html` - Borttagen URL-refresh setting
+- `bridge/public/app.js` - Borttagen URL-refresh setting
 
 ## Resultat
 
 | Före | Efter |
 |------|-------|
-| URL refresh triggas direkt efter cast (127+ min) | URL refresh triggas efter konfigurerat intervall (30 min default) |
-| Baseras på bridge-starttid | Baseras på senaste URL-sändning |
-
-## Filer att ändra
-1. `bridge/index.js` - Lägg till en rad i `castMedia()`
+| URL refresh triggades direkt efter cast (127+ min) | Triggas 2 min innan receiver auto-refresh |
+| Två separata timers | En timer styr allt |
+| Debug-loggar visades alltid | Debug-loggar dolda som default |
