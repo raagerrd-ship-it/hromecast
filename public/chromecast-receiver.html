@@ -111,15 +111,36 @@
   <iframe id="content" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" loading="eager" style="display:none;"></iframe>
   
   <script>
-    // ============ MINIMAL RECEIVER v1.3.38 ============
-    // Simplified to debug initialization issues
+    // ============ MINIMAL RECEIVER v1.3.43 ============
+    // With persistent error logging
     
-    const RECEIVER_VERSION = '1.3.39';
+    const RECEIVER_VERSION = '1.3.43';
     
     const statusEl = document.getElementById('status');
     const loadingEl = document.getElementById('loading');
     const contentEl = document.getElementById('content');
     const debugLogEl = document.getElementById('debug-log');
+    
+    // Check for errors/reload reason from previous session
+    const previousError = localStorage.getItem('lastError');
+    const reloadReason = localStorage.getItem('lastReloadReason');
+    
+    if (previousError) {
+      debugLogEl.classList.add('has-errors');
+      const entry = document.createElement('div');
+      entry.className = 'log-entry error';
+      entry.textContent = '⚠️ PREVIOUS ERROR: ' + previousError;
+      debugLogEl.appendChild(entry);
+      localStorage.removeItem('lastError');
+    }
+    
+    if (reloadReason) {
+      const entry = document.createElement('div');
+      entry.className = 'log-entry warn';
+      entry.textContent = '🔄 RELOAD: ' + reloadReason;
+      debugLogEl.insertBefore(entry, debugLogEl.firstChild);
+      localStorage.removeItem('lastReloadReason');
+    }
     
     // Simple logging - only show debug panel if errors occur
     function log(level, message) {
@@ -133,8 +154,20 @@
       // Show debug panel only for errors
       if (level === 'error') {
         debugLogEl.classList.add('has-errors');
+        // Persist error for after reload
+        localStorage.setItem('lastError', message);
       }
     }
+    
+    // Global error handlers
+    window.onerror = function(msg, url, line) {
+      log('error', 'JS Error: ' + msg + ' at line ' + line);
+      return false;
+    };
+    
+    window.onunhandledrejection = function(event) {
+      log('error', 'Unhandled promise: ' + event.reason);
+    };
     
     function setStatus(text, type) {
       statusEl.textContent = text;
@@ -249,7 +282,8 @@
     log('info', 'Auto-refresh: ' + refreshMinutes + ' min');
     
     setTimeout(function() {
-      log('warn', 'Auto-refresh triggered');
+      // Save reload reason to localStorage before reload
+      localStorage.setItem('lastReloadReason', 'Auto-refresh after ' + refreshMinutes + ' min');
       window.location.reload();
     }, refreshMinutes * 60 * 1000);
     
