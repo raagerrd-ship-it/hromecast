@@ -129,9 +129,9 @@ if ($existingTask) {
         Write-Host "  Bridge svarar inte (kanske inte startad), fortsatter..." -ForegroundColor Yellow
     }
     
-    # Stoppa task oavsett state
-    Write-Host "  Stoppar scheduled task..." -ForegroundColor Gray
-    Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    # Avregistrera task HELT for att undvika auto-restart
+    Write-Host "  Tar bort scheduled task (aterupprättas i steg 7)..." -ForegroundColor Gray
+    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 1
 } else {
     Write-Host "  Ny installation" -ForegroundColor Gray
