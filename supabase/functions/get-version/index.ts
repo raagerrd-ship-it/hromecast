@@ -19,10 +19,26 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.38";
-const RELEASED_AT = "2026-01-27";
+const VERSION = "1.3.42";
+const RELEASED_AT = "2026-01-28";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.42",
+    date: "2026-01-28",
+    changes: {
+      sv: [
+        "Smart heartbeat-logg: Bevarar historik vid statusändringar",
+        "Förbättrad deduplicering: Endast aktiv heartbeat uppdateras",
+        "Ny isHeartbeat-flagga ersätter isStatusCheck",
+      ],
+      en: [
+        "Smart heartbeat log: Preserves history on status changes",
+        "Improved deduplication: Only active heartbeat is updated",
+        "New isHeartbeat flag replaces isStatusCheck",
+      ],
+    }
+  },
   {
     version: "1.3.36",
     date: "2026-01-27",
