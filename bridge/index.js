@@ -362,7 +362,7 @@ function startRecoveryCheck() {
     }
     
     // Cooldown over - check if device is idle
-    log.info('🔍 [RECOVERY] Checking device status...');
+    log.debug('🔍 [RECOVERY] Checking device status...');
     const currentConfig = loadConfig();
     
     if (!currentConfig.selectedChromecast) {
