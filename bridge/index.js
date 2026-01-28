@@ -82,7 +82,7 @@ let logBuffer = [];
 let lastCheckMessages = [];
 
 // Track last URL refresh time (for refreshUrlInterval feature)
-let lastUrlRefreshTime = 0;
+let lastUrlRefreshTime = Date.now();
 
 // Default config with timing settings (all in seconds unless noted)
 // Note: discoveryInterval removed - discovery only runs at start, on reconnect, and manually
