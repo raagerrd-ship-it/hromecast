@@ -19,10 +19,26 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.42";
+const VERSION = "1.3.43";
 const RELEASED_AT = "2026-01-28";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.43",
+    date: "2026-01-28",
+    changes: {
+      sv: [
+        "Loggfiltrering: Välj vilka loggtyper som visas (Cast, Status, Debug, Fel, System)",
+        "Debug-loggar dolda som standard för renare vy",
+        "Filterinställningar sparas i webbläsaren",
+      ],
+      en: [
+        "Log filtering: Choose which log types to display (Cast, Status, Debug, Error, System)",
+        "Debug logs hidden by default for cleaner view",
+        "Filter settings saved in browser",
+      ],
+    }
+  },
   {
     version: "1.3.42",
     date: "2026-01-28",

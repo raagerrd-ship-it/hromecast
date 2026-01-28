@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.42';
+const BRIDGE_VERSION = '1.3.43';
 
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
@@ -112,11 +112,25 @@ const DEFAULT_CONFIG = {
 
 // ============ Structured Logging ============
 
+function categorizeLog(level, msg) {
+  if (msg.includes('[DEBUG]')) {
+    return 'debug';
+  } else if (msg.includes('Cast') || msg.includes('Launching') || msg.includes('Sending URL') || msg.includes('📺')) {
+    return 'cast';
+  } else if (msg.includes('📊') || msg.includes('Heartbeat') || msg.includes('CHECK') || msg.includes('Status')) {
+    return 'status';
+  } else if (level === 'error' || msg.includes('❌') || msg.includes('Failed') || msg.includes('Error')) {
+    return 'error';
+  }
+  return 'system';
+}
+
 function addToLogBuffer(level, msg, args) {
   const entry = {
     timestamp: new Date().toISOString(),
     level,
     message: msg,
+    category: categorizeLog(level, msg),
     args: args.length > 0 ? args : undefined
   };
   logBuffer.push(entry);

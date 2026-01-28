@@ -496,6 +496,45 @@ input:checked + .slider:before {
   border: none;
 }
 
+/* Log Filters */
+.log-filters {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  flex: 1;
+  justify-content: center;
+}
+
+.log-filter {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.65rem;
+  border-radius: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+  opacity: 0.5;
+}
+
+.log-filter:hover {
+  border-color: var(--text-muted);
+  opacity: 0.8;
+}
+
+.log-filter.active {
+  opacity: 1;
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+}
+
+/* Logs Card Header */
+.logs-card .card-header {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 /* Logs */
 .logs-container {
   max-height: 300px;
