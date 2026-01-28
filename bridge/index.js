@@ -101,8 +101,7 @@ const DEFAULT_CONFIG = {
   idleStatusTimeout: 5,              // Timeout for idle check (seconds)
   castRetryDelay: 2,                 // Base delay for retry backoff (seconds)
   castMaxRetries: 3,                 // Max cast retry attempts
-  receiverAutoRefresh: 45,           // Auto-refresh receiver (minutes)
-  refreshUrlInterval: 30,            // How often to re-send URL to receiver (minutes) - ensures receiver has content after auto-refresh
+  receiverAutoRefresh: 45,           // Auto-refresh receiver (minutes) - URL sent 2 min before
   // Återhämtning & Skydd
   cooldownAfterTakeover: 30,         // Cooldown after another app takes over (seconds)
   recoveryCheckInterval: 10,         // How often to check for recovery (seconds)
@@ -1268,13 +1267,15 @@ async function checkAndActivateScreensaver() {
       lastUrlRefreshTime = Date.now(); // Reset refresh timer on resume
     }
     
-    // Periodically re-send URL to receiver to handle auto-refresh
-    // This ensures the receiver has content even after its auto-refresh
-    const refreshIntervalMs = (config.refreshUrlInterval || 30) * 60 * 1000;
+    // Send URL shortly before receiver's auto-refresh (2 min before)
+    // This ensures receiver has fresh URL in memory right before reload
+    const receiverRefreshMs = (config.receiverAutoRefresh || 45) * 60 * 1000;
+    const preRefreshBuffer = 2 * 60 * 1000; // 2 minutes before
+    const refreshTriggerTime = receiverRefreshMs - preRefreshBuffer;
     const timeSinceRefresh = Date.now() - lastUrlRefreshTime;
     
-    if (timeSinceRefresh >= refreshIntervalMs) {
-      log.info(`⏰ URL refresh interval reached (${Math.round(timeSinceRefresh / 60000)} min)`);
+    if (timeSinceRefresh >= refreshTriggerTime) {
+      log.info(`⏰ Sending URL before receiver auto-refresh (${Math.round(timeSinceRefresh / 60000)}/${config.receiverAutoRefresh || 45} min)`);
       try {
         await refreshMediaOnReceiver(config.selectedChromecast, config.url);
         lastUrlRefreshTime = Date.now();
