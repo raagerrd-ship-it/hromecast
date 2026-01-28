@@ -99,6 +99,15 @@ let state = {
   isLoading: false
 };
 
+// Log filter state (debug OFF by default)
+let logFilters = JSON.parse(localStorage.getItem('logFilters')) || {
+  cast: true,
+  status: true,
+  debug: false,
+  error: true,
+  system: true
+};
+
 // ============ UI Updates ============
 
 function updateStatus(online, text) {
@@ -166,15 +175,26 @@ function updateLogs(logs) {
     return;
   }
   
+  // Filter logs based on active filters
+  const filteredLogs = logs.filter(log => {
+    const category = log.category || 'system';
+    return logFilters[category] !== false;
+  });
+  
+  if (filteredLogs.length === 0) {
+    container.innerHTML = '<p class="logs-placeholder">Inga loggar matchar filtret...</p>';
+    return;
+  }
+  
   // Sort by timestamp descending (newest first)
-  const sortedLogs = [...logs].sort((a, b) => {
+  const sortedLogs = [...filteredLogs].sort((a, b) => {
     const timeA = new Date(a.timestamp).getTime();
     const timeB = new Date(b.timestamp).getTime();
     return timeB - timeA;
   });
   
   const html = sortedLogs.map(log => `
-    <div class="log-entry ${log.level}">
+    <div class="log-entry ${log.level}" data-category="${log.category || 'system'}">
       <span class="log-time">${formatLogTime(log.timestamp)}</span>
       <span class="log-level">${log.level.toUpperCase()}</span>
       <span class="log-message">${log.message}</span>
@@ -182,6 +202,32 @@ function updateLogs(logs) {
   `).join('');
   
   container.innerHTML = html;
+}
+
+// Initialize log filter buttons
+function initLogFilters() {
+  const filterButtons = document.querySelectorAll('.log-filter');
+  
+  // Set initial active states from localStorage
+  filterButtons.forEach(btn => {
+    const filter = btn.dataset.filter;
+    if (logFilters[filter]) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+  
+  // Add click handlers
+  filterButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const filter = btn.dataset.filter;
+      logFilters[filter] = !logFilters[filter];
+      btn.classList.toggle('active', logFilters[filter]);
+      localStorage.setItem('logFilters', JSON.stringify(logFilters));
+      loadStatus(); // Refresh logs with new filter
+    });
+  });
 }
 
 function setLoading(loading) {
@@ -744,6 +790,9 @@ let statusPollInterval = null;
 
 async function init() {
   updateStatus(false, 'Ansluter...');
+  
+  // Initialize log filters before loading data
+  initLogFilters();
   
   await loadSettings();
   await loadDevices();

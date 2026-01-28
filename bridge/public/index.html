@@ -275,6 +275,13 @@
       <section class="card logs-card">
         <div class="card-header">
           <h2>📋 Loggar</h2>
+          <div class="log-filters" id="log-filters">
+            <button class="log-filter active" data-filter="cast" title="Cast-händelser">📺 Cast</button>
+            <button class="log-filter active" data-filter="status" title="Statuskontroller">📊 Status</button>
+            <button class="log-filter" data-filter="debug" title="Debug-meddelanden">🔧 Debug</button>
+            <button class="log-filter active" data-filter="error" title="Felmeddelanden">❌ Fel</button>
+            <button class="log-filter active" data-filter="system" title="Systemhändelser">⚙️ System</button>
+          </div>
           <button id="clear-logs-btn" class="btn btn-secondary btn-small">🗑️ Rensa</button>
         </div>
         <div class="card-content">
