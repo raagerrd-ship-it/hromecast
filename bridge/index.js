@@ -1029,6 +1029,7 @@ async function castMedia(chromecastName, url, retryCount = 0) {
             
             log.info('✅ Cast successful - keeping connection alive indefinitely');
             screensaverActive = true;
+            lastUrlRefreshTime = Date.now(); // Reset URL refresh timer on new cast
             stopRecoveryCheck(); // Stop recovery since we're active
             
             // Keep connection alive - don't close client
