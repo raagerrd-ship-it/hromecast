@@ -1,72 +1,93 @@
 
-# Plan: Visa uppdaterad status-tid varje minut i loggen
+# Plan: Enkel heartbeat-logg med bevarad historik (v1.3.42)
 
-## Problem
-Status-check-loggarna uppdaterar sina timestamps korrekt i bakgrunden, men eftersom de bara ändrar befintliga poster (inte skapar nya) så syns de inte som "nya händelser" i logglistan. Du ser bara URL-refresh-loggarna var 30:e minut.
+## Sammanfattning
+Ta bort "sticky"-konceptet helt. Varje minut jämförs den nya statusen med den senaste heartbeat-loggen:
 
-## Lösning
-Ändra logiken så att **statuscheck-loggarna alltid visas överst** med uppdaterad tid, oavsett om statusen har ändrats eller ej. Detta ger dig en "live-puls" som visar att systemet fungerar.
+- **Samma status** → Ta bort gamla, lägg till ny (uppdaterad tid)
+- **Annan status** → Behåll gamla som historik, lägg till ny
 
 ## Tekniska ändringar
 
-### Fil 1: `bridge/index.js`
+### Fil: `bridge/index.js`
 
-**Ändring i `checkAndActivateScreensaver()` (rad ~1218-1254)**
+**Ändring 1: Rad 1214-1232 - Ny jämförelselogik**
 
-1. **Ta bort den tysta timestamp-uppdateringen**
-   - Nuvarande logik uppdaterar bara timestamp utan att logga något nytt
-   
-2. **Gör om till en enda "sticky" statusrad**
-   - Istället för 3 separata status-loggposter, konsolidera till 1 rad
-   - Format: `📊 Status: [status] | Apps: [apps] | Tid: [HH:MM:SS]`
-   - Uppdatera alltid denna enda rad med ny timestamp
+Nuvarande kod:
+```javascript
+// ALWAYS log status check so it's visible in dashboard (v1.3.41)
+// Find existing sticky status entry and remove it first
+const existingIdx = logBuffer.findIndex(entry => entry.isStatusCheck);
+if (existingIdx !== -1) {
+  logBuffer.splice(existingIdx, 1);
+}
 
-3. **Alternativ: Lägg till en diskret "heartbeat"-logg**
-   - En rad som bara visar "🔄 Kontroll: OK" med uppdaterad tid varje minut
-   - Tar mindre plats i loggen
+// Add new sticky entry at the end (will be sorted to top by timestamp in dashboard)
+logBuffer.push({
+  timestamp: now,
+  level: 'info',
+  message: `📊 ${compactStatus}`,
+  isStatusCheck: true
+});
+```
 
-### Föreslagen implementering (alternativ 2 - minimal ändring)
+Ny kod:
+```javascript
+// Heartbeat logging with deduplication (v1.3.42)
+// Same status = replace (update time only)
+// Different status = keep old as history, add new
+const newMessage = `📊 ${compactStatus}`;
+const existingIdx = logBuffer.findIndex(entry => entry.isHeartbeat);
 
-```text
-// I checkAndActivateScreensaver() efter att status är kontrollerad:
+if (existingIdx !== -1) {
+  const existing = logBuffer[existingIdx];
+  
+  if (existing.message === newMessage) {
+    // SAME status - remove old, add new with updated time
+    logBuffer.splice(existingIdx, 1);
+  } else {
+    // DIFFERENT status - keep old as history (remove heartbeat flag)
+    existing.isHeartbeat = false;
+  }
+}
 
-// Bygg en kompakt statuslogg
-const statusEmoji = {
-  'our_app': '✅',
-  'idle': '⏸️', 
-  'busy': '📺',
-  'error': '❌'
-}[result.status] || '❓';
+// Add new heartbeat entry
+logBuffer.push({
+  timestamp: now,
+  level: 'info',
+  message: newMessage,
+  isHeartbeat: true  // Used only to find this entry next time
+});
 
-const compactStatus = `${statusEmoji} ${result.status} | ${result.appList || 'none'}`;
-
-// Uppdatera eller skapa den enda sticky-loggen
-const now = new Date().toISOString();
-const existingSticky = logBuffer.find(e => e.isStatusCheck);
-
-if (existingSticky) {
-  existingSticky.timestamp = now;
-  existingSticky.message = `📊 Senast kontrollerat: ${compactStatus}`;
-} else {
-  logBuffer.push({
-    timestamp: now,
-    level: 'info',
-    message: `📊 Senast kontrollerat: ${compactStatus}`,
-    isStatusCheck: true
-  });
+// Trim buffer if needed
+while (logBuffer.length > LOG_BUFFER_SIZE) {
+  logBuffer.shift();
 }
 ```
 
+**Ändring 2: Rad 10 - Bumpa version**
+```javascript
+const BRIDGE_VERSION = '1.3.42';
+```
+
+**Ändring 3: Ta bort extra "Statusändring"-logg (rad 1234-1239)**
+
+Eftersom vi nu bevarar gamla heartbeat-loggar som historik när status ändras, behövs inte den separata "🔄 Statusändring"-loggen längre. Den kan tas bort för att undvika duplicering.
+
 ## Resultat
 
-- Du kommer se **en enda statusrad** i loggen som alltid visar senaste kontrollerad tid
-- Raden uppdateras varje 60 sekunder (eller vad du ställt in `screensaverCheckInterval` till)
-- Ingen spam - bara en rad som "rör sig" uppåt i loggen med ny tid
-- Permanenta loggar (Cast, Stop, URL refresh) fortsätter fungera som vanligt
+Exempel på hur loggen kommer se ut:
 
-## Version
+```text
+08:05:15  📊 ✅ Skärmsläckare aktiv | Apps: DADDDD    ← Senaste (uppdateras varje minut)
+08:02:15  📊 ⏸️ Inaktiv | Apps: none                  ← Bevarad (status ändrades vid 08:03)
+07:45:00  ✅ URL refresh sent to receiver
+07:31:22  📊 ✅ Skärmsläckare aktiv | Apps: DADDDD    ← Bevarad (blev inaktiv vid 08:02)
+```
 
-Bumpa till **v1.3.40** för spårning.
+- Ingen "sticky"-logik - allt sorteras kronologiskt automatiskt
+- `isHeartbeat`-flaggan används bara internt för att hitta rätt post att jämföra med
+- Historik bevaras när status ändras
 
 ## Filer att ändra
-- `bridge/index.js` - Förenklad statuslogg-logik
+- `bridge/index.js`
