@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.40';
+const BRIDGE_VERSION = '1.3.41';
 
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
@@ -1209,26 +1209,26 @@ async function checkAndActivateScreensaver() {
   
   const compactStatus = `${statusEmoji} ${statusLabel} | Apps: ${result.appList || 'none'}`;
   const now = new Date().toISOString();
+  const timeStr = new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   
-  // Find existing sticky status entry
-  const existingSticky = logBuffer.find(entry => entry.isStatusCheck);
+  // ALWAYS log status check so it's visible in dashboard (v1.3.41)
+  // Find existing sticky status entry and remove it first
+  const existingIdx = logBuffer.findIndex(entry => entry.isStatusCheck);
+  if (existingIdx !== -1) {
+    logBuffer.splice(existingIdx, 1);
+  }
   
-  if (existingSticky) {
-    // Always update timestamp and message (so user sees "pulse")
-    existingSticky.timestamp = now;
-    existingSticky.message = `📊 ${compactStatus}`;
-  } else {
-    // Create new sticky entry
-    logBuffer.push({
-      timestamp: now,
-      level: 'info',
-      message: `📊 ${compactStatus}`,
-      isStatusCheck: true
-    });
-    // Trim buffer if needed
-    while (logBuffer.length > LOG_BUFFER_SIZE) {
-      logBuffer.shift();
-    }
+  // Add new sticky entry at the end (will be sorted to top by timestamp in dashboard)
+  logBuffer.push({
+    timestamp: now,
+    level: 'info',
+    message: `📊 ${compactStatus}`,
+    isStatusCheck: true
+  });
+  
+  // Trim buffer if needed
+  while (logBuffer.length > LOG_BUFFER_SIZE) {
+    logBuffer.shift();
   }
   
   // Log status change as permanent entry (not sticky)
