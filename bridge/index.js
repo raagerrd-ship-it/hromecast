@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.41';
+const BRIDGE_VERSION = '1.3.42';
 
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
@@ -1211,32 +1211,36 @@ async function checkAndActivateScreensaver() {
   const now = new Date().toISOString();
   const timeStr = new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   
-  // ALWAYS log status check so it's visible in dashboard (v1.3.41)
-  // Find existing sticky status entry and remove it first
-  const existingIdx = logBuffer.findIndex(entry => entry.isStatusCheck);
+  // Heartbeat logging with deduplication (v1.3.42)
+  // Same status = replace (update time only)
+  // Different status = keep old as history, add new
+  const newMessage = `📊 ${compactStatus}`;
+  const existingIdx = logBuffer.findIndex(entry => entry.isHeartbeat);
+  
   if (existingIdx !== -1) {
-    logBuffer.splice(existingIdx, 1);
+    const existing = logBuffer[existingIdx];
+    
+    if (existing.message === newMessage) {
+      // SAME status - remove old, add new with updated time
+      logBuffer.splice(existingIdx, 1);
+    } else {
+      // DIFFERENT status - keep old as history (remove heartbeat flag)
+      existing.isHeartbeat = false;
+    }
   }
   
-  // Add new sticky entry at the end (will be sorted to top by timestamp in dashboard)
+  // Add new heartbeat entry
   logBuffer.push({
     timestamp: now,
     level: 'info',
-    message: `📊 ${compactStatus}`,
-    isStatusCheck: true
+    message: newMessage,
+    isHeartbeat: true
   });
   
   // Trim buffer if needed
   while (logBuffer.length > LOG_BUFFER_SIZE) {
     logBuffer.shift();
   }
-  
-  // Log status change as permanent entry (not sticky)
-  const newStatusKey = `${result.status}|${result.appList || 'none'}`;
-  if (lastCheckMessages.length > 0 && lastCheckMessages[0] !== newStatusKey) {
-    log.info(`🔄 Statusändring: ${compactStatus}`);
-  }
-  lastCheckMessages = [newStatusKey];
 
 
   // Handle different states
