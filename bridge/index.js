@@ -153,10 +153,12 @@ const log = {
     addToLogBuffer('error', msg, args);
   },
   debug: (msg, ...args) => {
+    // Always add to buffer (frontend filters based on user preference)
+    // Only print to console if DEBUG env is set
     if (process.env.DEBUG) {
       console.log(`[DEBUG] ${new Date().toISOString()} - ${msg}`, ...args);
-      addToLogBuffer('debug', msg, args);
     }
+    addToLogBuffer('debug', msg, args);
   }
 };
 
