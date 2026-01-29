@@ -1110,7 +1110,7 @@ async function refreshMediaOnReceiver(chromecastName, url) {
               ? `${url}&refresh=${refreshMinutes}` 
               : `${url}?refresh=${refreshMinutes}`;
             
-            log.info(`🔄 Refreshing URL via custom channel: ${urlWithRefresh}`);
+            log.debug(`🔄 Refreshing URL via custom channel: ${urlWithRefresh}`);
             customChannel.send({
               type: 'LOAD_WEBSITE',
               url: urlWithRefresh
@@ -1123,7 +1123,7 @@ async function refreshMediaOnReceiver(chromecastName, url) {
                 clearTimeout(timeout);
                 connection.send({ type: 'CLOSE' });
                 refreshClient.close();
-                log.info('✅ URL refresh sent to receiver');
+                log.debug('✅ URL refresh sent to receiver');
                 resolve({ success: true });
               }
             }, 1000);
@@ -1275,7 +1275,7 @@ async function checkAndActivateScreensaver() {
     const timeSinceRefresh = Date.now() - lastUrlRefreshTime;
     
     if (timeSinceRefresh >= refreshTriggerTime) {
-      log.info(`⏰ Sending URL before receiver auto-refresh (${Math.round(timeSinceRefresh / 60000)}/${config.receiverAutoRefresh || 45} min)`);
+      log.debug(`⏰ Sending URL before receiver auto-refresh (${Math.round(timeSinceRefresh / 60000)}/${config.receiverAutoRefresh || 45} min)`);
       try {
         await refreshMediaOnReceiver(config.selectedChromecast, config.url);
         lastUrlRefreshTime = Date.now();
