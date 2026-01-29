@@ -177,6 +177,10 @@ function updateLogs(logs) {
   // Filter logs based on active filters
   const filteredLogs = logs.filter(log => {
     const category = log.category || 'system';
+    // Also check if level is 'debug' - hide these unless debug filter is active
+    if (log.level === 'debug' && !logFilters.debug) {
+      return false;
+    }
     return logFilters[category] !== false;
   });
   
