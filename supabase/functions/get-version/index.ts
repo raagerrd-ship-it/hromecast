@@ -19,10 +19,26 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.43";
-const RELEASED_AT = "2026-01-28";
+const VERSION = "1.3.44";
+const RELEASED_AT = "2026-01-29";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.44",
+    date: "2026-01-29",
+    changes: {
+      sv: [
+        "URL-refresh synkroniserad med receiver: Skickas 2 min innan auto-refresh",
+        "Borttagen separat URL-refresh inställning (nu kopplad till receiver auto-refresh)",
+        "Tystare loggar: URL-refresh och recovery-loggar flyttade till debug",
+      ],
+      en: [
+        "URL refresh synchronized with receiver: Sent 2 min before auto-refresh",
+        "Removed separate URL refresh setting (now linked to receiver auto-refresh)",
+        "Quieter logs: URL refresh and recovery logs moved to debug",
+      ],
+    }
+  },
   {
     version: "1.3.43",
     date: "2026-01-28",
