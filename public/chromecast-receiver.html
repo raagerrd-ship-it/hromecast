@@ -111,10 +111,10 @@
   <iframe id="content" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" loading="eager" style="display:none;"></iframe>
   
   <script>
-    // ============ MINIMAL RECEIVER v1.3.45 ============
-    // With memory monitoring
+    // ============ MINIMAL RECEIVER v1.3.47 ============
+    // With enhanced memory monitoring diagnostics
     
-    const RECEIVER_VERSION = '1.3.45';
+    const RECEIVER_VERSION = '1.3.47';
     
     // Memory tracking
     let memoryHistory = [];
@@ -286,12 +286,17 @@
       // Chrome's memory API (available on Chromecast)
       if (performance && performance.memory) {
         const mem = performance.memory;
-        return {
+        const result = {
           usedMB: Math.round(mem.usedJSHeapSize / 1024 / 1024),
           totalMB: Math.round(mem.totalJSHeapSize / 1024 / 1024),
           limitMB: Math.round(mem.jsHeapSizeLimit / 1024 / 1024),
-          usedPercent: Math.round((mem.usedJSHeapSize / mem.jsHeapSizeLimit) * 100)
+          usedPercent: Math.round((mem.usedJSHeapSize / mem.jsHeapSizeLimit) * 100),
+          // Raw values for debugging
+          rawUsed: mem.usedJSHeapSize,
+          rawTotal: mem.totalJSHeapSize,
+          rawLimit: mem.jsHeapSizeLimit
         };
+        return result;
       }
       return null;
     }
@@ -302,7 +307,10 @@
       
       const sample = {
         time: Date.now(),
-        ...mem
+        usedMB: mem.usedMB,
+        totalMB: mem.totalMB,
+        limitMB: mem.limitMB,
+        usedPercent: mem.usedPercent
       };
       
       memoryHistory.push(sample);
@@ -327,12 +335,26 @@
     // Track memory every minute
     setInterval(trackMemory, 60 * 1000);
     
-    // Initial memory reading
-    const initialMem = getMemoryInfo();
-    if (initialMem) {
-      log('info', 'Initial memory: ' + initialMem.usedMB + 'MB / ' + initialMem.limitMB + 'MB');
+    // Initial memory reading with detailed diagnostics
+    log('info', 'Checking memory API availability...');
+    if (performance) {
+      log('info', 'performance object exists');
+      if (performance.memory) {
+        log('info', 'performance.memory exists');
+        const mem = performance.memory;
+        log('info', 'Raw values - used: ' + mem.usedJSHeapSize + ', total: ' + mem.totalJSHeapSize + ', limit: ' + mem.jsHeapSizeLimit);
+        
+        const initialMem = getMemoryInfo();
+        if (initialMem.rawUsed === 0 && initialMem.rawLimit === 0) {
+          log('warn', 'Memory API returns zeros - may be restricted on this device');
+        } else {
+          log('info', 'Initial memory: ' + initialMem.usedMB + 'MB / ' + initialMem.limitMB + 'MB (' + initialMem.usedPercent + '%)');
+        }
+      } else {
+        log('warn', 'performance.memory is undefined - API not available');
+      }
     } else {
-      log('warn', 'Memory API not available');
+      log('warn', 'performance object is undefined');
     }
     
     // ============ AUTO-REFRESH ============
