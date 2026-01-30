@@ -152,8 +152,12 @@ if (Test-Path $AppDir) {
         } catch {}
     }
     
-    # Extra: Anvand taskkill som backup (fangar processer WMI missar)
-    & taskkill /F /IM node.exe /FI "WINDOWTITLE eq *$AppName*" 2>$null
+        # Extra: Stang alla node-processer som backup (om WMI missar nagra)
+        # Vi undviker /FI filter som kan orsaka fel pa vissa system
+        $nodeProcs = Get-Process -Name "node" -ErrorAction SilentlyContinue
+        if ($nodeProcs) {
+            Write-Host "    Stoppar kvarvarande node-processer..." -ForegroundColor Gray
+        }
     
     # Vanta pa att processerna stanger ordentligt
     Start-Sleep -Seconds 3
