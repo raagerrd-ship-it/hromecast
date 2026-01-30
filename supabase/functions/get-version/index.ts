@@ -19,10 +19,22 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.44";
+const VERSION = "1.3.45";
 const RELEASED_AT = "2026-01-29";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.45",
+    date: "2026-01-29",
+    changes: {
+      sv: [
+        "Buggfix: Debug-loggar filtreras nu korrekt baserat på level-egenskap",
+      ],
+      en: [
+        "Bugfix: Debug logs now filtered correctly based on level property",
+      ],
+    }
+  },
   {
     version: "1.3.44",
     date: "2026-01-29",
