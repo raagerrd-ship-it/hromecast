@@ -116,53 +116,85 @@ Write-Host "[2/8] Forbereder uppdatering..." -ForegroundColor Yellow
 
 # Kolla om task finns
 $existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-$bridgeRunning = $false
 
-# Forsok anropa prepare-update OAVSETT om task finns (bridge kan kora manuellt)
-try {
-    Write-Host "  Kontrollerar om bridge kors pa port $Port..." -ForegroundColor Gray
-    $response = Invoke-RestMethod -Uri "http://localhost:$Port/api/prepare-update" -Method Post -TimeoutSec 5 -ErrorAction Stop
-    Write-Host "  Bridge pausad gracefully" -ForegroundColor Green
-    $bridgeRunning = $true
-    Start-Sleep -Seconds 2
-} catch {
-    Write-Host "  Ingen bridge svarar pa port $Port" -ForegroundColor Gray
-}
-
-# Om bridge fortfarande kors, forsok stanga node-processen direkt
-if (Test-Path $AppDir) {
-    Write-Host "  Befintlig installation hittad i $AppDir" -ForegroundColor Gray
-    
-    # Stang eventuella node-processer som kors fran denna mapp
-    $nodeProcesses = Get-WmiObject Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue | 
-        Where-Object { $_.CommandLine -like "*$AppDir*" }
-    
-    if ($nodeProcesses) {
-        Write-Host "  Stoppar node-processer..." -ForegroundColor Gray
-        foreach ($proc in $nodeProcesses) {
-            try {
-                Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
-            } catch {}
-        }
-        Start-Sleep -Seconds 2
-    }
-}
-
-# Avregistrera task HELT for att undvika auto-restart
+# Avregistrera task FORST for att undvika auto-restart
 if ($existingTask) {
     Write-Host "  Tar bort scheduled task (aterupprättas i steg 7)..." -ForegroundColor Gray
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 1
+}
+
+# Forsok anropa prepare-update (bridge kan kora manuellt eller via task)
+try {
+    Write-Host "  Kontrollerar om bridge kors pa port $Port..." -ForegroundColor Gray
+    $response = Invoke-RestMethod -Uri "http://localhost:$Port/api/prepare-update" -Method Post -TimeoutSec 5 -ErrorAction Stop
+    Write-Host "  Bridge pausad gracefully" -ForegroundColor Green
+    Start-Sleep -Seconds 3
+} catch {
+    Write-Host "  Ingen bridge svarar pa port $Port" -ForegroundColor Gray
+}
+
+# Stang ALLA node-processer som kors fran denna mapp med taskkill (mer palitligt)
+if (Test-Path $AppDir) {
+    Write-Host "  Befintlig installation hittad i $AppDir" -ForegroundColor Gray
+    
+    # Anvand taskkill for att forcera stangning av alla node-processer
+    Write-Host "  Stoppar eventuella node-processer..." -ForegroundColor Gray
+    
+    # Hitta och stoppa via WMI
+    $nodeProcesses = Get-WmiObject Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue | 
+        Where-Object { $_.CommandLine -like "*$AppDir*" -or $_.CommandLine -like "*$AppName*" }
+    
+    foreach ($proc in $nodeProcesses) {
+        try {
+            Write-Host "    Stoppar PID $($proc.ProcessId)..." -ForegroundColor Gray
+            Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
+        } catch {}
+    }
+    
+    # Extra: Anvand taskkill som backup (fangar processer WMI missar)
+    & taskkill /F /IM node.exe /FI "WINDOWTITLE eq *$AppName*" 2>$null
+    
+    # Vanta pa att processerna stanger ordentligt
+    Start-Sleep -Seconds 3
+    
+    # Dubbelkolla att mappen ar fri
+    $retryCount = 0
+    $maxRetries = 5
+    while ($retryCount -lt $maxRetries) {
+        try {
+            # Testa om vi kan ta bort mappen
+            $testFile = Join-Path $AppDir "test-lock.tmp"
+            [System.IO.File]::Create($testFile).Close()
+            Remove-Item $testFile -Force -ErrorAction Stop
+            Write-Host "  Mappen ar fri" -ForegroundColor Green
+            break
+        } catch {
+            $retryCount++
+            if ($retryCount -lt $maxRetries) {
+                Write-Host "  Vantar pa att filer frislapps... ($retryCount/$maxRetries)" -ForegroundColor Yellow
+                Start-Sleep -Seconds 2
+            }
+        }
+    }
 } else {
     Write-Host "  Ny installation" -ForegroundColor Gray
 }
 
-# 3. Skapa app-mapp (bevara config.json)
+# 3. Skapa app-mapp
 Write-Host "[3/8] Skapar app-mapp..." -ForegroundColor Yellow
 
 if (Test-Path $AppDir) {
     Write-Host "  Tar bort befintlig installation..." -ForegroundColor Gray
-    Remove-Item -Path $AppDir -Recurse -Force
+    try {
+        Remove-Item -Path $AppDir -Recurse -Force -ErrorAction Stop
+    } catch {
+        Write-Host "  Kunde inte ta bort mappen, forsoker stanga fler processer..." -ForegroundColor Yellow
+        # Sista forsok: stoppa ALLA node-processer
+        & taskkill /F /IM node.exe 2>$null
+        Start-Sleep -Seconds 3
+        Remove-Item -Path $AppDir -Recurse -Force
+    }
 }
 New-Item -ItemType Directory -Path $AppDir -Force | Out-Null
 New-Item -ItemType Directory -Path "$AppDir\public" -Force | Out-Null
