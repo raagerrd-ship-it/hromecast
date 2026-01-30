@@ -114,22 +114,42 @@ Write-Host "  Node.js $nodeVersion OK" -ForegroundColor Green
 # 2. Forbereda uppdatering - pausa aktiv bridge
 Write-Host "[2/8] Forbereder uppdatering..." -ForegroundColor Yellow
 
-# Kolla om task finns och bridge kors
+# Kolla om task finns
 $existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-if ($existingTask) {
-    Write-Host "  Befintlig installation hittad" -ForegroundColor Gray
+$bridgeRunning = $false
+
+# Forsok anropa prepare-update OAVSETT om task finns (bridge kan kora manuellt)
+try {
+    Write-Host "  Kontrollerar om bridge kors pa port $Port..." -ForegroundColor Gray
+    $response = Invoke-RestMethod -Uri "http://localhost:$Port/api/prepare-update" -Method Post -TimeoutSec 5 -ErrorAction Stop
+    Write-Host "  Bridge pausad gracefully" -ForegroundColor Green
+    $bridgeRunning = $true
+    Start-Sleep -Seconds 2
+} catch {
+    Write-Host "  Ingen bridge svarar pa port $Port" -ForegroundColor Gray
+}
+
+# Om bridge fortfarande kors, forsok stanga node-processen direkt
+if (Test-Path $AppDir) {
+    Write-Host "  Befintlig installation hittad i $AppDir" -ForegroundColor Gray
     
-    # Forsok anropa prepare-update (fungerar om bridge kors oavsett task-state)
-    try {
-        Write-Host "  Pausar bridge gracefully..." -ForegroundColor Gray
-        $response = Invoke-RestMethod -Uri "http://localhost:$Port/api/prepare-update" -Method Post -TimeoutSec 5 -ErrorAction Stop
-        Write-Host "  Bridge pausad" -ForegroundColor Green
+    # Stang eventuella node-processer som kors fran denna mapp
+    $nodeProcesses = Get-WmiObject Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue | 
+        Where-Object { $_.CommandLine -like "*$AppDir*" }
+    
+    if ($nodeProcesses) {
+        Write-Host "  Stoppar node-processer..." -ForegroundColor Gray
+        foreach ($proc in $nodeProcesses) {
+            try {
+                Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
+            } catch {}
+        }
         Start-Sleep -Seconds 2
-    } catch {
-        Write-Host "  Bridge svarar inte (kanske inte startad), fortsatter..." -ForegroundColor Yellow
     }
-    
-    # Avregistrera task HELT for att undvika auto-restart
+}
+
+# Avregistrera task HELT for att undvika auto-restart
+if ($existingTask) {
     Write-Host "  Tar bort scheduled task (aterupprättas i steg 7)..." -ForegroundColor Gray
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 1
