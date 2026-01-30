@@ -19,10 +19,28 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.45";
-const RELEASED_AT = "2026-01-29";
+const VERSION = "1.3.46";
+const RELEASED_AT = "2026-01-30";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.46",
+    date: "2026-01-30",
+    changes: {
+      sv: [
+        "Minnesövervakning: Receiver loggar minnesanvändning var 5:e minut",
+        "Visar tillväxt sedan start och varnar vid högt minne (>80%)",
+        "Sparar minnesstatistik mellan omladdningar för analys",
+        "Förbättrad Windows-uppdatering: Stoppar node-process direkt vid fillåsning",
+      ],
+      en: [
+        "Memory monitoring: Receiver logs memory usage every 5 minutes",
+        "Shows growth since start and warns on high memory (>80%)",
+        "Saves memory stats between reloads for analysis",
+        "Improved Windows update: Kills node process directly on file lock",
+      ],
+    }
+  },
   {
     version: "1.3.45",
     date: "2026-01-29",
