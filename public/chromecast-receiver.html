@@ -111,10 +111,10 @@
   <iframe id="content" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" loading="eager" style="display:none;"></iframe>
   
   <script>
-    // ============ MINIMAL RECEIVER v1.3.47 ============
-    // With enhanced memory monitoring diagnostics
+    // ============ MINIMAL RECEIVER v1.3.48 ============
+    // Memory monitoring only - no auto-refresh (memory stable at ~3MB)
     
-    const RECEIVER_VERSION = '1.3.47';
+    const RECEIVER_VERSION = '1.3.48';
     
     // Memory tracking
     let memoryHistory = [];
@@ -357,30 +357,11 @@
       log('warn', 'performance object is undefined');
     }
     
-    // ============ AUTO-REFRESH ============
+    // ============ AUTO-REFRESH DISABLED ============
+    // Memory monitoring showed stable usage (~3MB), no growth over time
+    // Auto-refresh removed as unnecessary - keeping memory logging for verification
     
-    // Auto-refresh every 45 minutes
-    const urlParams = new URLSearchParams(window.location.search);
-    const refreshMinutes = parseInt(urlParams.get('refresh') || '45', 10);
-    log('info', 'Auto-refresh: ' + refreshMinutes + ' min');
-    
-    setTimeout(function() {
-      // Log final memory stats
-      const finalMem = getMemoryInfo();
-      if (finalMem && memoryHistory.length > 0) {
-        const firstMem = memoryHistory[0];
-        const totalGrowth = finalMem.usedMB - firstMem.usedMB;
-        localStorage.setItem('lastMemoryStats', JSON.stringify({
-          final: finalMem,
-          growth: totalGrowth,
-          samples: memoryHistory.length
-        }));
-      }
-      
-      // Save reload reason to localStorage before reload
-      localStorage.setItem('lastReloadReason', 'Auto-refresh after ' + refreshMinutes + ' min');
-      window.location.reload();
-    }, refreshMinutes * 60 * 1000);
+    log('info', 'Auto-refresh disabled (memory stable)');
     
     // Check for memory stats from previous session
     const prevMemStats = localStorage.getItem('lastMemoryStats');
