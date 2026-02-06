@@ -24,11 +24,13 @@
       position: absolute;
       top: 0;
       left: 0;
+      width: 100%;
+      height: 100%;
       transform: translate3d(0, 0, 0);
-      will-change: transform, contents;
+      will-change: transform;
       backface-visibility: hidden;
       -webkit-backface-visibility: hidden;
-      contain: strict;
+      contain: layout;
     }
     
     #status {
@@ -114,7 +116,7 @@
     // ============ MINIMAL RECEIVER v1.3.48 ============
     // Memory monitoring only - no auto-refresh (memory stable at ~3MB)
     
-    const RECEIVER_VERSION = '1.3.49';
+    const RECEIVER_VERSION = '1.3.50';
     
     // Memory tracking
     let memoryHistory = [];
@@ -179,17 +181,8 @@
       log('info', 'Status: ' + text);
     }
     
-    // Setup iframe
-    function setupIframe() {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      contentEl.width = w;
-      contentEl.height = h;
-      contentEl.style.width = w + 'px';
-      contentEl.style.height = h + 'px';
-      log('info', 'Viewport: ' + w + 'x' + h);
-    }
-    
+    // Log viewport size
+    log('info', 'Viewport: ' + window.innerWidth + 'x' + window.innerHeight);
     // Load website into iframe
     let currentUrl = null;
     
@@ -231,7 +224,6 @@
     // ============ INITIALIZATION ============
     
     log('info', 'Receiver v' + RECEIVER_VERSION + ' starting...');
-    setupIframe();
     
     try {
       log('info', 'Getting Cast context...');
@@ -373,7 +365,7 @@
       localStorage.removeItem('lastMemoryStats');
     }
     
-    window.addEventListener('resize', setupIframe);
+    
   </script>
 </body>
 </html>
