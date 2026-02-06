@@ -108,13 +108,13 @@
   <div id="status">Starting receiver...</div>
   <div id="loading" style="display:none;">Loading website...</div>
   <div id="debug-log"></div>
-  <iframe id="content" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" loading="eager" style="display:none;"></iframe>
+  <iframe id="content" frameborder="0" scrolling="no" allow="autoplay" loading="eager" style="display:none; overflow: hidden; border: none;"></iframe>
   
   <script>
     // ============ MINIMAL RECEIVER v1.3.48 ============
     // Memory monitoring only - no auto-refresh (memory stable at ~3MB)
     
-    const RECEIVER_VERSION = '1.3.48';
+    const RECEIVER_VERSION = '1.3.49';
     
     // Memory tracking
     let memoryHistory = [];
