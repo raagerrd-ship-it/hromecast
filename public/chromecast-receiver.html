@@ -4,105 +4,29 @@
   <meta charset="UTF-8">
   <title>Chromecast Website Receiver</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    
-    html, body {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: #000;
-      color: #fff;
-      font-family: Arial, sans-serif;
-    }
-    
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; color: #fff; font-family: Arial, sans-serif; }
     #content {
       border: none;
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
       transform: translate3d(0, 0, 0);
       will-change: transform;
       backface-visibility: hidden;
       -webkit-backface-visibility: hidden;
       contain: layout;
     }
-    
-    #status {
-      position: fixed;
-      top: 20px;
-      left: 20px;
-      background: rgba(0, 0, 0, 0.85);
-      padding: 12px 20px;
-      border-radius: 8px;
-      font-size: 13px;
-      z-index: 1000;
-      max-width: 400px;
-      line-height: 1.4;
-    }
-    
-    #status.connected {
-      background: rgba(0, 100, 0, 0.85);
-    }
-    
-    #status.error {
-      background: rgba(150, 0, 0, 0.85);
-    }
-    
-    #status.warning {
-      background: rgba(150, 100, 0, 0.85);
-    }
-    
-    #loading {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      font-size: 24px;
-      z-index: 999;
-    }
-    
-    #debug-log {
-      position: fixed;
-      bottom: 20px;
-      left: 20px;
-      background: rgba(0, 0, 0, 0.8);
-      padding: 10px 15px;
-      border-radius: 8px;
-      font-size: 11px;
-      z-index: 1000;
-      max-width: 500px;
-      max-height: 200px;
-      overflow-y: auto;
-      font-family: monospace;
-      display: none; /* Only shown when errors occur */
-    }
-    
-    #debug-log.has-errors {
-      display: block;
-    }
-    
-    .log-entry {
-      margin: 2px 0;
-      opacity: 0.9;
-    }
-    
-    .log-entry.error {
-      color: #ff6b6b;
-    }
-    
-    .log-entry.warn {
-      color: #ffd93d;
-    }
-    
-    .log-entry.info {
-      color: #6bcb77;
-    }
+    #status { position: fixed; top: 20px; left: 20px; background: rgba(0,0,0,0.85); padding: 12px 20px; border-radius: 8px; font-size: 13px; z-index: 1000; max-width: 400px; }
+    #status.connected { background: rgba(0,100,0,0.85); }
+    #status.error { background: rgba(150,0,0,0.85); }
+    #status.warning { background: rgba(150,100,0,0.85); }
+    #loading { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 24px; z-index: 999; }
+    #debug-log { position: fixed; bottom: 20px; left: 20px; background: rgba(0,0,0,0.8); padding: 10px 15px; border-radius: 8px; font-size: 11px; z-index: 1000; max-width: 500px; max-height: 200px; overflow-y: auto; font-family: monospace; display: none; }
+    #debug-log.has-errors { display: block; }
+    .log-entry { margin: 2px 0; opacity: 0.9; }
+    .log-entry.error { color: #ff6b6b; }
+    .log-entry.warn { color: #ffd93d; }
   </style>
   <script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
 </head>
@@ -111,261 +35,90 @@
   <div id="loading" style="display:none;">Loading website...</div>
   <div id="debug-log"></div>
   <iframe id="content" frameborder="0" scrolling="no" allow="autoplay" loading="eager" style="display:none; overflow: hidden; border: none;"></iframe>
-  
+
   <script>
-    // ============ MINIMAL RECEIVER v1.3.48 ============
-    // Memory monitoring only - no auto-refresh (memory stable at ~3MB)
-    
-    const RECEIVER_VERSION = '1.3.50';
-    
-    // Memory tracking
-    let memoryHistory = [];
-    const MAX_MEMORY_SAMPLES = 60; // Keep 60 samples (1 per minute = 1 hour)
-    
+    // ============ MINIMAL RECEIVER v1.4.0 ============
+    const RECEIVER_VERSION = '1.4.0';
+
     const statusEl = document.getElementById('status');
     const loadingEl = document.getElementById('loading');
     const contentEl = document.getElementById('content');
     const debugLogEl = document.getElementById('debug-log');
-    
-    // Check for errors/reload reason from previous session
-    const previousError = localStorage.getItem('lastError');
-    const reloadReason = localStorage.getItem('lastReloadReason');
-    
-    if (previousError) {
-      debugLogEl.classList.add('has-errors');
-      const entry = document.createElement('div');
-      entry.className = 'log-entry error';
-      entry.textContent = '⚠️ PREVIOUS ERROR: ' + previousError;
-      debugLogEl.appendChild(entry);
-      localStorage.removeItem('lastError');
-    }
-    
-    if (reloadReason) {
-      const entry = document.createElement('div');
-      entry.className = 'log-entry warn';
-      entry.textContent = '🔄 RELOAD: ' + reloadReason;
-      debugLogEl.insertBefore(entry, debugLogEl.firstChild);
-      localStorage.removeItem('lastReloadReason');
-    }
-    
-    // Simple logging - only show debug panel if errors occur
+
     function log(level, message) {
-      const timestamp = new Date().toLocaleTimeString('sv-SE');
-      const entry = document.createElement('div');
-      entry.className = 'log-entry ' + level;
-      entry.textContent = timestamp + ' ' + message;
-      debugLogEl.insertBefore(entry, debugLogEl.firstChild);
       console.log('[' + level.toUpperCase() + '] ' + message);
-      
-      // Show debug panel only for errors
       if (level === 'error') {
         debugLogEl.classList.add('has-errors');
-        // Persist error for after reload
-        localStorage.setItem('lastError', message);
+        const entry = document.createElement('div');
+        entry.className = 'log-entry error';
+        entry.textContent = new Date().toLocaleTimeString('sv-SE') + ' ' + message;
+        debugLogEl.insertBefore(entry, debugLogEl.firstChild);
       }
     }
-    
-    // Global error handlers
-    window.onerror = function(msg, url, line) {
-      log('error', 'JS Error: ' + msg + ' at line ' + line);
-      return false;
-    };
-    
-    window.onunhandledrejection = function(event) {
-      log('error', 'Unhandled promise: ' + event.reason);
-    };
-    
+
+    window.onerror = function(msg, url, line) { log('error', msg + ' L' + line); return false; };
+    window.onunhandledrejection = function(e) { log('error', 'Promise: ' + e.reason); };
+
     function setStatus(text, type) {
       statusEl.textContent = text;
       statusEl.className = type || '';
-      log('info', 'Status: ' + text);
     }
-    
-    // Log viewport size
-    log('info', 'Viewport: ' + window.innerWidth + 'x' + window.innerHeight);
-    // Load website into iframe
+
     let currentUrl = null;
-    
+
     function loadWebsite(url) {
-      if (url === currentUrl) {
-        log('info', 'Same URL, skipping reload');
-        return;
-      }
-      
-      log('info', 'Loading: ' + url);
+      if (url === currentUrl) return;
       currentUrl = url;
       localStorage.setItem('lastUrl', url);
-      
-      setStatus('Loading: ' + url, 'warning');
+      setStatus('Loading...', 'warning');
       loadingEl.style.display = 'block';
       contentEl.style.display = 'none';
-      
       contentEl.src = url;
-      
+
       contentEl.onload = function() {
-        log('info', 'Iframe loaded successfully');
         setStatus('Connected', 'connected');
         loadingEl.style.display = 'none';
         contentEl.style.display = 'block';
-        
-        // Hide status completely after successful load
-        setTimeout(function() {
-          statusEl.style.display = 'none';
-        }, 5000);
+        setTimeout(function() { statusEl.style.display = 'none'; }, 5000);
       };
-      
-      contentEl.onerror = function(error) {
-        log('error', 'Iframe load error');
+
+      contentEl.onerror = function() {
+        log('error', 'Iframe load failed');
         setStatus('Error loading website', 'error');
         loadingEl.style.display = 'none';
       };
     }
-    
-    // ============ INITIALIZATION ============
-    
-    log('info', 'Receiver v' + RECEIVER_VERSION + ' starting...');
-    
+
+    // ============ INIT ============
+    log('info', 'Receiver v' + RECEIVER_VERSION + ' | ' + window.innerWidth + 'x' + window.innerHeight);
+
     try {
-      log('info', 'Getting Cast context...');
       const context = cast.framework.CastReceiverContext.getInstance();
-      log('info', 'Cast context obtained');
-      
-      // Listen for custom messages (URL from bridge)
-      log('info', 'Adding custom message listener...');
+
       context.addCustomMessageListener('urn:x-cast:com.website.cast', function(event) {
-        log('info', 'Custom message received: ' + JSON.stringify(event.data));
-        
         if (event.data && event.data.type === 'LOAD_WEBSITE' && event.data.url) {
           loadWebsite(event.data.url);
         }
       });
-      log('info', 'Custom message listener added');
-      
-      // Sender events
-      context.addEventListener(cast.framework.system.EventType.SENDER_CONNECTED, function(e) {
-        log('info', 'Sender connected');
-      });
-      
-      context.addEventListener(cast.framework.system.EventType.SENDER_DISCONNECTED, function(e) {
+
+      context.addEventListener(cast.framework.system.EventType.SENDER_DISCONNECTED, function() {
         log('warn', 'Sender disconnected');
       });
-      
-      // Start receiver
-      log('info', 'Starting receiver context...');
+
       const options = new cast.framework.CastReceiverOptions();
       options.disableIdleTimeout = true;
-      
       context.start(options);
-      log('info', 'Receiver started successfully');
-      
-      // Restore URL from localStorage (survives auto-refresh)
+
       const savedUrl = localStorage.getItem('lastUrl');
       if (savedUrl) {
-        log('info', 'Restoring saved URL: ' + savedUrl);
         loadWebsite(savedUrl);
       } else {
         setStatus('Ready to cast...', '');
       }
-      
     } catch (err) {
-      log('error', 'INIT ERROR: ' + err.message);
-      setStatus('Initialization error: ' + err.message, 'error');
+      log('error', 'INIT: ' + err.message);
+      setStatus('Init error: ' + err.message, 'error');
     }
-    
-    // ============ MEMORY MONITORING ============
-    
-    function getMemoryInfo() {
-      // Chrome's memory API (available on Chromecast)
-      if (performance && performance.memory) {
-        const mem = performance.memory;
-        const result = {
-          usedMB: Math.round(mem.usedJSHeapSize / 1024 / 1024),
-          totalMB: Math.round(mem.totalJSHeapSize / 1024 / 1024),
-          limitMB: Math.round(mem.jsHeapSizeLimit / 1024 / 1024),
-          usedPercent: Math.round((mem.usedJSHeapSize / mem.jsHeapSizeLimit) * 100),
-          // Raw values for debugging
-          rawUsed: mem.usedJSHeapSize,
-          rawTotal: mem.totalJSHeapSize,
-          rawLimit: mem.jsHeapSizeLimit
-        };
-        return result;
-      }
-      return null;
-    }
-    
-    function trackMemory() {
-      const mem = getMemoryInfo();
-      if (!mem) return;
-      
-      const sample = {
-        time: Date.now(),
-        usedMB: mem.usedMB,
-        totalMB: mem.totalMB,
-        limitMB: mem.limitMB,
-        usedPercent: mem.usedPercent
-      };
-      
-      memoryHistory.push(sample);
-      if (memoryHistory.length > MAX_MEMORY_SAMPLES) {
-        memoryHistory.shift();
-      }
-      
-      // Log every 5 minutes
-      if (memoryHistory.length % 5 === 0) {
-        const first = memoryHistory[0];
-        const growth = mem.usedMB - first.usedMB;
-        const growthSign = growth >= 0 ? '+' : '';
-        log('info', 'Memory: ' + mem.usedMB + 'MB / ' + mem.limitMB + 'MB (' + mem.usedPercent + '%) ' + growthSign + growth + 'MB since start');
-      }
-      
-      // Warn if memory is high
-      if (mem.usedPercent > 80) {
-        log('warn', 'High memory usage: ' + mem.usedPercent + '%');
-      }
-    }
-    
-    // Track memory every minute
-    setInterval(trackMemory, 60 * 1000);
-    
-    // Initial memory reading with detailed diagnostics
-    log('info', 'Checking memory API availability...');
-    if (performance) {
-      log('info', 'performance object exists');
-      if (performance.memory) {
-        log('info', 'performance.memory exists');
-        const mem = performance.memory;
-        log('info', 'Raw values - used: ' + mem.usedJSHeapSize + ', total: ' + mem.totalJSHeapSize + ', limit: ' + mem.jsHeapSizeLimit);
-        
-        const initialMem = getMemoryInfo();
-        if (initialMem.rawUsed === 0 && initialMem.rawLimit === 0) {
-          log('warn', 'Memory API returns zeros - may be restricted on this device');
-        } else {
-          log('info', 'Initial memory: ' + initialMem.usedMB + 'MB / ' + initialMem.limitMB + 'MB (' + initialMem.usedPercent + '%)');
-        }
-      } else {
-        log('warn', 'performance.memory is undefined - API not available');
-      }
-    } else {
-      log('warn', 'performance object is undefined');
-    }
-    
-    // ============ AUTO-REFRESH DISABLED ============
-    // Memory monitoring showed stable usage (~3MB), no growth over time
-    // Auto-refresh removed as unnecessary - keeping memory logging for verification
-    
-    log('info', 'Auto-refresh disabled (memory stable)');
-    
-    // Check for memory stats from previous session
-    const prevMemStats = localStorage.getItem('lastMemoryStats');
-    if (prevMemStats) {
-      try {
-        const stats = JSON.parse(prevMemStats);
-        log('info', 'Prev session memory: ' + stats.final.usedMB + 'MB, growth: +' + stats.growth + 'MB over ' + stats.samples + ' min');
-      } catch (e) {}
-      localStorage.removeItem('lastMemoryStats');
-    }
-    
-    
   </script>
 </body>
 </html>
