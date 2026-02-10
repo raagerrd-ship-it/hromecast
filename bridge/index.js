@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.43';
+const BRIDGE_VERSION = '1.3.44';
 
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
@@ -238,6 +238,7 @@ function checkCircuitBreaker() {
       log.info('⚡ [CIRCUIT] Half-open - allowing one attempt');
       circuitBreakerState.isOpen = false;
       circuitBreakerState.failures = 0;
+      return 'half-open'; // Signal that we just transitioned
     } else {
       const remainingSec = Math.ceil((cooldownMs - elapsed) / 1000);
       log.debug(`⚡ [CIRCUIT] Open - skipping attempt (${remainingSec}s remaining)`);
@@ -660,8 +661,9 @@ function findDevice(name) {
 
 // Check if Chromecast is idle with recovery logic
 async function isChromecastIdleWithRecovery(deviceName, retryCount = 0) {
-  // Check circuit breaker first
-  if (!checkCircuitBreaker()) {
+  // Check circuit breaker first (called from isChromecastIdleWithRecovery, accept truthy)
+  const cbState = checkCircuitBreaker();
+  if (cbState === false) {
     return { status: 'circuit_open' };
   }
   
@@ -779,8 +781,8 @@ async function isChromecastIdleWithRecovery(deviceName, retryCount = 0) {
 
 // Cast media using raw castv2 with retry and circuit breaker
 async function castMedia(chromecastName, url, retryCount = 0) {
-  // Check circuit breaker first
-  if (!checkCircuitBreaker()) {
+  // Check circuit breaker first (accept truthy = allowed)
+  if (checkCircuitBreaker() === false) {
     throw new Error('Circuit breaker open - connection attempts paused');
   }
   
@@ -1198,6 +1200,27 @@ async function checkAndActivateScreensaver() {
   
   // Capture state before checking (isChromecastIdleWithRecovery syncs screensaverActive)
   const wasScreensaverActive = screensaverActive;
+  
+  // Check circuit breaker state before attempting
+  const circuitState = checkCircuitBreaker();
+  if (circuitState === false) {
+    log.info('⚡ Circuit breaker open, skipping');
+    return;
+  }
+  
+  // If circuit breaker just went half-open, rediscover devices first (IP may have changed)
+  if (circuitState === 'half-open') {
+    log.info('🔍 [CIRCUIT] Half-open - rediscovering devices before retry...');
+    await discoverDevices();
+    const device = findDevice(config.selectedChromecast);
+    if (device) {
+      log.info(`✅ [CIRCUIT] Device found at ${device.host} (.${device.host.split('.').pop()})`);
+    } else {
+      log.warn(`⚠️ [CIRCUIT] Device "${config.selectedChromecast}" not found after rediscovery`);
+      recordCircuitFailure();
+      return;
+    }
+  }
   
   // ALWAYS check device status - don't skip based on local flag
   // The old working version (v1.0.19) did this and never had silent disconnect issues
