@@ -125,7 +125,8 @@ function updateDeviceList(devices) {
   devices.forEach(device => {
     const option = document.createElement('option');
     option.value = device.name;
-    option.textContent = device.name;
+    const lastOctet = device.host ? '.' + device.host.split('.').pop() : '';
+    option.textContent = `${device.name}${lastOctet ? ' (…' + lastOctet + ')' : ''}`;
     select.appendChild(option);
   });
   
