@@ -1902,6 +1902,41 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       
+      // GET /api/sonos/getaa* – proxy album art directly from Sonos speaker
+      if (req.method === 'GET' && pathname.startsWith('/api/sonos/getaa')) {
+        const sonosPath = pathname.replace('/api/sonos', '') + (url.search || '');
+        const sonosUrl = `http://${SONOS_IP}:1400${sonosPath}`;
+        log.info(`🖼️ [SONOS] Art proxy: ${sonosUrl}`);
+        
+        try {
+          const artReq = http.get(sonosUrl, { timeout: 5000 }, (artRes) => {
+            res.writeHead(artRes.statusCode, {
+              'Content-Type': artRes.headers['content-type'] || 'image/jpeg',
+              'Access-Control-Allow-Origin': '*',
+              'Cache-Control': 'public, max-age=300',
+              ...SECURITY_HEADERS
+            });
+            artRes.pipe(res);
+          });
+          
+          artReq.on('timeout', () => {
+            artReq.destroy();
+            res.writeHead(502, SECURITY_HEADERS);
+            res.end('Art fetch timeout');
+          });
+          
+          artReq.on('error', (err) => {
+            log.error(`❌ Sonos getaa proxy error: ${err.message}`);
+            res.writeHead(502, SECURITY_HEADERS);
+            res.end('Art fetch error');
+          });
+        } catch (err) {
+          res.writeHead(502, SECURITY_HEADERS);
+          res.end('Art fetch error');
+        }
+        return;
+      }
+      
       // GET /api/sonos/art?url=...
       if (req.method === 'GET' && pathname === '/api/sonos/art') {
         const artUrl = url.searchParams.get('url');
