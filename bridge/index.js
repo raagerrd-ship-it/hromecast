@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.44';
+const BRIDGE_VERSION = '1.3.45';
 
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
@@ -17,6 +17,7 @@ const CONFIG_FILE = path.join(__dirname, 'config.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const PORT = parseInt(process.env.PORT || '3000');
 const DEVICE_ID = process.env.DEVICE_ID || 'default-bridge';
+const SONOS_IP = process.env.SONOS_IP || '192.168.1.175';
 const CUSTOM_APP_ID = 'FE376873';
 const BACKDROP_APP_ID = 'E8C28D3C';
 
@@ -165,6 +166,78 @@ const log = {
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ============ Sonos UPnP Helpers ============
+
+function soapRequest(body, action) {
+  return new Promise((resolve, reject) => {
+    const postData = `<?xml version="1.0" encoding="utf-8"?>
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+  <s:Body>${body}</s:Body>
+</s:Envelope>`;
+    
+    const options = {
+      hostname: SONOS_IP,
+      port: 1400,
+      path: '/MediaRenderer/AVTransport/Control',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/xml; charset="utf-8"',
+        'SOAPAction': `"urn:schemas-upnp-org:service:AVTransport:1#${action}"`,
+        'Content-Length': Buffer.byteLength(postData)
+      },
+      timeout: 2000
+    };
+    
+    const req = http.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => { data += chunk; });
+      res.on('end', () => resolve(data));
+    });
+    
+    req.on('timeout', () => { req.destroy(); reject(new Error('SOAP request timeout')); });
+    req.on('error', reject);
+    req.write(postData);
+    req.end();
+  });
+}
+
+function parseTime(timeStr) {
+  if (!timeStr || timeStr === 'NOT_IMPLEMENTED') return null;
+  const parts = timeStr.split(':');
+  if (parts.length !== 3) return null;
+  const [h, m, s] = parts.map(Number);
+  if (isNaN(h) || isNaN(m) || isNaN(s)) return null;
+  return (h * 3600 + m * 60 + s) * 1000;
+}
+
+function extractTag(xml, tag) {
+  const re = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`);
+  const m = xml.match(re);
+  return m ? m[1] : null;
+}
+
+function decodeXmlEntities(str) {
+  return str
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
+}
+
+function extractDidl(xml) {
+  const didlMatch = xml.match(/&lt;DIDL-Lite[\s\S]*?&lt;\/DIDL-Lite&gt;/);
+  if (!didlMatch) return null;
+  
+  const didl = decodeXmlEntities(didlMatch[0]);
+  return {
+    title: extractTag(didl, 'dc:title'),
+    creator: extractTag(didl, 'dc:creator'),
+    album: extractTag(didl, 'upnp:album'),
+    albumArtURI: extractTag(didl, 'upnp:albumArtURI')
+  };
 }
 
 // Calculate exponential backoff delay: base * 2^attempt (1s, 2s, 4s, 8s...)
@@ -1740,6 +1813,114 @@ const server = http.createServer(async (req, res) => {
         lastErrorType = 'takeover';
         stopRecoveryCheck();
         sendJson(res, { success: true, message: 'Recovery state reset' });
+        return;
+      }
+      
+      // GET /api/sonos/status
+      if (req.method === 'GET' && pathname === '/api/sonos/status') {
+        try {
+          const posBody = `<u:GetPositionInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:GetPositionInfo>`;
+          const transBody = `<u:GetTransportInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:GetTransportInfo>`;
+          const mediaBody = `<u:GetMediaInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:GetMediaInfo>`;
+          
+          const [posXml, transXml, mediaXml] = await Promise.all([
+            soapRequest(posBody, 'GetPositionInfo'),
+            soapRequest(transBody, 'GetTransportInfo'),
+            soapRequest(mediaBody, 'GetMediaInfo')
+          ]);
+          
+          // Parse position info
+          const relTime = extractTag(posXml, 'RelTime');
+          const trackDuration = extractTag(posXml, 'TrackDuration');
+          const didl = extractDidl(posXml);
+          
+          // Parse transport state
+          const transportState = extractTag(transXml, 'CurrentTransportState');
+          let playbackState = 'PLAYBACK_STATE_IDLE';
+          if (transportState === 'PLAYING') playbackState = 'PLAYBACK_STATE_PLAYING';
+          else if (transportState === 'PAUSED_PLAYBACK') playbackState = 'PLAYBACK_STATE_PAUSED';
+          else if (transportState === 'TRANSITIONING') playbackState = 'PLAYBACK_STATE_PLAYING';
+          
+          // Album art proxy URL
+          let albumArtUri = null;
+          if (didl && didl.albumArtURI && didl.albumArtURI.startsWith('http')) {
+            albumArtUri = `/api/sonos/art?url=${encodeURIComponent(didl.albumArtURI)}`;
+          }
+          
+          // Parse next track from MediaInfo
+          const nextMeta = extractTag(mediaXml, 'NextAVTransportURIMetaData');
+          let nextTrackName = null;
+          let nextArtistName = null;
+          if (nextMeta) {
+            const nextDidl = extractDidl(nextMeta);
+            if (!nextDidl) {
+              // Try decoding once more (double-encoded)
+              const decoded = decodeXmlEntities(nextMeta);
+              const nextDidl2 = extractDidl(decoded);
+              if (nextDidl2) {
+                nextTrackName = nextDidl2.title;
+                nextArtistName = nextDidl2.creator;
+              }
+            } else {
+              nextTrackName = nextDidl.title;
+              nextArtistName = nextDidl.creator;
+            }
+          }
+          
+          sendJson(res, {
+            ok: true,
+            source: 'local-upnp',
+            playbackState,
+            positionMillis: parseTime(relTime),
+            durationMillis: parseTime(trackDuration),
+            trackName: didl ? didl.title : null,
+            artistName: didl ? didl.creator : null,
+            albumName: didl ? didl.album : null,
+            albumArtUri,
+            nextTrackName,
+            nextArtistName
+          });
+        } catch (err) {
+          log.error(`❌ Sonos status error: ${err.message}`);
+          sendJson(res, { ok: false, error: err.message }, 502);
+        }
+        return;
+      }
+      
+      // GET /api/sonos/art?url=...
+      if (req.method === 'GET' && pathname === '/api/sonos/art') {
+        const artUrl = url.searchParams.get('url');
+        if (!artUrl) {
+          sendJson(res, { error: 'Missing url parameter' }, 400);
+          return;
+        }
+        
+        try {
+          const artReq = http.get(artUrl, { timeout: 3000 }, (artRes) => {
+            res.writeHead(artRes.statusCode, {
+              'Content-Type': artRes.headers['content-type'] || 'image/jpeg',
+              'Access-Control-Allow-Origin': '*',
+              'Cache-Control': 'public, max-age=300',
+              ...SECURITY_HEADERS
+            });
+            artRes.pipe(res);
+          });
+          
+          artReq.on('timeout', () => {
+            artReq.destroy();
+            res.writeHead(502, SECURITY_HEADERS);
+            res.end('Art fetch timeout');
+          });
+          
+          artReq.on('error', (err) => {
+            log.error(`❌ Sonos art proxy error: ${err.message}`);
+            res.writeHead(502, SECURITY_HEADERS);
+            res.end('Art fetch error');
+          });
+        } catch (err) {
+          res.writeHead(502, SECURITY_HEADERS);
+          res.end('Art fetch error');
+        }
         return;
       }
       
