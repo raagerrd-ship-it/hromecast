@@ -19,10 +19,30 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.47";
-const RELEASED_AT = "2026-01-30";
+const VERSION = "1.3.48";
+const RELEASED_AT = "2026-03-12";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.48",
+    date: "2026-03-12",
+    changes: {
+      sv: [
+        "Sonos UPnP-integration: Hämta nu-spelar status via /api/sonos/status",
+        "Albumart-proxy: /api/sonos/art proxar bilder från Sonos med CORS",
+        "Nästa låt-metadata: Visar titel och artist för nästa spår i kön",
+        "Auto-omskanning: Bridge söker om enheter vid circuit breaker half-open",
+        "IP-adress visas i enhetsväljaren (sista oktetten)",
+      ],
+      en: [
+        "Sonos UPnP integration: Get now-playing status via /api/sonos/status",
+        "Album art proxy: /api/sonos/art proxies images from Sonos with CORS",
+        "Next track metadata: Shows title and artist for next track in queue",
+        "Auto-rescan: Bridge rediscovers devices on circuit breaker half-open",
+        "IP address shown in device selector (last octet)",
+      ],
+    }
+  },
   {
     version: "1.3.47",
     date: "2026-01-30",
