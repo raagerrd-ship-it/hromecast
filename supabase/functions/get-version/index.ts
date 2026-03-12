@@ -19,10 +19,26 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.48";
+const VERSION = "1.3.49";
 const RELEASED_AT = "2026-03-12";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.49",
+    date: "2026-03-12",
+    changes: {
+      sv: [
+        "Fix: extractTag hanterar nu XML-taggar med attribut (t.ex. upnp:albumArtURI)",
+        "Fix: Relativa album art-URLer från Sonos hanteras korrekt",
+        "Debug-loggning för Sonos SOAP-svar",
+      ],
+      en: [
+        "Fix: extractTag now handles XML tags with attributes (e.g. upnp:albumArtURI)",
+        "Fix: Relative album art URLs from Sonos handled correctly",
+        "Debug logging for Sonos SOAP responses",
+      ],
+    }
+  },
   {
     version: "1.3.48",
     date: "2026-03-12",
