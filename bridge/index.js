@@ -1744,6 +1744,114 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       
+      // GET /api/sonos/status
+      if (req.method === 'GET' && pathname === '/api/sonos/status') {
+        try {
+          const posBody = `<u:GetPositionInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:GetPositionInfo>`;
+          const transBody = `<u:GetTransportInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:GetTransportInfo>`;
+          const mediaBody = `<u:GetMediaInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:GetMediaInfo>`;
+          
+          const [posXml, transXml, mediaXml] = await Promise.all([
+            soapRequest(posBody, 'GetPositionInfo'),
+            soapRequest(transBody, 'GetTransportInfo'),
+            soapRequest(mediaBody, 'GetMediaInfo')
+          ]);
+          
+          // Parse position info
+          const relTime = extractTag(posXml, 'RelTime');
+          const trackDuration = extractTag(posXml, 'TrackDuration');
+          const didl = extractDidl(posXml);
+          
+          // Parse transport state
+          const transportState = extractTag(transXml, 'CurrentTransportState');
+          let playbackState = 'PLAYBACK_STATE_IDLE';
+          if (transportState === 'PLAYING') playbackState = 'PLAYBACK_STATE_PLAYING';
+          else if (transportState === 'PAUSED_PLAYBACK') playbackState = 'PLAYBACK_STATE_PAUSED';
+          else if (transportState === 'TRANSITIONING') playbackState = 'PLAYBACK_STATE_PLAYING';
+          
+          // Album art proxy URL
+          let albumArtUri = null;
+          if (didl && didl.albumArtURI && didl.albumArtURI.startsWith('http')) {
+            albumArtUri = `/api/sonos/art?url=${encodeURIComponent(didl.albumArtURI)}`;
+          }
+          
+          // Parse next track from MediaInfo
+          const nextMeta = extractTag(mediaXml, 'NextAVTransportURIMetaData');
+          let nextTrackName = null;
+          let nextArtistName = null;
+          if (nextMeta) {
+            const nextDidl = extractDidl(nextMeta);
+            if (!nextDidl) {
+              // Try decoding once more (double-encoded)
+              const decoded = decodeXmlEntities(nextMeta);
+              const nextDidl2 = extractDidl(decoded);
+              if (nextDidl2) {
+                nextTrackName = nextDidl2.title;
+                nextArtistName = nextDidl2.creator;
+              }
+            } else {
+              nextTrackName = nextDidl.title;
+              nextArtistName = nextDidl.creator;
+            }
+          }
+          
+          sendJson(res, {
+            ok: true,
+            source: 'local-upnp',
+            playbackState,
+            positionMillis: parseTime(relTime),
+            durationMillis: parseTime(trackDuration),
+            trackName: didl ? didl.title : null,
+            artistName: didl ? didl.creator : null,
+            albumName: didl ? didl.album : null,
+            albumArtUri,
+            nextTrackName,
+            nextArtistName
+          });
+        } catch (err) {
+          log.error(`❌ Sonos status error: ${err.message}`);
+          sendJson(res, { ok: false, error: err.message }, 502);
+        }
+        return;
+      }
+      
+      // GET /api/sonos/art?url=...
+      if (req.method === 'GET' && pathname === '/api/sonos/art') {
+        const artUrl = url.searchParams.get('url');
+        if (!artUrl) {
+          sendJson(res, { error: 'Missing url parameter' }, 400);
+          return;
+        }
+        
+        try {
+          const artReq = http.get(artUrl, { timeout: 3000 }, (artRes) => {
+            res.writeHead(artRes.statusCode, {
+              'Content-Type': artRes.headers['content-type'] || 'image/jpeg',
+              'Access-Control-Allow-Origin': '*',
+              'Cache-Control': 'public, max-age=300',
+              ...SECURITY_HEADERS
+            });
+            artRes.pipe(res);
+          });
+          
+          artReq.on('timeout', () => {
+            artReq.destroy();
+            res.writeHead(502, SECURITY_HEADERS);
+            res.end('Art fetch timeout');
+          });
+          
+          artReq.on('error', (err) => {
+            log.error(`❌ Sonos art proxy error: ${err.message}`);
+            res.writeHead(502, SECURITY_HEADERS);
+            res.end('Art fetch error');
+          });
+        } catch (err) {
+          res.writeHead(502, SECURITY_HEADERS);
+          res.end('Art fetch error');
+        }
+        return;
+      }
+      
       // 404 for unknown API routes
       sendJson(res, { error: 'Not Found' }, 404);
       
