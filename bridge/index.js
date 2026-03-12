@@ -213,9 +213,11 @@ function parseTime(timeStr) {
 }
 
 function extractTag(xml, tag) {
-  const re = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`);
+  // Handle tags with attributes, e.g. <upnp:albumArtURI dlna:profileID="JPEG_TN">value</upnp:albumArtURI>
+  const escapedTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`<${escapedTag}(?:\\s[^>]*)?>([\\s\\S]*?)</${escapedTag}>`);
   const m = xml.match(re);
-  return m ? m[1] : null;
+  return m ? m[1].trim() : null;
 }
 
 function decodeXmlEntities(str) {
