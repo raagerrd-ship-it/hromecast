@@ -168,6 +168,78 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// ============ Sonos UPnP Helpers ============
+
+function soapRequest(body, action) {
+  return new Promise((resolve, reject) => {
+    const postData = `<?xml version="1.0" encoding="utf-8"?>
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+  <s:Body>${body}</s:Body>
+</s:Envelope>`;
+    
+    const options = {
+      hostname: SONOS_IP,
+      port: 1400,
+      path: '/MediaRenderer/AVTransport/Control',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/xml; charset="utf-8"',
+        'SOAPAction': `"urn:schemas-upnp-org:service:AVTransport:1#${action}"`,
+        'Content-Length': Buffer.byteLength(postData)
+      },
+      timeout: 2000
+    };
+    
+    const req = http.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => { data += chunk; });
+      res.on('end', () => resolve(data));
+    });
+    
+    req.on('timeout', () => { req.destroy(); reject(new Error('SOAP request timeout')); });
+    req.on('error', reject);
+    req.write(postData);
+    req.end();
+  });
+}
+
+function parseTime(timeStr) {
+  if (!timeStr || timeStr === 'NOT_IMPLEMENTED') return null;
+  const parts = timeStr.split(':');
+  if (parts.length !== 3) return null;
+  const [h, m, s] = parts.map(Number);
+  if (isNaN(h) || isNaN(m) || isNaN(s)) return null;
+  return (h * 3600 + m * 60 + s) * 1000;
+}
+
+function extractTag(xml, tag) {
+  const re = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`);
+  const m = xml.match(re);
+  return m ? m[1] : null;
+}
+
+function decodeXmlEntities(str) {
+  return str
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
+}
+
+function extractDidl(xml) {
+  const didlMatch = xml.match(/&lt;DIDL-Lite[\s\S]*?&lt;\/DIDL-Lite&gt;/);
+  if (!didlMatch) return null;
+  
+  const didl = decodeXmlEntities(didlMatch[0]);
+  return {
+    title: extractTag(didl, 'dc:title'),
+    creator: extractTag(didl, 'dc:creator'),
+    album: extractTag(didl, 'upnp:album'),
+    albumArtURI: extractTag(didl, 'upnp:albumArtURI')
+  };
+}
+
 // Calculate exponential backoff delay: base * 2^attempt (1s, 2s, 4s, 8s...)
 function getBackoffDelay(attempt) {
   const delay = BASE_DELAY_MS * Math.pow(2, attempt);
