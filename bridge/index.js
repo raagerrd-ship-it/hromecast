@@ -1845,8 +1845,15 @@ const server = http.createServer(async (req, res) => {
           
           // Album art proxy URL
           let albumArtUri = null;
-          if (didl && didl.albumArtURI && didl.albumArtURI.startsWith('http')) {
-            albumArtUri = `/api/sonos/art?url=${encodeURIComponent(didl.albumArtURI)}`;
+          if (didl && didl.albumArtURI) {
+            let artUrl = didl.albumArtURI;
+            // Handle relative URLs from Sonos
+            if (artUrl.startsWith('/')) {
+              artUrl = `http://${SONOS_IP}:1400${artUrl}`;
+            }
+            if (artUrl.startsWith('http')) {
+              albumArtUri = `/api/sonos/art?url=${encodeURIComponent(artUrl)}`;
+            }
           }
           
           // Parse next track from MediaInfo
