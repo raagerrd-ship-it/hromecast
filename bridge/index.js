@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.49';
+const BRIDGE_VERSION = '1.3.50';
 
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
@@ -240,6 +240,185 @@ function extractDidl(xml) {
     album: extractTag(didl, 'upnp:album'),
     albumArtURI: extractTag(didl, 'upnp:albumArtURI')
   };
+}
+
+// ============ Sonos UPnP Event Subscription (SSE) ============
+
+let sonosEventClients = []; // SSE clients
+let sonosSubscriptionSID = null;
+let sonosSubscriptionRenewTimer = null;
+let lastSonosEvent = null; // cache latest state for new SSE clients
+
+// Subscribe to Sonos AVTransport events
+function subscribeSonosEvents() {
+  const networkIP = getNetworkIP();
+  const callbackUrl = `<http://${networkIP}:${PORT}/api/sonos/upnp-callback>`;
+  
+  const options = {
+    hostname: SONOS_IP,
+    port: 1400,
+    path: '/MediaRenderer/AVTransport/Event',
+    method: 'SUBSCRIBE',
+    headers: {
+      'CALLBACK': callbackUrl,
+      'NT': 'upnp:event',
+      'TIMEOUT': 'Second-300'
+    },
+    timeout: 5000
+  };
+  
+  const req = http.request(options, (res) => {
+    const sid = res.headers['sid'];
+    if (sid) {
+      sonosSubscriptionSID = sid;
+      log.info(`📡 [SONOS] Subscribed to AVTransport events, SID: ${sid}`);
+      // Renew before expiry (every 4 min for a 5 min subscription)
+      clearTimeout(sonosSubscriptionRenewTimer);
+      sonosSubscriptionRenewTimer = setTimeout(() => renewSonosSubscription(), 240000);
+    } else {
+      log.warn('⚠️ [SONOS] Subscribe response missing SID');
+    }
+  });
+  
+  req.on('error', (err) => {
+    log.error(`❌ [SONOS] Subscribe error: ${err.message}`);
+    // Retry in 30s
+    setTimeout(() => subscribeSonosEvents(), 30000);
+  });
+  
+  req.on('timeout', () => {
+    req.destroy();
+    log.error('❌ [SONOS] Subscribe timeout');
+    setTimeout(() => subscribeSonosEvents(), 30000);
+  });
+  
+  req.end();
+}
+
+function renewSonosSubscription() {
+  if (!sonosSubscriptionSID) {
+    subscribeSonosEvents();
+    return;
+  }
+  
+  const options = {
+    hostname: SONOS_IP,
+    port: 1400,
+    path: '/MediaRenderer/AVTransport/Event',
+    method: 'SUBSCRIBE',
+    headers: {
+      'SID': sonosSubscriptionSID,
+      'TIMEOUT': 'Second-300'
+    },
+    timeout: 5000
+  };
+  
+  const req = http.request(options, (res) => {
+    if (res.statusCode === 200) {
+      log.info(`🔄 [SONOS] Subscription renewed, SID: ${sonosSubscriptionSID}`);
+      clearTimeout(sonosSubscriptionRenewTimer);
+      sonosSubscriptionRenewTimer = setTimeout(() => renewSonosSubscription(), 240000);
+    } else {
+      log.warn(`⚠️ [SONOS] Renewal failed (${res.statusCode}), re-subscribing...`);
+      sonosSubscriptionSID = null;
+      subscribeSonosEvents();
+    }
+  });
+  
+  req.on('error', (err) => {
+    log.error(`❌ [SONOS] Renewal error: ${err.message}, re-subscribing...`);
+    sonosSubscriptionSID = null;
+    setTimeout(() => subscribeSonosEvents(), 5000);
+  });
+  
+  req.on('timeout', () => {
+    req.destroy();
+    sonosSubscriptionSID = null;
+    setTimeout(() => subscribeSonosEvents(), 5000);
+  });
+  
+  req.end();
+}
+
+// When we receive a UPnP event, fetch full status and broadcast to SSE clients
+async function handleSonosUPnPEvent() {
+  try {
+    const posBody = `<u:GetPositionInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:GetPositionInfo>`;
+    const transBody = `<u:GetTransportInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:GetTransportInfo>`;
+    const mediaBody = `<u:GetMediaInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:GetMediaInfo>`;
+    
+    const [posXml, transXml, mediaXml] = await Promise.all([
+      soapRequest(posBody, 'GetPositionInfo'),
+      soapRequest(transBody, 'GetTransportInfo'),
+      soapRequest(mediaBody, 'GetMediaInfo')
+    ]);
+    
+    const relTime = extractTag(posXml, 'RelTime');
+    const trackDuration = extractTag(posXml, 'TrackDuration');
+    const didl = extractDidl(posXml);
+    const transportState = extractTag(transXml, 'CurrentTransportState');
+    
+    let playbackState = 'PLAYBACK_STATE_IDLE';
+    if (transportState === 'PLAYING') playbackState = 'PLAYBACK_STATE_PLAYING';
+    else if (transportState === 'PAUSED_PLAYBACK') playbackState = 'PLAYBACK_STATE_PAUSED';
+    else if (transportState === 'TRANSITIONING') playbackState = 'PLAYBACK_STATE_PLAYING';
+    
+    let albumArtUri = null;
+    if (didl && didl.albumArtURI) {
+      let artUrl = didl.albumArtURI;
+      if (artUrl.startsWith('/')) {
+        albumArtUri = `/api/sonos${artUrl}`;
+      } else if (artUrl.startsWith('http')) {
+        albumArtUri = `/api/sonos/art?url=${encodeURIComponent(artUrl)}`;
+      }
+    }
+    
+    const nextMeta = extractTag(mediaXml, 'NextAVTransportURIMetaData');
+    let nextTrackName = null;
+    let nextArtistName = null;
+    if (nextMeta) {
+      let nextDidl = extractDidl(nextMeta);
+      if (!nextDidl) {
+        nextDidl = extractDidl(decodeXmlEntities(nextMeta));
+      }
+      if (nextDidl) {
+        nextTrackName = nextDidl.title;
+        nextArtistName = nextDidl.creator;
+      }
+    }
+    
+    const eventData = {
+      ok: true,
+      source: 'upnp-event',
+      playbackState,
+      positionMillis: parseTime(relTime),
+      durationMillis: parseTime(trackDuration),
+      trackName: didl ? didl.title : null,
+      artistName: didl ? didl.creator : null,
+      albumName: didl ? didl.album : null,
+      albumArtUri,
+      nextTrackName,
+      nextArtistName,
+      timestamp: Date.now()
+    };
+    
+    lastSonosEvent = eventData;
+    broadcastSSE(eventData);
+  } catch (err) {
+    log.error(`❌ [SONOS] Event handler error: ${err.message}`);
+  }
+}
+
+function broadcastSSE(data) {
+  const msg = `data: ${JSON.stringify(data)}\n\n`;
+  sonosEventClients = sonosEventClients.filter(client => {
+    try {
+      client.write(msg);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  });
 }
 
 // Calculate exponential backoff delay: base * 2^attempt (1s, 2s, 4s, 8s...)
@@ -1853,11 +2032,10 @@ const server = http.createServer(async (req, res) => {
           let albumArtUri = null;
           if (didl && didl.albumArtURI) {
             let artUrl = didl.albumArtURI;
-            // Handle relative URLs from Sonos
             if (artUrl.startsWith('/')) {
-              artUrl = `http://${SONOS_IP}:1400${artUrl}`;
-            }
-            if (artUrl.startsWith('http')) {
+              // Use direct proxy path (e.g. /api/sonos/getaa?s=1&u=...)
+              albumArtUri = `/api/sonos${artUrl}`;
+            } else if (artUrl.startsWith('http')) {
               albumArtUri = `/api/sonos/art?url=${encodeURIComponent(artUrl)}`;
             }
           }
@@ -1974,6 +2152,52 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       
+      // GET /api/sonos/events – Server-Sent Events stream
+      if (req.method === 'GET' && pathname === '/api/sonos/events') {
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'Access-Control-Allow-Origin': '*',
+          ...SECURITY_HEADERS
+        });
+        
+        // Send last known state immediately
+        if (lastSonosEvent) {
+          res.write(`data: ${JSON.stringify(lastSonosEvent)}\n\n`);
+        }
+        
+        sonosEventClients.push(res);
+        log.info(`📡 [SONOS] SSE client connected (total: ${sonosEventClients.length})`);
+        
+        req.on('close', () => {
+          sonosEventClients = sonosEventClients.filter(c => c !== res);
+          log.info(`📡 [SONOS] SSE client disconnected (total: ${sonosEventClients.length})`);
+        });
+        
+        // Keep-alive every 15s
+        const keepAlive = setInterval(() => {
+          try { res.write(':keepalive\n\n'); } catch(e) { clearInterval(keepAlive); }
+        }, 15000);
+        
+        req.on('close', () => clearInterval(keepAlive));
+        return;
+      }
+      
+      // NOTIFY /api/sonos/upnp-callback – receives UPnP events from Sonos
+      if (req.method === 'NOTIFY' && pathname === '/api/sonos/upnp-callback') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+          log.info(`📡 [SONOS] UPnP event received (${body.length} bytes)`);
+          res.writeHead(200);
+          res.end();
+          // Fetch full status and broadcast
+          handleSonosUPnPEvent();
+        });
+        return;
+      }
+      
       // 404 for unknown API routes
       sendJson(res, { error: 'Not Found' }, 404);
       
@@ -2029,6 +2253,10 @@ async function main() {
   // Note: No periodic discovery - it only runs at start, on reconnect, and manually
   const screensaverMs = (config.screensaverCheckInterval || 60) * 1000;
   setInterval(checkAndActivateScreensaver, screensaverMs);
+  
+  // Start Sonos UPnP event subscription for SSE
+  log.info(`🔊 [SONOS] Starting UPnP event subscription to ${SONOS_IP}...`);
+  subscribeSonosEvents();
   
   // Graceful shutdown
   process.on('SIGINT', () => {
