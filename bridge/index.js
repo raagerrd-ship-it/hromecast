@@ -2032,11 +2032,10 @@ const server = http.createServer(async (req, res) => {
           let albumArtUri = null;
           if (didl && didl.albumArtURI) {
             let artUrl = didl.albumArtURI;
-            // Handle relative URLs from Sonos
             if (artUrl.startsWith('/')) {
-              artUrl = `http://${SONOS_IP}:1400${artUrl}`;
-            }
-            if (artUrl.startsWith('http')) {
+              // Use direct proxy path (e.g. /api/sonos/getaa?s=1&u=...)
+              albumArtUri = `/api/sonos${artUrl}`;
+            } else if (artUrl.startsWith('http')) {
               albumArtUri = `/api/sonos/art?url=${encodeURIComponent(artUrl)}`;
             }
           }
