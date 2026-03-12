@@ -1831,10 +1831,16 @@ const server = http.createServer(async (req, res) => {
             soapRequest(mediaBody, 'GetMediaInfo')
           ]);
           
+          // Debug: log raw SOAP responses for troubleshooting
+          log.info(`🔍 [SONOS] GetPositionInfo TrackMetaData present: ${posXml.includes('DIDL-Lite')}`);
+          log.info(`🔍 [SONOS] GetMediaInfo NextAVTransportURIMetaData present: ${mediaXml.includes('NextAVTransportURIMetaData')}`);
+          
           // Parse position info
           const relTime = extractTag(posXml, 'RelTime');
           const trackDuration = extractTag(posXml, 'TrackDuration');
           const didl = extractDidl(posXml);
+          
+          log.info(`🔍 [SONOS] DIDL parsed: title=${didl?.title}, albumArtURI=${didl?.albumArtURI}`);
           
           // Parse transport state
           const transportState = extractTag(transXml, 'CurrentTransportState');
