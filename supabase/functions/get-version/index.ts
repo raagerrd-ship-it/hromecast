@@ -19,10 +19,28 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.49";
+const VERSION = "1.3.50";
 const RELEASED_AT = "2026-03-12";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.50",
+    date: "2026-03-12",
+    changes: {
+      sv: [
+        "SSE-endpoint: /api/sonos/events streamar UPnP-events i realtid (ersätter polling)",
+        "UPnP event-prenumeration: Bridge prenumererar på Sonos AVTransport LastChange",
+        "Album art proxy: /api/sonos/getaa* proxar direkt till Sonos med CORS",
+        "Fix: albumArtUri använder nu /api/sonos/getaa-proxy istället för /api/sonos/art",
+      ],
+      en: [
+        "SSE endpoint: /api/sonos/events streams UPnP events in real-time (replaces polling)",
+        "UPnP event subscription: Bridge subscribes to Sonos AVTransport LastChange",
+        "Album art proxy: /api/sonos/getaa* proxies directly to Sonos with CORS",
+        "Fix: albumArtUri now uses /api/sonos/getaa proxy instead of /api/sonos/art",
+      ],
+    }
+  },
   {
     version: "1.3.49",
     date: "2026-03-12",
