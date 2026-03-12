@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.48';
+const BRIDGE_VERSION = '1.3.49';
 
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
@@ -213,9 +213,11 @@ function parseTime(timeStr) {
 }
 
 function extractTag(xml, tag) {
-  const re = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`);
+  // Handle tags with attributes, e.g. <upnp:albumArtURI dlna:profileID="JPEG_TN">value</upnp:albumArtURI>
+  const escapedTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`<${escapedTag}(?:\\s[^>]*)?>([\\s\\S]*?)</${escapedTag}>`);
   const m = xml.match(re);
-  return m ? m[1] : null;
+  return m ? m[1].trim() : null;
 }
 
 function decodeXmlEntities(str) {
@@ -1829,10 +1831,16 @@ const server = http.createServer(async (req, res) => {
             soapRequest(mediaBody, 'GetMediaInfo')
           ]);
           
+          // Debug: log raw SOAP responses for troubleshooting
+          log.info(`🔍 [SONOS] GetPositionInfo TrackMetaData present: ${posXml.includes('DIDL-Lite')}`);
+          log.info(`🔍 [SONOS] GetMediaInfo NextAVTransportURIMetaData present: ${mediaXml.includes('NextAVTransportURIMetaData')}`);
+          
           // Parse position info
           const relTime = extractTag(posXml, 'RelTime');
           const trackDuration = extractTag(posXml, 'TrackDuration');
           const didl = extractDidl(posXml);
+          
+          log.info(`🔍 [SONOS] DIDL parsed: title=${didl?.title}, albumArtURI=${didl?.albumArtURI}`);
           
           // Parse transport state
           const transportState = extractTag(transXml, 'CurrentTransportState');
@@ -1843,8 +1851,15 @@ const server = http.createServer(async (req, res) => {
           
           // Album art proxy URL
           let albumArtUri = null;
-          if (didl && didl.albumArtURI && didl.albumArtURI.startsWith('http')) {
-            albumArtUri = `/api/sonos/art?url=${encodeURIComponent(didl.albumArtURI)}`;
+          if (didl && didl.albumArtURI) {
+            let artUrl = didl.albumArtURI;
+            // Handle relative URLs from Sonos
+            if (artUrl.startsWith('/')) {
+              artUrl = `http://${SONOS_IP}:1400${artUrl}`;
+            }
+            if (artUrl.startsWith('http')) {
+              albumArtUri = `/api/sonos/art?url=${encodeURIComponent(artUrl)}`;
+            }
           }
           
           // Parse next track from MediaInfo
