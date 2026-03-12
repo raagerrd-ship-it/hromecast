@@ -2152,6 +2152,52 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       
+      // GET /api/sonos/events – Server-Sent Events stream
+      if (req.method === 'GET' && pathname === '/api/sonos/events') {
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'Access-Control-Allow-Origin': '*',
+          ...SECURITY_HEADERS
+        });
+        
+        // Send last known state immediately
+        if (lastSonosEvent) {
+          res.write(`data: ${JSON.stringify(lastSonosEvent)}\n\n`);
+        }
+        
+        sonosEventClients.push(res);
+        log.info(`📡 [SONOS] SSE client connected (total: ${sonosEventClients.length})`);
+        
+        req.on('close', () => {
+          sonosEventClients = sonosEventClients.filter(c => c !== res);
+          log.info(`📡 [SONOS] SSE client disconnected (total: ${sonosEventClients.length})`);
+        });
+        
+        // Keep-alive every 15s
+        const keepAlive = setInterval(() => {
+          try { res.write(':keepalive\n\n'); } catch(e) { clearInterval(keepAlive); }
+        }, 15000);
+        
+        req.on('close', () => clearInterval(keepAlive));
+        return;
+      }
+      
+      // NOTIFY /api/sonos/upnp-callback – receives UPnP events from Sonos
+      if (req.method === 'NOTIFY' && pathname === '/api/sonos/upnp-callback') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+          log.info(`📡 [SONOS] UPnP event received (${body.length} bytes)`);
+          res.writeHead(200);
+          res.end();
+          // Fetch full status and broadcast
+          handleSonosUPnPEvent();
+        });
+        return;
+      }
+      
       // 404 for unknown API routes
       sendJson(res, { error: 'Not Found' }, 404);
       
