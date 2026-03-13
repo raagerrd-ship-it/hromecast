@@ -2310,6 +2310,8 @@ async function main() {
   // Start Sonos UPnP event subscription for SSE
   log.info(`🔊 [SONOS] Starting UPnP event subscription to ${SONOS_IP}...`);
   subscribeSonosEvents();
+  startPositionBroadcast();
+  log.info(`🔊 [SONOS] Position broadcast started (250ms interval)`);
   
   // Graceful shutdown
   process.on('SIGINT', () => {
