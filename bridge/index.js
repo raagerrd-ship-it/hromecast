@@ -170,7 +170,9 @@ function sleep(ms) {
 
 // ============ Sonos UPnP Helpers ============
 
-function soapRequest(body, action) {
+function soapRequest(body, action, controlPath, serviceType) {
+  controlPath = controlPath || '/MediaRenderer/AVTransport/Control';
+  serviceType = serviceType || 'AVTransport';
   return new Promise((resolve, reject) => {
     const postData = `<?xml version="1.0" encoding="utf-8"?>
 <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
@@ -180,11 +182,11 @@ function soapRequest(body, action) {
     const options = {
       hostname: SONOS_IP,
       port: 1400,
-      path: '/MediaRenderer/AVTransport/Control',
+      path: controlPath,
       method: 'POST',
       headers: {
         'Content-Type': 'text/xml; charset="utf-8"',
-        'SOAPAction': `"urn:schemas-upnp-org:service:AVTransport:1#${action}"`,
+        'SOAPAction': `"urn:schemas-upnp-org:service:${serviceType}:1#${action}"`,
         'Content-Length': Buffer.byteLength(postData)
       },
       timeout: 2000
