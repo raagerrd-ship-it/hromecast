@@ -420,6 +420,38 @@ async function handleSonosUPnPEvent() {
   }
 }
 
+// Broadcast position via SSE every 250ms (UPnP events don't fire on position changes)
+let positionBroadcastTimer = null;
+
+function startPositionBroadcast() {
+  if (positionBroadcastTimer) return;
+  positionBroadcastTimer = setInterval(async () => {
+    if (sonosEventClients.length === 0) return; // no listeners
+    try {
+      const posBody = `<u:GetPositionInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:GetPositionInfo>`;
+      const volBody = `<u:GetVolume xmlns:u="urn:schemas-upnp-org:service:RenderingControl:1"><InstanceID>0</InstanceID><Channel>Master</Channel></u:GetVolume>`;
+      const [posXml, volXml] = await Promise.all([
+        soapRequest(posBody, 'GetPositionInfo'),
+        soapRequest(volBody, 'GetVolume', '/MediaRenderer/RenderingControl/Control', 'RenderingControl').catch(() => null)
+      ]);
+      let volume = null;
+      if (volXml) {
+        const volStr = extractTag(volXml, 'CurrentVolume');
+        if (volStr !== null) volume = parseInt(volStr, 10);
+      }
+      const relTime = extractTag(posXml, 'RelTime');
+      const trackDuration = extractTag(posXml, 'TrackDuration');
+      broadcastSSE({
+        ok: true,
+        source: 'position-tick',
+        positionMillis: parseTime(relTime),
+        durationMillis: parseTime(trackDuration),
+        volume
+      });
+    } catch { /* ignore */ }
+  }, 250);
+}
+
 function broadcastSSE(data) {
   const msg = `data: ${JSON.stringify(data)}\n\n`;
   sonosEventClients = sonosEventClients.filter(client => {
