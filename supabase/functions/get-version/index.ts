@@ -24,6 +24,22 @@ const RELEASED_AT = "2026-03-13";
 
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.3.51",
+    date: "2026-03-13",
+    changes: {
+      sv: [
+        "Position-tick SSE: Bridge skickar position och volym var 250ms via SSE (source: position-tick)",
+        "Volymnivå inkluderas i UPnP-events och position-ticks",
+        "Klienter behöver inte längre polla för positionsuppdateringar",
+      ],
+      en: [
+        "Position-tick SSE: Bridge broadcasts position and volume every 250ms via SSE (source: position-tick)",
+        "Volume level included in UPnP events and position ticks",
+        "Clients no longer need to poll for position updates",
+      ],
+    }
+  },
+  {
     version: "1.3.50",
     date: "2026-03-12",
     changes: {
