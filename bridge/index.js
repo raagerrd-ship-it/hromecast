@@ -2005,12 +2005,21 @@ const server = http.createServer(async (req, res) => {
           const posBody = `<u:GetPositionInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:GetPositionInfo>`;
           const transBody = `<u:GetTransportInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:GetTransportInfo>`;
           const mediaBody = `<u:GetMediaInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:GetMediaInfo>`;
+          const volBody = `<u:GetVolume xmlns:u="urn:schemas-upnp-org:service:RenderingControl:1"><InstanceID>0</InstanceID><Channel>Master</Channel></u:GetVolume>`;
           
-          const [posXml, transXml, mediaXml] = await Promise.all([
+          const [posXml, transXml, mediaXml, volXml] = await Promise.all([
             soapRequest(posBody, 'GetPositionInfo'),
             soapRequest(transBody, 'GetTransportInfo'),
-            soapRequest(mediaBody, 'GetMediaInfo')
+            soapRequest(mediaBody, 'GetMediaInfo'),
+            soapRequest(volBody, 'GetVolume', '/MediaRenderer/RenderingControl/Control', 'RenderingControl').catch(() => null)
           ]);
+          
+          // Parse volume
+          let volume = null;
+          if (volXml) {
+            const volStr = extractTag(volXml, 'CurrentVolume');
+            if (volStr !== null) volume = parseInt(volStr, 10);
+          }
           
           // Debug: log raw SOAP responses for troubleshooting
           log.info(`🔍 [SONOS] GetPositionInfo TrackMetaData present: ${posXml.includes('DIDL-Lite')}`);
