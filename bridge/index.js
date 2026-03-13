@@ -2082,7 +2082,8 @@ const server = http.createServer(async (req, res) => {
             albumName: didl ? didl.album : null,
             albumArtUri,
             nextTrackName,
-            nextArtistName
+            nextArtistName,
+            volume
           });
         } catch (err) {
           log.error(`❌ Sonos status error: ${err.message}`);
