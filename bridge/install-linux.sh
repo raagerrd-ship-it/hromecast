@@ -170,6 +170,31 @@ Environment=NODE_ENV=production
 WantedBy=default.target
 EOF
 
+# Skapa timer för nattlig omstart kl 05:00
+cat > "$HOME/.config/systemd/user/$SERVICE_NAME-restart.service" << EOF
+[Unit]
+Description=Restart Chromecast Bridge - $APP_NAME
+
+[Service]
+Type=oneshot
+ExecStart=/bin/systemctl --user restart $SERVICE_NAME
+EOF
+
+cat > "$HOME/.config/systemd/user/$SERVICE_NAME-restart.timer" << EOF
+[Unit]
+Description=Nightly restart of Chromecast Bridge - $APP_NAME
+
+[Timer]
+OnCalendar=*-*-* 05:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+systemctl --user enable "$SERVICE_NAME-restart.timer"
+systemctl --user start "$SERVICE_NAME-restart.timer"
+
 # Aktivera lingering för att köra services utan inloggning
 loginctl enable-linger "$USER" 2>/dev/null || true
 

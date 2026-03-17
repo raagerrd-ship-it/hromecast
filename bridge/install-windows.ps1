@@ -264,11 +264,12 @@ $NodePath = (Get-Command node).Source
 
 # Skapa task som kors vid systemstart som SYSTEM-anvandare
 $Action = New-ScheduledTaskAction -Execute $NodePath -Argument "index.js" -WorkingDirectory $AppDir
-$Trigger = New-ScheduledTaskTrigger -AtStartup
+$TriggerStartup = New-ScheduledTaskTrigger -AtStartup
+$TriggerDaily = New-ScheduledTaskTrigger -Daily -At "05:00"
 $Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
 $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Days 9999)
 
-Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Principal $Principal -Settings $Settings -Description "Chromecast Bridge - $AppName (startar vid systemstart)" | Out-Null
+Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger @($TriggerStartup, $TriggerDaily) -Principal $Principal -Settings $Settings -Description "Chromecast Bridge - $AppName (startar vid systemstart och 05:00 varje natt)" | Out-Null
 
 # Verifiera att tasken skapades
 $createdTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
