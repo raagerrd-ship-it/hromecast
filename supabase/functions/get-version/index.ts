@@ -19,10 +19,24 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.52";
+const VERSION = "1.3.53";
 const RELEASED_AT = "2026-03-29";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.53",
+    date: "2026-03-29",
+    changes: {
+      sv: [
+        "Nästa spår: nextAlbumArtUri extraheras från NextAVTransportURIMetaData och proxas via bridge",
+        "NextAVTransportURIMetaData parsas med extractDidl för nextTrackName, nextArtistName och nextAlbumArtUri",
+      ],
+      en: [
+        "Next track: nextAlbumArtUri extracted from NextAVTransportURIMetaData and proxied via bridge",
+        "NextAVTransportURIMetaData parsed with extractDidl for nextTrackName, nextArtistName and nextAlbumArtUri",
+      ],
+    }
+  },
   {
     version: "1.3.52",
     date: "2026-03-29",
