@@ -2124,12 +2124,20 @@ const server = http.createServer(async (req, res) => {
           const transBody = `<u:GetTransportInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:GetTransportInfo>`;
           const mediaBody = `<u:GetMediaInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:GetMediaInfo>`;
           const volBody = `<u:GetVolume xmlns:u="urn:schemas-upnp-org:service:RenderingControl:1"><InstanceID>0</InstanceID><Channel>Master</Channel></u:GetVolume>`;
+          const muteBody = `<u:GetMute xmlns:u="urn:schemas-upnp-org:service:RenderingControl:1"><InstanceID>0</InstanceID><Channel>Master</Channel></u:GetMute>`;
+          const bassBody = `<u:GetBass xmlns:u="urn:schemas-upnp-org:service:RenderingControl:1"><InstanceID>0</InstanceID></u:GetBass>`;
+          const trebleBody = `<u:GetTreble xmlns:u="urn:schemas-upnp-org:service:RenderingControl:1"><InstanceID>0</InstanceID></u:GetTreble>`;
+          const loudnessBody = `<u:GetLoudness xmlns:u="urn:schemas-upnp-org:service:RenderingControl:1"><InstanceID>0</InstanceID><Channel>Master</Channel></u:GetLoudness>`;
           
-          const [posXml, transXml, mediaXml, volXml] = await Promise.all([
+          const [posXml, transXml, mediaXml, volXml, muteXml, bassXml, trebleXml, loudnessXml] = await Promise.all([
             soapRequest(posBody, 'GetPositionInfo'),
             soapRequest(transBody, 'GetTransportInfo'),
             soapRequest(mediaBody, 'GetMediaInfo'),
-            soapRequest(volBody, 'GetVolume', '/MediaRenderer/RenderingControl/Control', 'RenderingControl').catch(() => null)
+            soapRequest(volBody, 'GetVolume', '/MediaRenderer/RenderingControl/Control', 'RenderingControl').catch(() => null),
+            soapRequest(muteBody, 'GetMute', '/MediaRenderer/RenderingControl/Control', 'RenderingControl').catch(() => null),
+            soapRequest(bassBody, 'GetBass', '/MediaRenderer/RenderingControl/Control', 'RenderingControl').catch(() => null),
+            soapRequest(trebleBody, 'GetTreble', '/MediaRenderer/RenderingControl/Control', 'RenderingControl').catch(() => null),
+            soapRequest(loudnessBody, 'GetLoudness', '/MediaRenderer/RenderingControl/Control', 'RenderingControl').catch(() => null)
           ]);
           
           // Parse volume
@@ -2137,6 +2145,26 @@ const server = http.createServer(async (req, res) => {
           if (volXml) {
             const volStr = extractTag(volXml, 'CurrentVolume');
             if (volStr !== null) volume = parseInt(volStr, 10);
+          }
+          let mute = null;
+          if (muteXml) {
+            const muteStr = extractTag(muteXml, 'CurrentMute');
+            if (muteStr !== null) mute = muteStr === '1';
+          }
+          let bass = null;
+          if (bassXml) {
+            const bassStr = extractTag(bassXml, 'CurrentBass');
+            if (bassStr !== null) bass = parseInt(bassStr, 10);
+          }
+          let treble = null;
+          if (trebleXml) {
+            const trebleStr = extractTag(trebleXml, 'CurrentTreble');
+            if (trebleStr !== null) treble = parseInt(trebleStr, 10);
+          }
+          let loudness = null;
+          if (loudnessXml) {
+            const loudnessStr = extractTag(loudnessXml, 'CurrentLoudness');
+            if (loudnessStr !== null) loudness = loudnessStr === '1';
           }
           
           // Debug: log raw SOAP responses for troubleshooting
@@ -2146,12 +2174,16 @@ const server = http.createServer(async (req, res) => {
           // Parse position info
           const relTime = extractTag(posXml, 'RelTime');
           const trackDuration = extractTag(posXml, 'TrackDuration');
+          const trackNumber = extractTag(posXml, 'Track');
+          const trackURI = extractTag(posXml, 'TrackURI');
+          const absTime = extractTag(posXml, 'AbsTime');
           const didl = extractDidl(posXml);
           
           log.info(`🔍 [SONOS] DIDL parsed: title=${didl?.title}, albumArtURI=${didl?.albumArtURI}`);
           
           // Parse transport state
           const transportState = extractTag(transXml, 'CurrentTransportState');
+          const currentSpeed = extractTag(transXml, 'CurrentSpeed');
           let playbackState = 'PLAYBACK_STATE_IDLE';
           if (transportState === 'PLAYING') playbackState = 'PLAYBACK_STATE_PLAYING';
           else if (transportState === 'PAUSED_PLAYBACK') playbackState = 'PLAYBACK_STATE_PAUSED';
@@ -2162,12 +2194,16 @@ const server = http.createServer(async (req, res) => {
           if (didl && didl.albumArtURI) {
             let artUrl = didl.albumArtURI;
             if (artUrl.startsWith('/')) {
-              // Use direct proxy path (e.g. /api/sonos/getaa?s=1&u=...)
               albumArtUri = `/api/sonos${artUrl}`;
             } else if (artUrl.startsWith('http')) {
               albumArtUri = `/api/sonos/art?url=${encodeURIComponent(artUrl)}`;
             }
           }
+          
+          // MediaInfo fields
+          const nrTracks = extractTag(mediaXml, 'NrTracks');
+          const currentURI = extractTag(mediaXml, 'CurrentURI');
+          const playMedium = extractTag(mediaXml, 'PlayMedium');
           
           // Parse next track from MediaInfo
           const nextMeta = extractTag(mediaXml, 'NextAVTransportURIMetaData');
@@ -2176,7 +2212,6 @@ const server = http.createServer(async (req, res) => {
           if (nextMeta) {
             const nextDidl = extractDidl(nextMeta);
             if (!nextDidl) {
-              // Try decoding once more (double-encoded)
               const decoded = decodeXmlEntities(nextMeta);
               const nextDidl2 = extractDidl(decoded);
               if (nextDidl2) {
@@ -2204,7 +2239,22 @@ const server = http.createServer(async (req, res) => {
             nextTrackName,
             nextArtistName,
             volume,
-            mediaType
+            mute,
+            bass,
+            treble,
+            loudness,
+            mediaType,
+            trackNumber: trackNumber ? parseInt(trackNumber, 10) : null,
+            trackURI,
+            absTime,
+            currentSpeed,
+            nrTracks: nrTracks ? parseInt(nrTracks, 10) : null,
+            currentURI,
+            playMedium,
+            streamContent: didl ? didl.streamContent : null,
+            radioShowMd: didl ? didl.radioShowMd : null,
+            originalTrackNumber: didl?.originalTrackNumber ? parseInt(didl.originalTrackNumber, 10) : null,
+            protocolInfo: didl ? didl.protocolInfo : null
           });
         } catch (err) {
           log.error(`❌ Sonos status error: ${err.message}`);
