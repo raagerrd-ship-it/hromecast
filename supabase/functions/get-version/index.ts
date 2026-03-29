@@ -19,10 +19,24 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.53";
+const VERSION = "1.3.54";
 const RELEASED_AT = "2026-03-29";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.54",
+    date: "2026-03-29",
+    changes: {
+      sv: [
+        "Nästa spår: ContentDirectory Browse-fallback – om NextAVTransportURIMetaData saknas hämtas metadata via Browse Q:0 på trackNumber+1",
+        "Gemensam resolveNextTrack()-hjälpfunktion som används av både UPnP-eventhandler och /status-endpoint",
+      ],
+      en: [
+        "Next track: ContentDirectory Browse fallback – if NextAVTransportURIMetaData is missing, metadata is fetched via Browse Q:0 at trackNumber+1",
+        "Shared resolveNextTrack() helper used by both UPnP event handler and /status endpoint",
+      ],
+    }
+  },
   {
     version: "1.3.53",
     date: "2026-03-29",
