@@ -19,10 +19,34 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.51";
-const RELEASED_AT = "2026-03-13";
+const VERSION = "1.3.52";
+const RELEASED_AT = "2026-03-29";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.52",
+    date: "2026-03-29",
+    changes: {
+      sv: [
+        "Utökad Sonos-metadata: mediaType (radio/track), streamContent (radiotext), radioShowMd, originalTrackNumber, protocolInfo (codec)",
+        "RenderingControl: mute, bass, treble, loudness skickas i alla events",
+        "AVTransport: crossfade, currentTransportStatus, nextAVTransportURI, trackNumber, trackURI, absTime, currentSpeed",
+        "MediaInfo: nrTracks (köstorlek), currentURI, playMedium",
+        "Position-tick optimerad: bass/treble/loudness/crossfade cachas från UPnP-events istället för separata SOAP-anrop",
+        "Mute inkluderas i position-tick (realtid var 250ms)",
+        "Nattlig omstart-trigger (05:00) i install-script för Windows och Linux",
+      ],
+      en: [
+        "Extended Sonos metadata: mediaType (radio/track), streamContent (radio text), radioShowMd, originalTrackNumber, protocolInfo (codec)",
+        "RenderingControl: mute, bass, treble, loudness included in all events",
+        "AVTransport: crossfade, currentTransportStatus, nextAVTransportURI, trackNumber, trackURI, absTime, currentSpeed",
+        "MediaInfo: nrTracks (queue size), currentURI, playMedium",
+        "Position-tick optimized: bass/treble/loudness/crossfade cached from UPnP events instead of separate SOAP calls",
+        "Mute included in position-tick (realtime every 250ms)",
+        "Nightly restart trigger (05:00) in install scripts for Windows and Linux",
+      ],
+    }
+  },
   {
     version: "1.3.51",
     date: "2026-03-13",
