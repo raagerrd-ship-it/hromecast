@@ -399,6 +399,7 @@ async function handleSonosUPnPEvent() {
     }
     
     const mediaType = didl?.upnpClass?.includes('audioBroadcast') ? 'radio' : 'track';
+    cachedMediaType = mediaType; // cache for position-tick reuse
     
     const eventData = {
       ok: true,
@@ -426,6 +427,7 @@ async function handleSonosUPnPEvent() {
 
 // Broadcast position via SSE every 250ms (UPnP events don't fire on position changes)
 let positionBroadcastTimer = null;
+let cachedMediaType = 'track'; // updated by UPnP events, reused by position-tick
 
 function startPositionBroadcast() {
   if (positionBroadcastTimer) return;
@@ -434,21 +436,14 @@ function startPositionBroadcast() {
     try {
       const posBody = `<u:GetPositionInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:GetPositionInfo>`;
       const volBody = `<u:GetVolume xmlns:u="urn:schemas-upnp-org:service:RenderingControl:1"><InstanceID>0</InstanceID><Channel>Master</Channel></u:GetVolume>`;
-      const mediaBody = `<u:GetMediaInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:GetMediaInfo>`;
-      const [posXml, volXml, mediaXml] = await Promise.all([
+      const [posXml, volXml] = await Promise.all([
         soapRequest(posBody, 'GetPositionInfo'),
-        soapRequest(volBody, 'GetVolume', '/MediaRenderer/RenderingControl/Control', 'RenderingControl').catch(() => null),
-        soapRequest(mediaBody, 'GetMediaInfo').catch(() => null)
+        soapRequest(volBody, 'GetVolume', '/MediaRenderer/RenderingControl/Control', 'RenderingControl').catch(() => null)
       ]);
       let volume = null;
       if (volXml) {
         const volStr = extractTag(volXml, 'CurrentVolume');
         if (volStr !== null) volume = parseInt(volStr, 10);
-      }
-      let mediaType = 'track';
-      if (mediaXml) {
-        const didl = extractDidl(mediaXml);
-        if (didl?.upnpClass?.includes('audioBroadcast')) mediaType = 'radio';
       }
       const relTime = extractTag(posXml, 'RelTime');
       const trackDuration = extractTag(posXml, 'TrackDuration');
@@ -458,7 +453,7 @@ function startPositionBroadcast() {
         positionMillis: parseTime(relTime),
         durationMillis: parseTime(trackDuration),
         volume,
-        mediaType
+        mediaType: cachedMediaType
       });
     } catch { /* ignore */ }
   }, 250);
