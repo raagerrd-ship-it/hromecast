@@ -364,8 +364,9 @@ async function handleSonosUPnPEvent() {
     const bassBody = `<u:GetBass xmlns:u="urn:schemas-upnp-org:service:RenderingControl:1"><InstanceID>0</InstanceID></u:GetBass>`;
     const trebleBody = `<u:GetTreble xmlns:u="urn:schemas-upnp-org:service:RenderingControl:1"><InstanceID>0</InstanceID></u:GetTreble>`;
     const loudnessBody = `<u:GetLoudness xmlns:u="urn:schemas-upnp-org:service:RenderingControl:1"><InstanceID>0</InstanceID><Channel>Master</Channel></u:GetLoudness>`;
+    const crossfadeBody = `<u:GetCrossfadeMode xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:GetCrossfadeMode>`;
     
-    const [posXml, transXml, mediaXml, volXml, muteXml, bassXml, trebleXml, loudnessXml] = await Promise.all([
+    const [posXml, transXml, mediaXml, volXml, muteXml, bassXml, trebleXml, loudnessXml, crossfadeXml] = await Promise.all([
       soapRequest(posBody, 'GetPositionInfo'),
       soapRequest(transBody, 'GetTransportInfo'),
       soapRequest(mediaBody, 'GetMediaInfo'),
@@ -373,7 +374,8 @@ async function handleSonosUPnPEvent() {
       soapRequest(muteBody, 'GetMute', '/MediaRenderer/RenderingControl/Control', 'RenderingControl').catch(() => null),
       soapRequest(bassBody, 'GetBass', '/MediaRenderer/RenderingControl/Control', 'RenderingControl').catch(() => null),
       soapRequest(trebleBody, 'GetTreble', '/MediaRenderer/RenderingControl/Control', 'RenderingControl').catch(() => null),
-      soapRequest(loudnessBody, 'GetLoudness', '/MediaRenderer/RenderingControl/Control', 'RenderingControl').catch(() => null)
+      soapRequest(loudnessBody, 'GetLoudness', '/MediaRenderer/RenderingControl/Control', 'RenderingControl').catch(() => null),
+      soapRequest(crossfadeBody, 'GetCrossfadeMode').catch(() => null)
     ]);
     
     let volume = null;
@@ -409,7 +411,13 @@ async function handleSonosUPnPEvent() {
     const absTime = extractTag(posXml, 'AbsTime');
     const didl = extractDidl(posXml);
     const transportState = extractTag(transXml, 'CurrentTransportState');
+    const currentTransportStatus = extractTag(transXml, 'CurrentTransportStatus');
     const currentSpeed = extractTag(transXml, 'CurrentSpeed');
+    let crossfade = null;
+    if (crossfadeXml) {
+      const cfStr = extractTag(crossfadeXml, 'CrossfadeMode');
+      if (cfStr !== null) crossfade = cfStr === '1';
+    }
     
     let playbackState = 'PLAYBACK_STATE_IDLE';
     if (transportState === 'PLAYING') playbackState = 'PLAYBACK_STATE_PLAYING';
@@ -429,6 +437,7 @@ async function handleSonosUPnPEvent() {
     // MediaInfo fields
     const nrTracks = extractTag(mediaXml, 'NrTracks');
     const currentURI = extractTag(mediaXml, 'CurrentURI');
+    const nextAVTransportURI = extractTag(mediaXml, 'NextAVTransportURI');
     const playMedium = extractTag(mediaXml, 'PlayMedium');
     
     const nextMeta = extractTag(mediaXml, 'NextAVTransportURIMetaData');
@@ -470,8 +479,11 @@ async function handleSonosUPnPEvent() {
       trackURI,
       absTime,
       currentSpeed,
+      currentTransportStatus,
+      crossfade,
       nrTracks: nrTracks ? parseInt(nrTracks, 10) : null,
       currentURI,
+      nextAVTransportURI,
       playMedium,
       streamContent: didl ? didl.streamContent : null,
       radioShowMd: didl ? didl.radioShowMd : null,
@@ -2128,8 +2140,9 @@ const server = http.createServer(async (req, res) => {
           const bassBody = `<u:GetBass xmlns:u="urn:schemas-upnp-org:service:RenderingControl:1"><InstanceID>0</InstanceID></u:GetBass>`;
           const trebleBody = `<u:GetTreble xmlns:u="urn:schemas-upnp-org:service:RenderingControl:1"><InstanceID>0</InstanceID></u:GetTreble>`;
           const loudnessBody = `<u:GetLoudness xmlns:u="urn:schemas-upnp-org:service:RenderingControl:1"><InstanceID>0</InstanceID><Channel>Master</Channel></u:GetLoudness>`;
+          const crossfadeBody = `<u:GetCrossfadeMode xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:GetCrossfadeMode>`;
           
-          const [posXml, transXml, mediaXml, volXml, muteXml, bassXml, trebleXml, loudnessXml] = await Promise.all([
+          const [posXml, transXml, mediaXml, volXml, muteXml, bassXml, trebleXml, loudnessXml, crossfadeXml] = await Promise.all([
             soapRequest(posBody, 'GetPositionInfo'),
             soapRequest(transBody, 'GetTransportInfo'),
             soapRequest(mediaBody, 'GetMediaInfo'),
@@ -2137,7 +2150,8 @@ const server = http.createServer(async (req, res) => {
             soapRequest(muteBody, 'GetMute', '/MediaRenderer/RenderingControl/Control', 'RenderingControl').catch(() => null),
             soapRequest(bassBody, 'GetBass', '/MediaRenderer/RenderingControl/Control', 'RenderingControl').catch(() => null),
             soapRequest(trebleBody, 'GetTreble', '/MediaRenderer/RenderingControl/Control', 'RenderingControl').catch(() => null),
-            soapRequest(loudnessBody, 'GetLoudness', '/MediaRenderer/RenderingControl/Control', 'RenderingControl').catch(() => null)
+            soapRequest(loudnessBody, 'GetLoudness', '/MediaRenderer/RenderingControl/Control', 'RenderingControl').catch(() => null),
+            soapRequest(crossfadeBody, 'GetCrossfadeMode').catch(() => null)
           ]);
           
           // Parse volume
@@ -2183,7 +2197,13 @@ const server = http.createServer(async (req, res) => {
           
           // Parse transport state
           const transportState = extractTag(transXml, 'CurrentTransportState');
+          const currentTransportStatus = extractTag(transXml, 'CurrentTransportStatus');
           const currentSpeed = extractTag(transXml, 'CurrentSpeed');
+          let crossfade = null;
+          if (crossfadeXml) {
+            const cfStr = extractTag(crossfadeXml, 'CrossfadeMode');
+            if (cfStr !== null) crossfade = cfStr === '1';
+          }
           let playbackState = 'PLAYBACK_STATE_IDLE';
           if (transportState === 'PLAYING') playbackState = 'PLAYBACK_STATE_PLAYING';
           else if (transportState === 'PAUSED_PLAYBACK') playbackState = 'PLAYBACK_STATE_PAUSED';
@@ -2203,6 +2223,7 @@ const server = http.createServer(async (req, res) => {
           // MediaInfo fields
           const nrTracks = extractTag(mediaXml, 'NrTracks');
           const currentURI = extractTag(mediaXml, 'CurrentURI');
+          const nextAVTransportURI = extractTag(mediaXml, 'NextAVTransportURI');
           const playMedium = extractTag(mediaXml, 'PlayMedium');
           
           // Parse next track from MediaInfo
@@ -2248,8 +2269,11 @@ const server = http.createServer(async (req, res) => {
             trackURI,
             absTime,
             currentSpeed,
+            currentTransportStatus,
+            crossfade,
             nrTracks: nrTracks ? parseInt(nrTracks, 10) : null,
             currentURI,
+            nextAVTransportURI,
             playMedium,
             streamContent: didl ? didl.streamContent : null,
             radioShowMd: didl ? didl.radioShowMd : null,
