@@ -443,6 +443,7 @@ async function handleSonosUPnPEvent() {
     const nextMeta = extractTag(mediaXml, 'NextAVTransportURIMetaData');
     let nextTrackName = null;
     let nextArtistName = null;
+    let nextAlbumArtUri = null;
     if (nextMeta) {
       let nextDidl = extractDidl(nextMeta);
       if (!nextDidl) {
@@ -451,6 +452,13 @@ async function handleSonosUPnPEvent() {
       if (nextDidl) {
         nextTrackName = nextDidl.title;
         nextArtistName = nextDidl.creator;
+        if (nextDidl.albumArtURI) {
+          if (nextDidl.albumArtURI.startsWith('/')) {
+            nextAlbumArtUri = `/api/sonos${nextDidl.albumArtURI}`;
+          } else if (nextDidl.albumArtURI.startsWith('http')) {
+            nextAlbumArtUri = `/api/sonos/art?url=${encodeURIComponent(nextDidl.albumArtURI)}`;
+          }
+        }
       }
     }
     
@@ -473,6 +481,7 @@ async function handleSonosUPnPEvent() {
       albumArtUri,
       nextTrackName,
       nextArtistName,
+      nextAlbumArtUri,
       volume,
       mute,
       bass,
@@ -2242,18 +2251,22 @@ const server = http.createServer(async (req, res) => {
           const nextMeta = extractTag(mediaXml, 'NextAVTransportURIMetaData');
           let nextTrackName = null;
           let nextArtistName = null;
+          let nextAlbumArtUri = null;
           if (nextMeta) {
-            const nextDidl = extractDidl(nextMeta);
+            let nextDidl = extractDidl(nextMeta);
             if (!nextDidl) {
-              const decoded = decodeXmlEntities(nextMeta);
-              const nextDidl2 = extractDidl(decoded);
-              if (nextDidl2) {
-                nextTrackName = nextDidl2.title;
-                nextArtistName = nextDidl2.creator;
-              }
-            } else {
+              nextDidl = extractDidl(decodeXmlEntities(nextMeta));
+            }
+            if (nextDidl) {
               nextTrackName = nextDidl.title;
               nextArtistName = nextDidl.creator;
+              if (nextDidl.albumArtURI) {
+                if (nextDidl.albumArtURI.startsWith('/')) {
+                  nextAlbumArtUri = `/api/sonos${nextDidl.albumArtURI}`;
+                } else if (nextDidl.albumArtURI.startsWith('http')) {
+                  nextAlbumArtUri = `/api/sonos/art?url=${encodeURIComponent(nextDidl.albumArtURI)}`;
+                }
+              }
             }
           }
           
@@ -2271,6 +2284,7 @@ const server = http.createServer(async (req, res) => {
             albumArtUri,
             nextTrackName,
             nextArtistName,
+            nextAlbumArtUri,
             volume,
             mute,
             bass,
