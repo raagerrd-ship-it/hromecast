@@ -255,6 +255,67 @@ function extractDidl(xml) {
   };
 }
 
+// Resolve next-track metadata with fallback to ContentDirectory Browse
+async function resolveNextTrack(nextMeta, trackNumber, nrTracks) {
+  let nextTrackName = null;
+  let nextArtistName = null;
+  let nextAlbumArtUri = null;
+
+  // 1. Try NextAVTransportURIMetaData first
+  if (nextMeta) {
+    let nextDidl = extractDidl(nextMeta);
+    if (!nextDidl) nextDidl = extractDidl(decodeXmlEntities(nextMeta));
+    if (nextDidl) {
+      nextTrackName = nextDidl.title || null;
+      nextArtistName = nextDidl.creator || null;
+      if (nextDidl.albumArtURI) {
+        nextAlbumArtUri = nextDidl.albumArtURI.startsWith('/')
+          ? `/api/sonos${nextDidl.albumArtURI}`
+          : `/api/sonos/art?url=${encodeURIComponent(nextDidl.albumArtURI)}`;
+      }
+    }
+  }
+
+  // 2. Fallback: Browse queue at trackNumber + 1 via ContentDirectory
+  if (!nextTrackName && trackNumber != null) {
+    const nextIndex = parseInt(trackNumber, 10); // queue is 0-indexed, trackNumber is 1-indexed
+    const total = nrTracks != null ? parseInt(nrTracks, 10) : 0;
+    if (nextIndex < total) {
+      try {
+        const browseBody = `<u:Browse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1">
+          <ObjectID>Q:0</ObjectID>
+          <BrowseFlag>BrowseDirectChildren</BrowseFlag>
+          <Filter>dc:title,dc:creator,upnp:album,upnp:albumArtURI,upnp:class</Filter>
+          <StartingIndex>${nextIndex}</StartingIndex>
+          <RequestedCount>1</RequestedCount>
+          <SortCriteria></SortCriteria>
+        </u:Browse>`;
+        const browseXml = await soapRequest(browseBody, 'Browse', '/MediaServer/ContentDirectory/Control', 'ContentDirectory');
+        // The result is in <Result> tag, DIDL-encoded
+        const resultRaw = extractTag(browseXml, 'Result');
+        if (resultRaw) {
+          let browseDidl = extractDidl(resultRaw);
+          if (!browseDidl) browseDidl = extractDidl(decodeXmlEntities(resultRaw));
+          if (browseDidl) {
+            nextTrackName = browseDidl.title || null;
+            nextArtistName = browseDidl.creator || null;
+            if (browseDidl.albumArtURI) {
+              nextAlbumArtUri = browseDidl.albumArtURI.startsWith('/')
+                ? `/api/sonos${browseDidl.albumArtURI}`
+                : `/api/sonos/art?url=${encodeURIComponent(browseDidl.albumArtURI)}`;
+            }
+          }
+        }
+      } catch (err) {
+        log.debug(`[SONOS] ContentDirectory browse fallback failed: ${err.message}`);
+      }
+    }
+  }
+
+  return { nextTrackName, nextArtistName, nextAlbumArtUri };
+}
+
+
 // ============ Sonos UPnP Event Subscription (SSE) ============
 
 let sonosEventClients = []; // SSE clients
