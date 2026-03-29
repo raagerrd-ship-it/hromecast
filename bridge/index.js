@@ -502,26 +502,7 @@ async function handleSonosUPnPEvent() {
     const playMedium = extractTag(mediaXml, 'PlayMedium');
     
     const nextMeta = extractTag(mediaXml, 'NextAVTransportURIMetaData');
-    let nextTrackName = null;
-    let nextArtistName = null;
-    let nextAlbumArtUri = null;
-    if (nextMeta) {
-      let nextDidl = extractDidl(nextMeta);
-      if (!nextDidl) {
-        nextDidl = extractDidl(decodeXmlEntities(nextMeta));
-      }
-      if (nextDidl) {
-        nextTrackName = nextDidl.title;
-        nextArtistName = nextDidl.creator;
-        if (nextDidl.albumArtURI) {
-          if (nextDidl.albumArtURI.startsWith('/')) {
-            nextAlbumArtUri = `/api/sonos${nextDidl.albumArtURI}`;
-          } else if (nextDidl.albumArtURI.startsWith('http')) {
-            nextAlbumArtUri = `/api/sonos/art?url=${encodeURIComponent(nextDidl.albumArtURI)}`;
-          }
-        }
-      }
-    }
+    const { nextTrackName, nextArtistName, nextAlbumArtUri } = await resolveNextTrack(nextMeta, trackNumber, nrTracks);
     
     const mediaType = didl?.upnpClass?.includes('audioBroadcast') ? 'radio' : 'track';
     cachedMediaType = mediaType;
