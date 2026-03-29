@@ -455,7 +455,11 @@ async function handleSonosUPnPEvent() {
     }
     
     const mediaType = didl?.upnpClass?.includes('audioBroadcast') ? 'radio' : 'track';
-    cachedMediaType = mediaType; // cache for position-tick reuse
+    cachedMediaType = mediaType;
+    cachedBass = bass;
+    cachedTreble = treble;
+    cachedLoudness = loudness;
+    cachedCrossfade = crossfade;
     
     const eventData = {
       ok: true,
@@ -502,6 +506,10 @@ async function handleSonosUPnPEvent() {
 // Broadcast position via SSE every 250ms (UPnP events don't fire on position changes)
 let positionBroadcastTimer = null;
 let cachedMediaType = 'track'; // updated by UPnP events, reused by position-tick
+let cachedBass = null;
+let cachedTreble = null;
+let cachedLoudness = null;
+let cachedCrossfade = null;
 
 function startPositionBroadcast() {
   if (positionBroadcastTimer) return;
@@ -535,7 +543,11 @@ function startPositionBroadcast() {
         durationMillis: parseTime(trackDuration),
         volume,
         mute,
-        mediaType: cachedMediaType
+        mediaType: cachedMediaType,
+        bass: cachedBass,
+        treble: cachedTreble,
+        loudness: cachedLoudness,
+        crossfade: cachedCrossfade
       });
     } catch { /* ignore */ }
   }, 250);
