@@ -2197,7 +2197,13 @@ const server = http.createServer(async (req, res) => {
           
           // Parse transport state
           const transportState = extractTag(transXml, 'CurrentTransportState');
+          const currentTransportStatus = extractTag(transXml, 'CurrentTransportStatus');
           const currentSpeed = extractTag(transXml, 'CurrentSpeed');
+          let crossfade = null;
+          if (crossfadeXml) {
+            const cfStr = extractTag(crossfadeXml, 'CrossfadeMode');
+            if (cfStr !== null) crossfade = cfStr === '1';
+          }
           let playbackState = 'PLAYBACK_STATE_IDLE';
           if (transportState === 'PLAYING') playbackState = 'PLAYBACK_STATE_PLAYING';
           else if (transportState === 'PAUSED_PLAYBACK') playbackState = 'PLAYBACK_STATE_PAUSED';
@@ -2217,6 +2223,7 @@ const server = http.createServer(async (req, res) => {
           // MediaInfo fields
           const nrTracks = extractTag(mediaXml, 'NrTracks');
           const currentURI = extractTag(mediaXml, 'CurrentURI');
+          const nextAVTransportURI = extractTag(mediaXml, 'NextAVTransportURI');
           const playMedium = extractTag(mediaXml, 'PlayMedium');
           
           // Parse next track from MediaInfo
@@ -2262,8 +2269,11 @@ const server = http.createServer(async (req, res) => {
             trackURI,
             absTime,
             currentSpeed,
+            currentTransportStatus,
+            crossfade,
             nrTracks: nrTracks ? parseInt(nrTracks, 10) : null,
             currentURI,
+            nextAVTransportURI,
             playMedium,
             streamContent: didl ? didl.streamContent : null,
             radioShowMd: didl ? didl.radioShowMd : null,
