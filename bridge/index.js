@@ -2140,8 +2140,9 @@ const server = http.createServer(async (req, res) => {
           const bassBody = `<u:GetBass xmlns:u="urn:schemas-upnp-org:service:RenderingControl:1"><InstanceID>0</InstanceID></u:GetBass>`;
           const trebleBody = `<u:GetTreble xmlns:u="urn:schemas-upnp-org:service:RenderingControl:1"><InstanceID>0</InstanceID></u:GetTreble>`;
           const loudnessBody = `<u:GetLoudness xmlns:u="urn:schemas-upnp-org:service:RenderingControl:1"><InstanceID>0</InstanceID><Channel>Master</Channel></u:GetLoudness>`;
+          const crossfadeBody = `<u:GetCrossfadeMode xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:GetCrossfadeMode>`;
           
-          const [posXml, transXml, mediaXml, volXml, muteXml, bassXml, trebleXml, loudnessXml] = await Promise.all([
+          const [posXml, transXml, mediaXml, volXml, muteXml, bassXml, trebleXml, loudnessXml, crossfadeXml] = await Promise.all([
             soapRequest(posBody, 'GetPositionInfo'),
             soapRequest(transBody, 'GetTransportInfo'),
             soapRequest(mediaBody, 'GetMediaInfo'),
@@ -2149,7 +2150,8 @@ const server = http.createServer(async (req, res) => {
             soapRequest(muteBody, 'GetMute', '/MediaRenderer/RenderingControl/Control', 'RenderingControl').catch(() => null),
             soapRequest(bassBody, 'GetBass', '/MediaRenderer/RenderingControl/Control', 'RenderingControl').catch(() => null),
             soapRequest(trebleBody, 'GetTreble', '/MediaRenderer/RenderingControl/Control', 'RenderingControl').catch(() => null),
-            soapRequest(loudnessBody, 'GetLoudness', '/MediaRenderer/RenderingControl/Control', 'RenderingControl').catch(() => null)
+            soapRequest(loudnessBody, 'GetLoudness', '/MediaRenderer/RenderingControl/Control', 'RenderingControl').catch(() => null),
+            soapRequest(crossfadeBody, 'GetCrossfadeMode').catch(() => null)
           ]);
           
           // Parse volume
