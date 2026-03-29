@@ -240,7 +240,8 @@ function extractDidl(xml) {
     title: extractTag(didl, 'dc:title'),
     creator: extractTag(didl, 'dc:creator'),
     album: extractTag(didl, 'upnp:album'),
-    albumArtURI: extractTag(didl, 'upnp:albumArtURI')
+    albumArtURI: extractTag(didl, 'upnp:albumArtURI'),
+    upnpClass: extractTag(didl, 'upnp:class')
   };
 }
 
@@ -397,6 +398,8 @@ async function handleSonosUPnPEvent() {
       }
     }
     
+    const mediaType = didl?.upnpClass?.includes('audioBroadcast') ? 'radio' : 'track';
+    
     const eventData = {
       ok: true,
       source: 'upnp-event',
@@ -410,6 +413,7 @@ async function handleSonosUPnPEvent() {
       nextTrackName,
       nextArtistName,
       volume,
+      mediaType,
       timestamp: Date.now()
     };
     
@@ -2112,6 +2116,8 @@ const server = http.createServer(async (req, res) => {
             }
           }
           
+          const mediaType = didl?.upnpClass?.includes('audioBroadcast') ? 'radio' : 'track';
+          
           sendJson(res, {
             ok: true,
             source: 'local-upnp',
@@ -2124,7 +2130,8 @@ const server = http.createServer(async (req, res) => {
             albumArtUri,
             nextTrackName,
             nextArtistName,
-            volume
+            volume,
+            mediaType
           });
         } catch (err) {
           log.error(`❌ Sonos status error: ${err.message}`);
