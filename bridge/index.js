@@ -502,13 +502,13 @@ async function fetchAndUploadArt(rawUri, filename) {
           }
         });
       });
-      req.on('error', () => resolve(null));
-      req.on('timeout', () => { req.destroy(); resolve(null); });
+      req.on('error', (e) => { log.warn(`⚠️ [PUSH] Art upload request error: ${e.message}`); resolve(null); });
+      req.on('timeout', () => { req.destroy(); log.warn('⚠️ [PUSH] Art upload timeout'); resolve(null); });
       req.write(imageBuffer);
       req.end();
     });
   } catch (err) {
-    log.debug(`[PUSH] Art fetch/upload failed: ${err.message}`);
+    log.warn(`⚠️ [PUSH] Art fetch/upload failed for ${filename}: ${err.message}`);
     return null;
   }
 }
