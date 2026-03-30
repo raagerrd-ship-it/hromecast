@@ -19,10 +19,24 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.57";
+const VERSION = "1.3.58";
 const RELEASED_AT = "2026-03-30";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.58",
+    date: "2026-03-30",
+    changes: {
+      sv: [
+        "Fix: Art-uppladdning loggar nu varningar (warn) istället för debug vid fel — synligt i alla loggnivåer",
+        "Ny lograd visar rawUri innan fetch så man ser vilken bild bridge:n försöker hämta",
+      ],
+      en: [
+        "Fix: Art upload now logs warnings (warn) instead of debug on failure — visible at all log levels",
+        "New log line shows rawUri before fetch so you can see which image the bridge tries to retrieve",
+      ],
+    }
+  },
   {
     version: "1.3.57",
     date: "2026-03-30",
