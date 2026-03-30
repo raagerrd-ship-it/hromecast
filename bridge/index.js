@@ -431,12 +431,12 @@ function pushToBridge(eventData, rawAlbumArtUri, rawNextAlbumArtUri) {
   if (trackKey === lastPushedTrack) return;
   lastPushedTrack = trackKey;
   
-  // Resolve album art to absolute Sonos URLs for external consumption
+  // Only pass publicly accessible URLs (skip local Sonos IPs)
   const resolveArt = (raw) => {
     if (!raw) return null;
-    if (raw.startsWith('http')) return raw;
-    if (raw.startsWith('/')) return `http://${SONOS_IP}:1400${raw}`;
-    return null;
+    if (raw.startsWith('https://')) return raw;
+    if (raw.startsWith('http://') && !raw.includes('192.168.') && !raw.includes('10.') && !raw.includes('172.')) return raw;
+    return null; // local/relative paths can't be reached from Cloud
   };
   
   const payload = JSON.stringify({
