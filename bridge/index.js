@@ -680,6 +680,7 @@ async function handleSonosUPnPEvent() {
     if (transportState === 'PLAYING') playbackState = 'PLAYBACK_STATE_PLAYING';
     else if (transportState === 'PAUSED_PLAYBACK') playbackState = 'PLAYBACK_STATE_PAUSED';
     else if (transportState === 'TRANSITIONING') playbackState = 'PLAYBACK_STATE_PLAYING';
+    else if (transportState === 'STOPPED') playbackState = 'PLAYBACK_STATE_PAUSED';
     
     let albumArtUri = null;
     if (didl && didl.albumArtURI) {
