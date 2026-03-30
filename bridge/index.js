@@ -235,10 +235,17 @@ function decodeXmlEntities(str) {
 }
 
 function extractDidl(xml) {
-  const didlMatch = xml.match(/&lt;DIDL-Lite[\s\S]*?&lt;\/DIDL-Lite&gt;/);
-  if (!didlMatch) return null;
-  
-  const didl = decodeXmlEntities(didlMatch[0]);
+  // Try entity-encoded first
+  let didlMatch = xml.match(/&lt;DIDL-Lite[\s\S]*?&lt;\/DIDL-Lite&gt;/);
+  let didl;
+  if (didlMatch) {
+    didl = decodeXmlEntities(didlMatch[0]);
+  } else {
+    // Try raw XML (e.g. from ContentDirectory Browse CDATA)
+    didlMatch = xml.match(/<DIDL-Lite[\s\S]*?<\/DIDL-Lite>/);
+    if (!didlMatch) return null;
+    didl = didlMatch[0];
+  }
   
   // Extract protocolInfo from <res protocolInfo="...">
   let protocolInfo = null;
@@ -267,24 +274,31 @@ async function resolveNextTrack(nextMeta, trackNumber, nrTracks) {
 
   // 1. Try NextAVTransportURIMetaData first
   if (nextMeta) {
+    log.debug(`[SONOS] NextMeta present (${nextMeta.length} chars)`);
     let nextDidl = extractDidl(nextMeta);
     if (!nextDidl) nextDidl = extractDidl(decodeXmlEntities(nextMeta));
     if (nextDidl) {
       nextTrackName = nextDidl.title || null;
       nextArtistName = nextDidl.creator || null;
+      log.debug(`[SONOS] Next from metadata: "${nextTrackName}" by "${nextArtistName}"`);
       if (nextDidl.albumArtURI) {
         rawNextAlbumArtUri = nextDidl.albumArtURI;
         nextAlbumArtUri = nextDidl.albumArtURI.startsWith('/')
           ? `/api/sonos${nextDidl.albumArtURI}`
           : `/api/sonos/art?url=${encodeURIComponent(nextDidl.albumArtURI)}`;
       }
+    } else {
+      log.debug(`[SONOS] NextMeta present but DIDL parse failed`);
     }
+  } else {
+    log.debug(`[SONOS] NextAVTransportURIMetaData is empty/null`);
   }
 
   // 2. Fallback: Browse queue at trackNumber + 1 via ContentDirectory
   if (!nextTrackName && trackNumber != null) {
     const nextIndex = parseInt(trackNumber, 10); // queue is 0-indexed, trackNumber is 1-indexed
     const total = nrTracks != null ? parseInt(nrTracks, 10) : 0;
+    log.debug(`[SONOS] Next track fallback: trackNumber=${trackNumber}, nextIndex=${nextIndex}, total=${total}`);
     if (nextIndex < total) {
       try {
         const browseBody = `<u:Browse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1">
@@ -298,22 +312,30 @@ async function resolveNextTrack(nextMeta, trackNumber, nrTracks) {
         const browseXml = await soapRequest(browseBody, 'Browse', '/MediaServer/ContentDirectory/Control', 'ContentDirectory');
         const resultRaw = extractTag(browseXml, 'Result');
         if (resultRaw) {
+          log.debug(`[SONOS] Browse result (${resultRaw.length} chars): ${resultRaw.substring(0, 200)}`);
           let browseDidl = extractDidl(resultRaw);
           if (!browseDidl) browseDidl = extractDidl(decodeXmlEntities(resultRaw));
           if (browseDidl) {
             nextTrackName = browseDidl.title || null;
             nextArtistName = browseDidl.creator || null;
+            log.debug(`[SONOS] Next from browse: "${nextTrackName}" by "${nextArtistName}"`);
             if (browseDidl.albumArtURI) {
               rawNextAlbumArtUri = browseDidl.albumArtURI;
               nextAlbumArtUri = browseDidl.albumArtURI.startsWith('/')
                 ? `/api/sonos${browseDidl.albumArtURI}`
                 : `/api/sonos/art?url=${encodeURIComponent(browseDidl.albumArtURI)}`;
             }
+          } else {
+            log.debug(`[SONOS] Browse DIDL parse failed for result`);
           }
+        } else {
+          log.debug(`[SONOS] Browse returned no Result tag`);
         }
       } catch (err) {
         log.debug(`[SONOS] ContentDirectory browse fallback failed: ${err.message}`);
       }
+    } else {
+      log.debug(`[SONOS] No next track: nextIndex(${nextIndex}) >= total(${total})`);
     }
   }
 
