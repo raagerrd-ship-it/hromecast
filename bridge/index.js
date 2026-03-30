@@ -421,7 +421,7 @@ function renewSonosSubscription() {
 
 let lastPushedTrack = null;
 
-function pushToBridge(eventData) {
+function pushToBridge(eventData, rawAlbumArtUri, rawNextAlbumArtUri) {
   if (!SUPABASE_PUSH_URL || !BRIDGE_SECRET) return;
   
   // Only push on track changes
@@ -429,14 +429,22 @@ function pushToBridge(eventData) {
   if (trackKey === lastPushedTrack) return;
   lastPushedTrack = trackKey;
   
+  // Resolve album art to absolute Sonos URLs for external consumption
+  const resolveArt = (raw) => {
+    if (!raw) return null;
+    if (raw.startsWith('http')) return raw;
+    if (raw.startsWith('/')) return `http://${SONOS_IP}:1400${raw}`;
+    return null;
+  };
+  
   const payload = JSON.stringify({
     trackName: eventData.trackName,
     artistName: eventData.artistName,
     albumName: eventData.albumName,
-    albumArtUri: eventData.albumArtUri,
+    albumArtUri: resolveArt(rawAlbumArtUri),
     nextTrackName: eventData.nextTrackName,
     nextArtistName: eventData.nextArtistName,
-    nextAlbumArtUri: eventData.nextAlbumArtUri,
+    nextAlbumArtUri: resolveArt(rawNextAlbumArtUri),
     playbackState: eventData.playbackState,
     positionMillis: eventData.positionMillis,
     durationMillis: eventData.durationMillis
