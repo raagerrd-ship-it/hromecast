@@ -552,6 +552,9 @@ async function handleSonosUPnPEvent() {
     
     lastSonosEvent = eventData;
     broadcastSSE(eventData);
+    
+    // Push to brew-monitor edge function on track changes
+    pushToBridge(eventData);
   } catch (err) {
     log.error(`❌ [SONOS] Event handler error: ${err.message}`);
   }
