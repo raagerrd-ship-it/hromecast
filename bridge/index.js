@@ -2880,6 +2880,7 @@ async function main() {
   subscribeSonosEvents();
   startPositionBroadcast();
   log.info(`🔊 [SONOS] Position broadcast started (250ms interval)`);
+  startPeriodicPush();
   
   // Graceful shutdown
   process.on('SIGINT', () => {
