@@ -497,7 +497,7 @@ async function fetchAndUploadArt(rawUri, filename) {
             log.info(`📤 [PUSH] Art uploaded: ${filename} (${imageBuffer.length}b)`);
             resolve(publicUrl);
           } else {
-            log.debug(`[PUSH] Upload failed (${res.statusCode}): ${body}`);
+            log.warn(`⚠️ [PUSH] Art upload failed (${res.statusCode}): ${body.substring(0, 200)}`);
             resolve(null);
           }
         });
