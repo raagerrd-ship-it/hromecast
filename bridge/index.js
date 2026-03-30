@@ -423,7 +423,73 @@ function renewSonosSubscription() {
 
 let lastPushedTrack = null;
 
-function pushToBridge(eventData, rawAlbumArtUri, rawNextAlbumArtUri) {
+// Fetch album art from local Sonos and upload to Supabase Storage
+async function uploadAlbumArt(rawUri, filename) {
+  if (!rawUri || !SUPABASE_PUSH_URL || !SUPABASE_ANON_KEY) return null;
+  
+  // Already a public URL — use as-is
+  if (rawUri.startsWith('https://')) return rawUri;
+  if (rawUri.startsWith('http://') && !rawUri.includes('192.168.') && !rawUri.includes('10.') && !rawUri.includes('172.')) return rawUri;
+  
+  // Local Sonos path — fetch and upload
+  const localUrl = rawUri.startsWith('/') ? `http://${SONOS_IP}:1400${rawUri}` : rawUri;
+  if (!localUrl.startsWith('http')) return null;
+  
+  try {
+    const imageBuffer = await new Promise((resolve, reject) => {
+      http.get(localUrl, { timeout: 3000 }, (res) => {
+        if (res.statusCode !== 200) { reject(new Error(`HTTP ${res.statusCode}`)); return; }
+        const chunks = [];
+        res.on('data', chunk => chunks.push(chunk));
+        res.on('end', () => resolve(Buffer.concat(chunks)));
+      }).on('error', reject).on('timeout', function() { this.destroy(); reject(new Error('timeout')); });
+    });
+    
+    // Upload to Supabase Storage (bridge-files bucket)
+    const https = require('https');
+    const supabaseUrl = new URL(SUPABASE_PUSH_URL);
+    const storageUrl = `https://${supabaseUrl.hostname}/storage/v1/object/bridge-files/album-art/${filename}`;
+    const uploadUrl = new URL(storageUrl);
+    
+    return await new Promise((resolve, reject) => {
+      const req = https.request({
+        hostname: uploadUrl.hostname,
+        path: uploadUrl.pathname,
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'image/jpeg',
+          'Content-Length': imageBuffer.length,
+          'x-upsert': 'true'
+        },
+        timeout: 5000
+      }, (res) => {
+        let body = '';
+        res.on('data', chunk => { body += chunk; });
+        res.on('end', () => {
+          if (res.statusCode === 200) {
+            // Public URL
+            const publicUrl = `https://${uploadUrl.hostname}/storage/v1/object/public/bridge-files/album-art/${filename}`;
+            log.debug(`[PUSH] Album art uploaded: ${filename}`);
+            resolve(publicUrl);
+          } else {
+            log.debug(`[PUSH] Upload failed (${res.statusCode}): ${body}`);
+            resolve(null);
+          }
+        });
+      });
+      req.on('error', () => resolve(null));
+      req.on('timeout', () => { req.destroy(); resolve(null); });
+      req.write(imageBuffer);
+      req.end();
+    });
+  } catch (err) {
+    log.debug(`[PUSH] Album art fetch failed: ${err.message}`);
+    return null;
+  }
+}
+
+async function pushToBridge(eventData, rawAlbumArtUri, rawNextAlbumArtUri) {
   if (!SUPABASE_PUSH_URL || !BRIDGE_SECRET) return;
   
   // Only push on track changes
@@ -431,22 +497,20 @@ function pushToBridge(eventData, rawAlbumArtUri, rawNextAlbumArtUri) {
   if (trackKey === lastPushedTrack) return;
   lastPushedTrack = trackKey;
   
-  // Only pass publicly accessible URLs (skip local Sonos IPs)
-  const resolveArt = (raw) => {
-    if (!raw) return null;
-    if (raw.startsWith('https://')) return raw;
-    if (raw.startsWith('http://') && !raw.includes('192.168.') && !raw.includes('10.') && !raw.includes('172.')) return raw;
-    return null; // local/relative paths can't be reached from Cloud
-  };
+  // Resolve album art — upload local Sonos images to storage
+  const [albumArtUrl, nextAlbumArtUrl] = await Promise.all([
+    uploadAlbumArt(rawAlbumArtUri, 'current.jpg'),
+    uploadAlbumArt(rawNextAlbumArtUri, 'next.jpg')
+  ]);
   
   const payload = JSON.stringify({
     trackName: eventData.trackName,
     artistName: eventData.artistName,
     albumName: eventData.albumName,
-    albumArtUri: resolveArt(rawAlbumArtUri),
+    albumArtUri: albumArtUrl,
     nextTrackName: eventData.nextTrackName,
     nextArtistName: eventData.nextArtistName,
-    nextAlbumArtUri: resolveArt(rawNextAlbumArtUri),
+    nextAlbumArtUri: nextAlbumArtUrl,
     playbackState: eventData.playbackState,
     positionMillis: eventData.positionMillis,
     durationMillis: eventData.durationMillis
