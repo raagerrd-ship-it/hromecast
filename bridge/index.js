@@ -581,7 +581,7 @@ async function handleSonosUPnPEvent() {
     const playMedium = extractTag(mediaXml, 'PlayMedium');
     
     const nextMeta = extractTag(mediaXml, 'NextAVTransportURIMetaData');
-    const { nextTrackName, nextArtistName, nextAlbumArtUri } = await resolveNextTrack(nextMeta, trackNumber, nrTracks);
+    const { nextTrackName, nextArtistName, nextAlbumArtUri, rawNextAlbumArtUri } = await resolveNextTrack(nextMeta, trackNumber, nrTracks);
     
     const mediaType = didl?.upnpClass?.includes('audioBroadcast') ? 'radio' : 'track';
     cachedMediaType = mediaType;
