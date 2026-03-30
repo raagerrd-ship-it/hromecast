@@ -455,6 +455,7 @@ async function fetchAndUploadArt(rawUri, filename) {
   else if (!rawUri.startsWith('http')) return null;
   
   try {
+    log.info(`📥 [PUSH] Fetching art for ${filename}: ${localUrl}`);
     // Fetch from local Sonos
     const imageBuffer = await new Promise((resolve, reject) => {
       const mod = localUrl.startsWith('https') ? require('https') : http;
