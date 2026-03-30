@@ -455,6 +455,7 @@ async function fetchAndUploadArt(rawUri, filename) {
   else if (!rawUri.startsWith('http')) return null;
   
   try {
+    log.info(`📥 [PUSH] Fetching art for ${filename}: ${localUrl}`);
     // Fetch from local Sonos
     const imageBuffer = await new Promise((resolve, reject) => {
       const mod = localUrl.startsWith('https') ? require('https') : http;
@@ -497,18 +498,18 @@ async function fetchAndUploadArt(rawUri, filename) {
             log.info(`📤 [PUSH] Art uploaded: ${filename} (${imageBuffer.length}b)`);
             resolve(publicUrl);
           } else {
-            log.debug(`[PUSH] Upload failed (${res.statusCode}): ${body}`);
+            log.warn(`⚠️ [PUSH] Art upload failed (${res.statusCode}): ${body.substring(0, 200)}`);
             resolve(null);
           }
         });
       });
-      req.on('error', () => resolve(null));
-      req.on('timeout', () => { req.destroy(); resolve(null); });
+      req.on('error', (e) => { log.warn(`⚠️ [PUSH] Art upload request error: ${e.message}`); resolve(null); });
+      req.on('timeout', () => { req.destroy(); log.warn('⚠️ [PUSH] Art upload timeout'); resolve(null); });
       req.write(imageBuffer);
       req.end();
     });
   } catch (err) {
-    log.debug(`[PUSH] Art fetch/upload failed: ${err.message}`);
+    log.warn(`⚠️ [PUSH] Art fetch/upload failed for ${filename}: ${err.message}`);
     return null;
   }
 }
