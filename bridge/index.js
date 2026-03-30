@@ -689,7 +689,8 @@ async function pushToBridge(eventData, rawAlbumArtUri, rawNextAlbumArtUri) {
     streamContent: eventData.streamContent,
     radioShowMd: eventData.radioShowMd,
     originalTrackNumber: eventData.originalTrackNumber,
-    protocolInfo: eventData.protocolInfo
+    protocolInfo: eventData.protocolInfo,
+    pushedAt: Date.now()
   });
   
   const url = new URL(SUPABASE_PUSH_URL);
