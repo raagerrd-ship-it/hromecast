@@ -19,10 +19,24 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.60";
+const VERSION = "1.3.61";
 const RELEASED_AT = "2026-03-30";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.61",
+    date: "2026-03-30",
+    changes: {
+      sv: [
+        "Fix: Periodisk push hämtar nu färsk position från Sonos (GetPositionInfo) istället för cachat värde",
+        "Löser problemet att positionMillis alltid var 0 i push-anrop",
+      ],
+      en: [
+        "Fix: Periodic push now fetches fresh position from Sonos (GetPositionInfo) instead of cached value",
+        "Fixes issue where positionMillis was always 0 in push calls",
+      ],
+    }
+  },
   {
     version: "1.3.60",
     date: "2026-03-30",
