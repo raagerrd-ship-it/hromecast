@@ -263,6 +263,7 @@ async function resolveNextTrack(nextMeta, trackNumber, nrTracks) {
   let nextTrackName = null;
   let nextArtistName = null;
   let nextAlbumArtUri = null;
+  let rawNextAlbumArtUri = null;
 
   // 1. Try NextAVTransportURIMetaData first
   if (nextMeta) {
@@ -272,6 +273,7 @@ async function resolveNextTrack(nextMeta, trackNumber, nrTracks) {
       nextTrackName = nextDidl.title || null;
       nextArtistName = nextDidl.creator || null;
       if (nextDidl.albumArtURI) {
+        rawNextAlbumArtUri = nextDidl.albumArtURI;
         nextAlbumArtUri = nextDidl.albumArtURI.startsWith('/')
           ? `/api/sonos${nextDidl.albumArtURI}`
           : `/api/sonos/art?url=${encodeURIComponent(nextDidl.albumArtURI)}`;
@@ -294,7 +296,6 @@ async function resolveNextTrack(nextMeta, trackNumber, nrTracks) {
           <SortCriteria></SortCriteria>
         </u:Browse>`;
         const browseXml = await soapRequest(browseBody, 'Browse', '/MediaServer/ContentDirectory/Control', 'ContentDirectory');
-        // The result is in <Result> tag, DIDL-encoded
         const resultRaw = extractTag(browseXml, 'Result');
         if (resultRaw) {
           let browseDidl = extractDidl(resultRaw);
@@ -303,6 +304,7 @@ async function resolveNextTrack(nextMeta, trackNumber, nrTracks) {
             nextTrackName = browseDidl.title || null;
             nextArtistName = browseDidl.creator || null;
             if (browseDidl.albumArtURI) {
+              rawNextAlbumArtUri = browseDidl.albumArtURI;
               nextAlbumArtUri = browseDidl.albumArtURI.startsWith('/')
                 ? `/api/sonos${browseDidl.albumArtURI}`
                 : `/api/sonos/art?url=${encodeURIComponent(browseDidl.albumArtURI)}`;
@@ -315,7 +317,7 @@ async function resolveNextTrack(nextMeta, trackNumber, nrTracks) {
     }
   }
 
-  return { nextTrackName, nextArtistName, nextAlbumArtUri };
+  return { nextTrackName, nextArtistName, nextAlbumArtUri, rawNextAlbumArtUri };
 }
 
 
@@ -421,7 +423,7 @@ function renewSonosSubscription() {
 
 let lastPushedTrack = null;
 
-function pushToBridge(eventData) {
+function pushToBridge(eventData, rawAlbumArtUri, rawNextAlbumArtUri) {
   if (!SUPABASE_PUSH_URL || !BRIDGE_SECRET) return;
   
   // Only push on track changes
@@ -429,14 +431,22 @@ function pushToBridge(eventData) {
   if (trackKey === lastPushedTrack) return;
   lastPushedTrack = trackKey;
   
+  // Resolve album art to absolute Sonos URLs for external consumption
+  const resolveArt = (raw) => {
+    if (!raw) return null;
+    if (raw.startsWith('http')) return raw;
+    if (raw.startsWith('/')) return `http://${SONOS_IP}:1400${raw}`;
+    return null;
+  };
+  
   const payload = JSON.stringify({
     trackName: eventData.trackName,
     artistName: eventData.artistName,
     albumName: eventData.albumName,
-    albumArtUri: eventData.albumArtUri,
+    albumArtUri: resolveArt(rawAlbumArtUri),
     nextTrackName: eventData.nextTrackName,
     nextArtistName: eventData.nextArtistName,
-    nextAlbumArtUri: eventData.nextAlbumArtUri,
+    nextAlbumArtUri: resolveArt(rawNextAlbumArtUri),
     playbackState: eventData.playbackState,
     positionMillis: eventData.positionMillis,
     durationMillis: eventData.durationMillis
@@ -571,7 +581,7 @@ async function handleSonosUPnPEvent() {
     const playMedium = extractTag(mediaXml, 'PlayMedium');
     
     const nextMeta = extractTag(mediaXml, 'NextAVTransportURIMetaData');
-    const { nextTrackName, nextArtistName, nextAlbumArtUri } = await resolveNextTrack(nextMeta, trackNumber, nrTracks);
+    const { nextTrackName, nextArtistName, nextAlbumArtUri, rawNextAlbumArtUri } = await resolveNextTrack(nextMeta, trackNumber, nrTracks);
     
     const mediaType = didl?.upnpClass?.includes('audioBroadcast') ? 'radio' : 'track';
     cachedMediaType = mediaType;
@@ -620,7 +630,7 @@ async function handleSonosUPnPEvent() {
     broadcastSSE(eventData);
     
     // Push to brew-monitor edge function on track changes
-    pushToBridge(eventData);
+    pushToBridge(eventData, didl?.albumArtURI || null, rawNextAlbumArtUri);
   } catch (err) {
     log.error(`❌ [SONOS] Event handler error: ${err.message}`);
   }
