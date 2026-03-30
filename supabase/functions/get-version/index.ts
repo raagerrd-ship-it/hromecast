@@ -19,10 +19,30 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.59";
+const VERSION = "1.3.60";
 const RELEASED_AT = "2026-03-30";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.60",
+    date: "2026-03-30",
+    changes: {
+      sv: [
+        "IDLE-debounce (2s): Bridge:n skickar inte längre IDLE vid kortvariga övergångar (låtbyte)",
+        "Transition-refresh: Vid STOPPED/TRANSITIONING pollar bridge:n upp till 3 gånger (700ms) för att fånga PLAYING",
+        "Periodisk push: Status (playback, volym, position) skickas till brew-monitor var 30:e sekund",
+        "Förbättrad push-signatur: Pushar nu även vid playbackState-ändringar, inte bara låtbyten",
+        "Tydligare loggning: IDLE loggas med warn och anger orsak (stop-button vs transition)",
+      ],
+      en: [
+        "IDLE debounce (2s): Bridge no longer emits IDLE during brief transitions (track changes)",
+        "Transition refresh: On STOPPED/TRANSITIONING, bridge polls up to 3 times (700ms) to catch PLAYING",
+        "Periodic push: Status (playback, volume, position) pushed to brew-monitor every 30 seconds",
+        "Improved push signature: Now also pushes on playbackState changes, not just track changes",
+        "Clearer logging: IDLE logged as warn with reason (stop-button vs transition)",
+      ],
+    }
+  },
   {
     version: "1.3.59",
     date: "2026-03-30",
