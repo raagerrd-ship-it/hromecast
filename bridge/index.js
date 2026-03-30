@@ -349,6 +349,142 @@ let sonosEventClients = []; // SSE clients
 let sonosSubscriptionSID = null;
 let sonosSubscriptionRenewTimer = null;
 let lastSonosEvent = null; // cache latest state for new SSE clients
+let sonosIdleDebounceTimer = null;
+let pendingSonosIdleEvent = null;
+let pendingSonosIdleMeta = null;
+let sonosTransitionRefreshTimer = null;
+const SONOS_IDLE_DEBOUNCE_MS = 2000;
+const SONOS_TRANSITION_REFRESH_MS = 700;
+const SONOS_TRANSITION_MAX_REFRESHES = 3;
+
+function getSonosTrackKey(eventData) {
+  return [
+    eventData?.trackURI || '',
+    eventData?.trackNumber ?? '',
+    eventData?.trackName || '',
+    eventData?.artistName || ''
+  ].join('|');
+}
+
+function getSonosPushSignature(eventData) {
+  return `${getSonosTrackKey(eventData)}|${eventData?.playbackState || 'unknown'}`;
+}
+
+function isSonosTransitionState(transportState) {
+  return transportState === 'TRANSITIONING';
+}
+
+function isSonosIdleCandidateTransportState(transportState) {
+  return !transportState || transportState === 'STOPPED' || transportState === 'NO_MEDIA_PRESENT';
+}
+
+function getSonosPlaybackState(transportState) {
+  if (transportState === 'PLAYING') return 'PLAYBACK_STATE_PLAYING';
+  if (transportState === 'PAUSED_PLAYBACK') return 'PLAYBACK_STATE_PAUSED';
+  if (transportState === 'TRANSITIONING') {
+    if (lastSonosEvent?.playbackState && lastSonosEvent.playbackState !== 'PLAYBACK_STATE_IDLE') {
+      return lastSonosEvent.playbackState;
+    }
+    return 'PLAYBACK_STATE_PLAYING';
+  }
+  if (transportState === 'STOPPED') {
+    if (lastSonosEvent?.playbackState && lastSonosEvent.playbackState !== 'PLAYBACK_STATE_IDLE') {
+      return lastSonosEvent.playbackState;
+    }
+    return 'PLAYBACK_STATE_PAUSED';
+  }
+  return 'PLAYBACK_STATE_IDLE';
+}
+
+function classifySonosIdleReason(transportState, eventData) {
+  if (transportState === 'TRANSITIONING') return 'transition';
+
+  const previousTrackKey = getSonosTrackKey(lastSonosEvent);
+  const currentTrackKey = getSonosTrackKey(eventData);
+  if (
+    transportState === 'STOPPED' &&
+    previousTrackKey &&
+    currentTrackKey &&
+    previousTrackKey !== currentTrackKey
+  ) {
+    return 'transition';
+  }
+
+  return 'stop-button';
+}
+
+function clearSonosTransitionRefresh() {
+  if (sonosTransitionRefreshTimer) {
+    clearTimeout(sonosTransitionRefreshTimer);
+    sonosTransitionRefreshTimer = null;
+  }
+}
+
+function cancelPendingSonosIdle(reason) {
+  const hadPendingIdle = Boolean(sonosIdleDebounceTimer || pendingSonosIdleEvent);
+
+  if (sonosIdleDebounceTimer) {
+    clearTimeout(sonosIdleDebounceTimer);
+    sonosIdleDebounceTimer = null;
+  }
+
+  pendingSonosIdleEvent = null;
+  pendingSonosIdleMeta = null;
+
+  if (hadPendingIdle) {
+    log.info(`✅ [SONOS] Suppressed pending IDLE (${reason})`);
+  }
+}
+
+function emitSonosEvent(eventData, rawAlbumArtUri, rawNextAlbumArtUri) {
+  lastSonosEvent = eventData;
+  broadcastSSE(eventData);
+  pushToBridge(eventData, rawAlbumArtUri, rawNextAlbumArtUri);
+}
+
+function schedulePendingSonosIdle(eventData, meta) {
+  pendingSonosIdleEvent = eventData;
+  pendingSonosIdleMeta = meta;
+
+  if (sonosIdleDebounceTimer) {
+    clearTimeout(sonosIdleDebounceTimer);
+  }
+
+  sonosIdleDebounceTimer = setTimeout(() => {
+    const idleEvent = pendingSonosIdleEvent;
+    const idleMeta = pendingSonosIdleMeta;
+
+    pendingSonosIdleEvent = null;
+    pendingSonosIdleMeta = null;
+    sonosIdleDebounceTimer = null;
+    clearSonosTransitionRefresh();
+
+    if (!idleEvent) return;
+
+    const emittedIdleEvent = {
+      ...idleEvent,
+      playbackState: 'PLAYBACK_STATE_IDLE',
+      timestamp: Date.now()
+    };
+
+    log.warn(`⚠️ [SONOS] Emitting IDLE after ${SONOS_IDLE_DEBOUNCE_MS}ms debounce (${idleMeta?.reason || 'unknown'}, transport=${idleMeta?.transportState || 'unknown'})`);
+    emitSonosEvent(
+      emittedIdleEvent,
+      idleMeta?.rawAlbumArtUri || null,
+      idleMeta?.rawNextAlbumArtUri || null
+    );
+  }, SONOS_IDLE_DEBOUNCE_MS);
+}
+
+function scheduleSonosTransitionRefresh(refreshCount) {
+  if (refreshCount > SONOS_TRANSITION_MAX_REFRESHES) return;
+
+  clearSonosTransitionRefresh();
+  sonosTransitionRefreshTimer = setTimeout(() => {
+    sonosTransitionRefreshTimer = null;
+    handleSonosUPnPEvent({ source: 'transition-refresh', refreshCount });
+  }, SONOS_TRANSITION_REFRESH_MS);
+}
 
 // Subscribe to Sonos AVTransport events
 function subscribeSonosEvents() {
@@ -373,7 +509,6 @@ function subscribeSonosEvents() {
     if (sid) {
       sonosSubscriptionSID = sid;
       log.info(`📡 [SONOS] Subscribed to AVTransport events, SID: ${sid}`);
-      // Renew before expiry (every 4 min for a 5 min subscription)
       clearTimeout(sonosSubscriptionRenewTimer);
       sonosSubscriptionRenewTimer = setTimeout(() => renewSonosSubscription(), 240000);
     } else {
@@ -383,7 +518,6 @@ function subscribeSonosEvents() {
   
   req.on('error', (err) => {
     log.error(`❌ [SONOS] Subscribe error: ${err.message}`);
-    // Retry in 30s
     setTimeout(() => subscribeSonosEvents(), 30000);
   });
   
@@ -451,14 +585,12 @@ async function fetchAndUploadArt(rawUri, filename) {
   
   const decodedRawUri = decodeXmlEntities(String(rawUri).trim());
 
-  // Build local Sonos URL
   let localUrl = decodedRawUri;
   if (decodedRawUri.startsWith('/')) localUrl = `http://${SONOS_IP}:1400${decodedRawUri}`;
   else if (!decodedRawUri.startsWith('http')) return null;
   
   try {
     log.info(`📥 [PUSH] Fetching art for ${filename}: ${localUrl}`);
-    // Fetch from local Sonos
     const imageBuffer = await new Promise((resolve, reject) => {
       const mod = localUrl.startsWith('https') ? require('https') : http;
       mod.get(localUrl, { timeout: 3000 }, (res) => {
@@ -474,7 +606,6 @@ async function fetchAndUploadArt(rawUri, filename) {
       return null;
     }
     
-    // Upload to brew-monitor-tv's sonos-backgrounds bucket
     const https = require('https');
     const supabaseHost = new URL(SUPABASE_PUSH_URL).hostname;
     const storagePath = `/storage/v1/object/sonos-backgrounds/${filename}`;
@@ -519,42 +650,35 @@ async function fetchAndUploadArt(rawUri, filename) {
 async function pushToBridge(eventData, rawAlbumArtUri, rawNextAlbumArtUri) {
   if (!SUPABASE_PUSH_URL || !BRIDGE_SECRET) return;
   
-  // Only push on track changes
-  const trackKey = `${eventData.trackName}|${eventData.artistName}`;
-  if (trackKey === lastPushedTrack) return;
-  lastPushedTrack = trackKey;
+  const pushSignature = getSonosPushSignature(eventData);
+  if (pushSignature === lastPushedTrack) return;
+  lastPushedTrack = pushSignature;
   
-  log.info(`📤 [PUSH] Pushing track: "${eventData.trackName}" | next: "${eventData.nextTrackName || 'NONE'}" by "${eventData.nextArtistName || 'NONE'}"`);
+  log.info(`📤 [PUSH] Pushing ${eventData.playbackState}: "${eventData.trackName}" | next: "${eventData.nextTrackName || 'NONE'}" by "${eventData.nextArtistName || 'NONE'}"`);
   log.debug(`[PUSH] rawAlbumArtUri: ${rawAlbumArtUri || 'null'}, rawNextAlbumArtUri: ${rawNextAlbumArtUri || 'null'}`);
   
-  // Fetch from local Sonos and upload to brew-monitor storage (parallel)
   const [albumArtUrl, nextAlbumArtUrl] = await Promise.all([
     fetchAndUploadArt(rawAlbumArtUri, 'bridge-current.jpg'),
     fetchAndUploadArt(rawNextAlbumArtUri, 'bridge-next.jpg')
   ]);
   
   const payload = JSON.stringify({
-    // Core track info
     trackName: eventData.trackName,
     artistName: eventData.artistName,
     albumName: eventData.albumName,
     albumArtUri: albumArtUrl,
-    // Next track
     nextTrackName: eventData.nextTrackName,
     nextArtistName: eventData.nextArtistName,
     nextAlbumArtUri: nextAlbumArtUrl,
-    // Playback state
     playbackState: eventData.playbackState,
     positionMillis: eventData.positionMillis,
     durationMillis: eventData.durationMillis,
-    // Audio controls
     volume: eventData.volume,
     mute: eventData.mute,
     bass: eventData.bass,
     treble: eventData.treble,
     loudness: eventData.loudness,
     crossfade: eventData.crossfade,
-    // Media info
     mediaType: eventData.mediaType,
     trackNumber: eventData.trackNumber,
     trackURI: eventData.trackURI,
@@ -562,7 +686,6 @@ async function pushToBridge(eventData, rawAlbumArtUri, rawNextAlbumArtUri) {
     currentURI: eventData.currentURI,
     nextAVTransportURI: eventData.nextAVTransportURI,
     playMedium: eventData.playMedium,
-    // Extended metadata
     streamContent: eventData.streamContent,
     radioShowMd: eventData.radioShowMd,
     originalTrackNumber: eventData.originalTrackNumber,
@@ -611,7 +734,7 @@ async function pushToBridge(eventData, rawAlbumArtUri, rawNextAlbumArtUri) {
 }
 
 // When we receive a UPnP event, fetch full status and broadcast to SSE clients
-async function handleSonosUPnPEvent() {
+async function handleSonosUPnPEvent({ source = 'upnp-event', refreshCount = 0 } = {}) {
   try {
     const posBody = `<u:GetPositionInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:GetPositionInfo>`;
     const transBody = `<u:GetTransportInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:GetTransportInfo>`;
@@ -676,12 +799,7 @@ async function handleSonosUPnPEvent() {
       if (cfStr !== null) crossfade = cfStr === '1';
     }
     
-    let playbackState = 'PLAYBACK_STATE_IDLE';
-    if (transportState === 'PLAYING') playbackState = 'PLAYBACK_STATE_PLAYING';
-    else if (transportState === 'PAUSED_PLAYBACK') playbackState = 'PLAYBACK_STATE_PAUSED';
-    else if (transportState === 'TRANSITIONING') playbackState = 'PLAYBACK_STATE_PLAYING';
-    else if (transportState === 'STOPPED') playbackState = 'PLAYBACK_STATE_PAUSED';
-    
+    const playbackState = getSonosPlaybackState(transportState);
     let albumArtUri = null;
     if (didl && didl.albumArtURI) {
       let artUrl = didl.albumArtURI;
@@ -692,12 +810,10 @@ async function handleSonosUPnPEvent() {
       }
     }
     
-    // MediaInfo fields
     const nrTracks = extractTag(mediaXml, 'NrTracks');
     const currentURI = extractTag(mediaXml, 'CurrentURI');
     const nextAVTransportURI = extractTag(mediaXml, 'NextAVTransportURI');
     const playMedium = extractTag(mediaXml, 'PlayMedium');
-    
     const nextMeta = extractTag(mediaXml, 'NextAVTransportURIMetaData');
     const { nextTrackName, nextArtistName, nextAlbumArtUri, rawNextAlbumArtUri } = await resolveNextTrack(nextMeta, trackNumber, nrTracks);
     
@@ -710,7 +826,7 @@ async function handleSonosUPnPEvent() {
     
     const eventData = {
       ok: true,
-      source: 'upnp-event',
+      source,
       playbackState,
       positionMillis: parseTime(relTime),
       durationMillis: parseTime(trackDuration),
@@ -743,12 +859,33 @@ async function handleSonosUPnPEvent() {
       protocolInfo: didl ? didl.protocolInfo : null,
       timestamp: Date.now()
     };
-    
-    lastSonosEvent = eventData;
-    broadcastSSE(eventData);
-    
-    // Push to brew-monitor edge function on track changes
-    pushToBridge(eventData, didl?.albumArtURI || null, rawNextAlbumArtUri);
+
+    if (transportState === 'PLAYING' || transportState === 'PAUSED_PLAYBACK') {
+      cancelPendingSonosIdle(`received ${transportState}`);
+      clearSonosTransitionRefresh();
+      emitSonosEvent(eventData, didl?.albumArtURI || null, rawNextAlbumArtUri);
+      return;
+    }
+
+    if (isSonosTransitionState(transportState) || isSonosIdleCandidateTransportState(transportState)) {
+      const idleReason = classifySonosIdleReason(transportState, eventData);
+      schedulePendingSonosIdle(eventData, {
+        reason: idleReason,
+        transportState,
+        rawAlbumArtUri: didl?.albumArtURI || null,
+        rawNextAlbumArtUri
+      });
+
+      if (idleReason === 'transition' && refreshCount < SONOS_TRANSITION_MAX_REFRESHES) {
+        log.info(`🔄 [SONOS] Waiting for PLAYING after ${transportState || 'UNKNOWN'} (${refreshCount + 1}/${SONOS_TRANSITION_MAX_REFRESHES})`);
+        scheduleSonosTransitionRefresh(refreshCount + 1);
+      }
+      return;
+    }
+
+    cancelPendingSonosIdle(`received ${transportState || 'UNKNOWN'}`);
+    clearSonosTransitionRefresh();
+    emitSonosEvent(eventData, didl?.albumArtURI || null, rawNextAlbumArtUri);
   } catch (err) {
     log.error(`❌ [SONOS] Event handler error: ${err.message}`);
   }
