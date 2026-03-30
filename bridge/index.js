@@ -490,10 +490,6 @@ async function fetchAndUploadArt(rawUri, filename) {
     return null;
   }
 }
-  }
-  
-  return null;
-}
 
 async function pushToBridge(eventData, rawAlbumArtUri, rawNextAlbumArtUri) {
   if (!SUPABASE_PUSH_URL || !BRIDGE_SECRET) return;
@@ -503,10 +499,10 @@ async function pushToBridge(eventData, rawAlbumArtUri, rawNextAlbumArtUri) {
   if (trackKey === lastPushedTrack) return;
   lastPushedTrack = trackKey;
   
-  // Resolve album art to public URLs (parallel)
+  // Fetch from local Sonos and upload to brew-monitor storage (parallel)
   const [albumArtUrl, nextAlbumArtUrl] = await Promise.all([
-    resolvePublicArt(rawAlbumArtUri, 'current'),
-    resolvePublicArt(rawNextAlbumArtUri, 'next')
+    fetchAndUploadArt(rawAlbumArtUri, 'bridge-current.jpg'),
+    fetchAndUploadArt(rawNextAlbumArtUri, 'bridge-next.jpg')
   ]);
   
   const payload = JSON.stringify({
