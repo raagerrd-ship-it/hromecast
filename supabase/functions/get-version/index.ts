@@ -19,10 +19,22 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.55";
+const VERSION = "1.3.56";
 const RELEASED_AT = "2026-03-30";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.56",
+    date: "2026-03-30",
+    changes: {
+      sv: [
+        "Hårdkodade brew-monitor defaults: Push-URL, anon key och bridge secret fungerar direkt utan .env-konfiguration",
+      ],
+      en: [
+        "Hardcoded brew-monitor defaults: Push URL, anon key and bridge secret work out of the box without .env configuration",
+      ],
+    }
+  },
   {
     version: "1.3.55",
     date: "2026-03-30",
