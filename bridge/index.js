@@ -423,83 +423,20 @@ function renewSonosSubscription() {
 
 let lastPushedTrack = null;
 
-// Extract public URL or Spotify track ID from Sonos getaa u-parameter
-function extractFromGetaa(rawUri) {
-  if (!rawUri) return { publicUrl: null, spotifyId: null };
-  
-  // Already a public URL
-  if (rawUri.startsWith('https://')) return { publicUrl: rawUri, spotifyId: null };
-  if (rawUri.startsWith('http://') && !rawUri.includes('192.168.') && !rawUri.includes('10.') && !rawUri.includes('172.'))
-    return { publicUrl: rawUri, spotifyId: null };
-  
-  // Build full URL for local paths
-  let fullUrl = rawUri;
-  if (rawUri.startsWith('/')) fullUrl = `http://${SONOS_IP}:1400${rawUri}`;
-  
-  try {
-    const url = new URL(fullUrl);
-    const uParam = url.searchParams.get('u');
-    if (!uParam) return { publicUrl: null, spotifyId: null };
-    
-    let decoded = decodeURIComponent(uParam);
-    
-    // Check if u-param contains a public https URL directly
-    if (decoded.startsWith('https://')) {
-      return { publicUrl: decoded, spotifyId: null };
-    }
-    
-    // Try double-decode
-    if (decoded.includes('%3a') || decoded.includes('%3A') || decoded.includes('%25')) {
-      decoded = decodeURIComponent(decoded);
-      if (decoded.startsWith('https://')) {
-        return { publicUrl: decoded, spotifyId: null };
-      }
-    }
-    
-    // Try extracting Spotify track ID from x-sonos-spotify:spotify:track:XXXX
-    const spotifyMatch = decoded.match(/spotify(?:%3a|:)track(?:%3a|:)([a-zA-Z0-9]+)/i);
-    if (spotifyMatch) {
-      return { publicUrl: null, spotifyId: spotifyMatch[1] };
-    }
-  } catch (e) { /* not a valid URL */ }
-  
-  return { publicUrl: null, spotifyId: null };
-}
-
-// Resolve album art via Spotify oEmbed (no API key needed)
-async function resolveViaOEmbed(spotifyId) {
-  try {
-    const https = require('https');
-    return await new Promise((resolve) => {
-      const req = https.get(`https://open.spotify.com/oembed?url=https://open.spotify.com/track/${spotifyId}`, { timeout: 5000 }, (res) => {
-        let body = '';
-        res.on('data', chunk => { body += chunk; });
-        res.on('end', () => {
-          try {
-            const data = JSON.parse(body);
-            let url = data.thumbnail_url || null;
-            // Upgrade from 300x300 to 640x640
-            if (url) url = url.replace('ab67616d00001e02', 'ab67616d0000b273');
-            resolve(url);
-          } catch { resolve(null); }
-        });
-      });
-      req.on('error', () => resolve(null));
-      req.on('timeout', () => { req.destroy(); resolve(null); });
-    });
-  } catch { return null; }
-}
-
 // Fetch image from local Sonos and upload to brew-monitor-tv's sonos-backgrounds bucket
-async function fetchAndUploadLocalArt(rawUri, filename) {
+async function fetchAndUploadArt(rawUri, filename) {
+  if (!rawUri || !SUPABASE_PUSH_URL || !SUPABASE_ANON_KEY) return null;
+  
+  // Build local Sonos URL
   let localUrl = rawUri;
   if (rawUri.startsWith('/')) localUrl = `http://${SONOS_IP}:1400${rawUri}`;
-  if (!localUrl.startsWith('http')) return null;
+  else if (!rawUri.startsWith('http')) return null;
   
   try {
-    // 1. Fetch from local Sonos
+    // Fetch from local Sonos
     const imageBuffer = await new Promise((resolve, reject) => {
-      http.get(localUrl, { timeout: 3000 }, (res) => {
+      const mod = localUrl.startsWith('https') ? require('https') : http;
+      mod.get(localUrl, { timeout: 3000 }, (res) => {
         if (res.statusCode !== 200) { reject(new Error(`HTTP ${res.statusCode}`)); return; }
         const chunks = [];
         res.on('data', chunk => chunks.push(chunk));
@@ -508,11 +445,11 @@ async function fetchAndUploadLocalArt(rawUri, filename) {
     });
     
     if (imageBuffer.length < 500) {
-      log.debug(`[PUSH] Image too small (${imageBuffer.length}b), skipping upload`);
+      log.debug(`[PUSH] Image too small (${imageBuffer.length}b), skipping`);
       return null;
     }
     
-    // 2. Upload to brew-monitor-tv's sonos-backgrounds bucket
+    // Upload to brew-monitor-tv's sonos-backgrounds bucket
     const https = require('https');
     const supabaseHost = new URL(SUPABASE_PUSH_URL).hostname;
     const storagePath = `/storage/v1/object/sonos-backgrounds/${filename}`;
@@ -535,10 +472,10 @@ async function fetchAndUploadLocalArt(rawUri, filename) {
         res.on('end', () => {
           if (res.statusCode === 200) {
             const publicUrl = `https://${supabaseHost}/storage/v1/object/public/sonos-backgrounds/${filename}`;
-            log.info(`📤 [PUSH] Album art uploaded: ${filename} (${imageBuffer.length}b)`);
+            log.info(`📤 [PUSH] Art uploaded: ${filename} (${imageBuffer.length}b)`);
             resolve(publicUrl);
           } else {
-            log.debug(`[PUSH] Storage upload failed (${res.statusCode}): ${body}`);
+            log.debug(`[PUSH] Upload failed (${res.statusCode}): ${body}`);
             resolve(null);
           }
         });
@@ -549,35 +486,10 @@ async function fetchAndUploadLocalArt(rawUri, filename) {
       req.end();
     });
   } catch (err) {
-    log.debug(`[PUSH] Local art fetch failed: ${err.message}`);
+    log.debug(`[PUSH] Art fetch/upload failed: ${err.message}`);
     return null;
   }
 }
-
-// Resolve raw Sonos art URI to a public URL
-// Priority: 1) Already public URL  2) Extract from getaa u-param  3) Spotify oEmbed  4) Fetch from Sonos & upload
-async function resolvePublicArt(rawUri, label) {
-  if (!rawUri) return null;
-  
-  const { publicUrl, spotifyId } = extractFromGetaa(rawUri);
-  if (publicUrl) {
-    log.debug(`[PUSH] ${label}: public URL from getaa`);
-    return publicUrl;
-  }
-  if (spotifyId) {
-    const oEmbedUrl = await resolveViaOEmbed(spotifyId);
-    if (oEmbedUrl) {
-      log.debug(`[PUSH] ${label}: resolved via Spotify oEmbed (${spotifyId})`);
-      return oEmbedUrl;
-    }
-  }
-  
-  // Last resort: fetch from local Sonos and upload to brew-monitor storage
-  const filename = `bridge-${label}-${Date.now()}.jpg`;
-  const uploadedUrl = await fetchAndUploadLocalArt(rawUri, filename);
-  if (uploadedUrl) {
-    log.debug(`[PUSH] ${label}: fetched from Sonos & uploaded to storage`);
-    return uploadedUrl;
   }
   
   return null;
