@@ -19,10 +19,24 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.58";
+const VERSION = "1.3.59";
 const RELEASED_AT = "2026-03-30";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.59",
+    date: "2026-03-30",
+    changes: {
+      sv: [
+        "Fix: Bridge:n avkodar nu XML-entiteter i albumArtURI innan fetch/upload till storage",
+        "Löser fall där Sonos skickar art-URL:er med &amp; i metadata så bridgeArt tidigare blev false",
+      ],
+      en: [
+        "Fix: The bridge now decodes XML entities in albumArtURI before fetch/upload to storage",
+        "Fixes cases where Sonos returns art URLs with &amp; in metadata, which previously caused bridgeArt=false",
+      ],
+    }
+  },
   {
     version: "1.3.58",
     date: "2026-03-30",

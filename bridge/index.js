@@ -449,10 +449,12 @@ let lastPushedTrack = null;
 async function fetchAndUploadArt(rawUri, filename) {
   if (!rawUri || !SUPABASE_PUSH_URL || !SUPABASE_ANON_KEY) return null;
   
+  const decodedRawUri = decodeXmlEntities(String(rawUri).trim());
+
   // Build local Sonos URL
-  let localUrl = rawUri;
-  if (rawUri.startsWith('/')) localUrl = `http://${SONOS_IP}:1400${rawUri}`;
-  else if (!rawUri.startsWith('http')) return null;
+  let localUrl = decodedRawUri;
+  if (decodedRawUri.startsWith('/')) localUrl = `http://${SONOS_IP}:1400${decodedRawUri}`;
+  else if (!decodedRawUri.startsWith('http')) return null;
   
   try {
     log.info(`📥 [PUSH] Fetching art for ${filename}: ${localUrl}`);
