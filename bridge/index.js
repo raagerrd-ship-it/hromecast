@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.60';
+const BRIDGE_VERSION = '1.3.61';
 
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
@@ -947,13 +947,25 @@ let periodicPushTimer = null;
 
 function startPeriodicPush() {
   if (periodicPushTimer) return;
-  periodicPushTimer = setInterval(() => {
+  periodicPushTimer = setInterval(async () => {
     if (!lastSonosEvent) return;
+    // Fetch fresh position from Sonos before pushing
+    try {
+      const posBody = `<u:GetPositionInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:GetPositionInfo>`;
+      const posXml = await soapRequest(posBody, 'GetPositionInfo');
+      const relTime = extractTag(posXml, 'RelTime');
+      const trackDuration = extractTag(posXml, 'TrackDuration');
+      const freshPosition = parseTime(relTime);
+      const freshDuration = parseTime(trackDuration);
+      // Update lastSonosEvent with fresh position
+      lastSonosEvent.positionMillis = freshPosition;
+      if (freshDuration != null) lastSonosEvent.durationMillis = freshDuration;
+      log.debug(`[PUSH] Periodic: fresh position ${freshPosition}ms, duration ${freshDuration}ms`);
+    } catch (e) {
+      log.warn(`[PUSH] Periodic: failed to fetch fresh position, using cached: ${e.message}`);
+    }
     // Force push by temporarily clearing the signature
-    const savedSignature = lastPushedTrack;
     lastPushedTrack = null;
-    const rawArt = lastSonosEvent.albumArtUri || null;
-    const rawNextArt = lastSonosEvent.nextAlbumArtUri || null;
     // Push current state (will re-upload art if available)
     pushToBridge(lastSonosEvent, null, null).then(() => {
       log.debug(`[PUSH] Periodic status push complete (${lastSonosEvent.playbackState})`);
