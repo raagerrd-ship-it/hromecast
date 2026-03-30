@@ -19,10 +19,28 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.54";
-const RELEASED_AT = "2026-03-29";
+const VERSION = "1.3.55";
+const RELEASED_AT = "2026-03-30";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.55",
+    date: "2026-03-30",
+    changes: {
+      sv: [
+        "Brew-monitor push: Bridge pushar all Sonos-metadata till brew-monitor-tv vid varje låtbyte via sonos-bridge-push edge function",
+        "Lokal album art: Bridge hämtar albumart direkt från Sonos-högtalaren och laddar upp till brew-monitors sonos-backgrounds storage-bucket",
+        "Komplett payload: Alla fält från /status skickas – spår, nästa spår, volym, EQ, crossfade, mediaType, köinfo, radiotext, protocolInfo",
+        "Ny env-konfiguration: SUPABASE_PUSH_URL, SUPABASE_ANON_KEY, SONOS_BRIDGE_SECRET för push-autentisering",
+      ],
+      en: [
+        "Brew-monitor push: Bridge pushes all Sonos metadata to brew-monitor-tv on every track change via sonos-bridge-push edge function",
+        "Local album art: Bridge fetches album art directly from Sonos speaker and uploads to brew-monitor's sonos-backgrounds storage bucket",
+        "Complete payload: All fields from /status sent – track, next track, volume, EQ, crossfade, mediaType, queue info, radio text, protocolInfo",
+        "New env config: SUPABASE_PUSH_URL, SUPABASE_ANON_KEY, SONOS_BRIDGE_SECRET for push authentication",
+      ],
+    }
+  },
   {
     version: "1.3.54",
     date: "2026-03-29",
