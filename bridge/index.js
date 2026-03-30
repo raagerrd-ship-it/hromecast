@@ -451,13 +451,6 @@ function pushToBridge(eventData, rawAlbumArtUri, rawNextAlbumArtUri) {
     positionMillis: eventData.positionMillis,
     durationMillis: eventData.durationMillis
   });
-    nextTrackName: eventData.nextTrackName,
-    nextArtistName: eventData.nextArtistName,
-    nextAlbumArtUri: nextAlbumArtUrl,
-    playbackState: eventData.playbackState,
-    positionMillis: eventData.positionMillis,
-    durationMillis: eventData.durationMillis
-  });
   
   const url = new URL(SUPABASE_PUSH_URL);
   const options = {
