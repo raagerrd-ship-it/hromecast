@@ -490,17 +490,96 @@ async function resolveViaOEmbed(spotifyId) {
   } catch { return null; }
 }
 
+// Fetch image from local Sonos and upload to brew-monitor-tv's sonos-backgrounds bucket
+async function fetchAndUploadLocalArt(rawUri, filename) {
+  let localUrl = rawUri;
+  if (rawUri.startsWith('/')) localUrl = `http://${SONOS_IP}:1400${rawUri}`;
+  if (!localUrl.startsWith('http')) return null;
+  
+  try {
+    // 1. Fetch from local Sonos
+    const imageBuffer = await new Promise((resolve, reject) => {
+      http.get(localUrl, { timeout: 3000 }, (res) => {
+        if (res.statusCode !== 200) { reject(new Error(`HTTP ${res.statusCode}`)); return; }
+        const chunks = [];
+        res.on('data', chunk => chunks.push(chunk));
+        res.on('end', () => resolve(Buffer.concat(chunks)));
+      }).on('error', reject).on('timeout', function() { this.destroy(); reject(new Error('timeout')); });
+    });
+    
+    if (imageBuffer.length < 500) {
+      log.debug(`[PUSH] Image too small (${imageBuffer.length}b), skipping upload`);
+      return null;
+    }
+    
+    // 2. Upload to brew-monitor-tv's sonos-backgrounds bucket
+    const https = require('https');
+    const supabaseHost = new URL(SUPABASE_PUSH_URL).hostname;
+    const storagePath = `/storage/v1/object/sonos-backgrounds/${filename}`;
+    
+    return await new Promise((resolve) => {
+      const req = https.request({
+        hostname: supabaseHost,
+        path: storagePath,
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'image/jpeg',
+          'Content-Length': imageBuffer.length,
+          'x-upsert': 'true'
+        },
+        timeout: 5000
+      }, (res) => {
+        let body = '';
+        res.on('data', chunk => { body += chunk; });
+        res.on('end', () => {
+          if (res.statusCode === 200) {
+            const publicUrl = `https://${supabaseHost}/storage/v1/object/public/sonos-backgrounds/${filename}`;
+            log.info(`📤 [PUSH] Album art uploaded: ${filename} (${imageBuffer.length}b)`);
+            resolve(publicUrl);
+          } else {
+            log.debug(`[PUSH] Storage upload failed (${res.statusCode}): ${body}`);
+            resolve(null);
+          }
+        });
+      });
+      req.on('error', () => resolve(null));
+      req.on('timeout', () => { req.destroy(); resolve(null); });
+      req.write(imageBuffer);
+      req.end();
+    });
+  } catch (err) {
+    log.debug(`[PUSH] Local art fetch failed: ${err.message}`);
+    return null;
+  }
+}
+
 // Resolve raw Sonos art URI to a public URL
-async function resolvePublicArt(rawUri) {
+// Priority: 1) Already public URL  2) Extract from getaa u-param  3) Spotify oEmbed  4) Fetch from Sonos & upload
+async function resolvePublicArt(rawUri, label) {
+  if (!rawUri) return null;
+  
   const { publicUrl, spotifyId } = extractFromGetaa(rawUri);
-  if (publicUrl) return publicUrl;
+  if (publicUrl) {
+    log.debug(`[PUSH] ${label}: public URL from getaa`);
+    return publicUrl;
+  }
   if (spotifyId) {
     const oEmbedUrl = await resolveViaOEmbed(spotifyId);
     if (oEmbedUrl) {
-      log.debug(`[PUSH] Resolved Spotify art via oEmbed: ${spotifyId}`);
+      log.debug(`[PUSH] ${label}: resolved via Spotify oEmbed (${spotifyId})`);
       return oEmbedUrl;
     }
   }
+  
+  // Last resort: fetch from local Sonos and upload to brew-monitor storage
+  const filename = `bridge-${label}-${Date.now()}.jpg`;
+  const uploadedUrl = await fetchAndUploadLocalArt(rawUri, filename);
+  if (uploadedUrl) {
+    log.debug(`[PUSH] ${label}: fetched from Sonos & uploaded to storage`);
+    return uploadedUrl;
+  }
+  
   return null;
 }
 
