@@ -19,21 +19,21 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.61";
+const VERSION = "1.3.62";
 const RELEASED_AT = "2026-03-30";
 
 const CHANGELOG: ChangelogEntry[] = [
   {
-    version: "1.3.61",
+    version: "1.3.62",
     date: "2026-03-30",
     changes: {
       sv: [
+        "Nytt fält pushedAt (epoch ms) i push-payloaden för att mottagaren ska kunna kompensera nätverkslatens",
         "Fix: Periodisk push hämtar nu färsk position från Sonos (GetPositionInfo) istället för cachat värde",
-        "Löser problemet att positionMillis alltid var 0 i push-anrop",
       ],
       en: [
+        "New field pushedAt (epoch ms) in push payload so receiver can compensate for network latency",
         "Fix: Periodic push now fetches fresh position from Sonos (GetPositionInfo) instead of cached value",
-        "Fixes issue where positionMillis was always 0 in push calls",
       ],
     }
   },
