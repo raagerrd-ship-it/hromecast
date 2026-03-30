@@ -593,8 +593,8 @@ async function pushToBridge(eventData, rawAlbumArtUri, rawNextAlbumArtUri) {
   
   // Resolve album art to public URLs (parallel)
   const [albumArtUrl, nextAlbumArtUrl] = await Promise.all([
-    resolvePublicArt(rawAlbumArtUri),
-    resolvePublicArt(rawNextAlbumArtUri)
+    resolvePublicArt(rawAlbumArtUri, 'current'),
+    resolvePublicArt(rawNextAlbumArtUri, 'next')
   ]);
   
   const payload = JSON.stringify({
