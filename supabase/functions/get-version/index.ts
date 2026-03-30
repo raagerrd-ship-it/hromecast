@@ -19,10 +19,24 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.56";
+const VERSION = "1.3.57";
 const RELEASED_AT = "2026-03-30";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.57",
+    date: "2026-03-30",
+    changes: {
+      sv: [
+        "Fix: extractDidl hanterar nu även rå XML (ej entity-kodad) från ContentDirectory Browse — löser saknad nästa-låt-info",
+        "Utökad debug-loggning i resolveNextTrack och pushToBridge för felsökning av nästa-låt-metadata",
+      ],
+      en: [
+        "Fix: extractDidl now handles raw XML (non-entity-encoded) from ContentDirectory Browse — fixes missing next track info",
+        "Extended debug logging in resolveNextTrack and pushToBridge for next track metadata troubleshooting",
+      ],
+    }
+  },
   {
     version: "1.3.56",
     date: "2026-03-30",
