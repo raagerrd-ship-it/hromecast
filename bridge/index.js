@@ -423,15 +423,88 @@ function renewSonosSubscription() {
 
 let lastPushedTrack = null;
 
-// Return public URL or null (local Sonos paths can't be reached from Cloud)
-function resolvePublicArt(rawUri) {
-  if (!rawUri) return null;
-  if (rawUri.startsWith('https://')) return rawUri;
-  if (rawUri.startsWith('http://') && !rawUri.includes('192.168.') && !rawUri.includes('10.') && !rawUri.includes('172.')) return rawUri;
-  return null; // edge function's resolveAlbumArt handles lookup via trackName/artistName
+// Extract public URL or Spotify track ID from Sonos getaa u-parameter
+function extractFromGetaa(rawUri) {
+  if (!rawUri) return { publicUrl: null, spotifyId: null };
+  
+  // Already a public URL
+  if (rawUri.startsWith('https://')) return { publicUrl: rawUri, spotifyId: null };
+  if (rawUri.startsWith('http://') && !rawUri.includes('192.168.') && !rawUri.includes('10.') && !rawUri.includes('172.'))
+    return { publicUrl: rawUri, spotifyId: null };
+  
+  // Build full URL for local paths
+  let fullUrl = rawUri;
+  if (rawUri.startsWith('/')) fullUrl = `http://${SONOS_IP}:1400${rawUri}`;
+  
+  try {
+    const url = new URL(fullUrl);
+    const uParam = url.searchParams.get('u');
+    if (!uParam) return { publicUrl: null, spotifyId: null };
+    
+    let decoded = decodeURIComponent(uParam);
+    
+    // Check if u-param contains a public https URL directly
+    if (decoded.startsWith('https://')) {
+      return { publicUrl: decoded, spotifyId: null };
+    }
+    
+    // Try double-decode
+    if (decoded.includes('%3a') || decoded.includes('%3A') || decoded.includes('%25')) {
+      decoded = decodeURIComponent(decoded);
+      if (decoded.startsWith('https://')) {
+        return { publicUrl: decoded, spotifyId: null };
+      }
+    }
+    
+    // Try extracting Spotify track ID from x-sonos-spotify:spotify:track:XXXX
+    const spotifyMatch = decoded.match(/spotify(?:%3a|:)track(?:%3a|:)([a-zA-Z0-9]+)/i);
+    if (spotifyMatch) {
+      return { publicUrl: null, spotifyId: spotifyMatch[1] };
+    }
+  } catch (e) { /* not a valid URL */ }
+  
+  return { publicUrl: null, spotifyId: null };
 }
 
-function pushToBridge(eventData, rawAlbumArtUri, rawNextAlbumArtUri) {
+// Resolve album art via Spotify oEmbed (no API key needed)
+async function resolveViaOEmbed(spotifyId) {
+  try {
+    const https = require('https');
+    return await new Promise((resolve) => {
+      const req = https.get(`https://open.spotify.com/oembed?url=https://open.spotify.com/track/${spotifyId}`, { timeout: 5000 }, (res) => {
+        let body = '';
+        res.on('data', chunk => { body += chunk; });
+        res.on('end', () => {
+          try {
+            const data = JSON.parse(body);
+            let url = data.thumbnail_url || null;
+            // Upgrade from 300x300 to 640x640
+            if (url) url = url.replace('ab67616d00001e02', 'ab67616d0000b273');
+            resolve(url);
+          } catch { resolve(null); }
+        });
+      });
+      req.on('error', () => resolve(null));
+      req.on('timeout', () => { req.destroy(); resolve(null); });
+    });
+  } catch { return null; }
+}
+
+// Resolve raw Sonos art URI to a public URL
+async function resolvePublicArt(rawUri) {
+  const { publicUrl, spotifyId } = extractFromGetaa(rawUri);
+  if (publicUrl) return publicUrl;
+  if (spotifyId) {
+    const oEmbedUrl = await resolveViaOEmbed(spotifyId);
+    if (oEmbedUrl) {
+      log.debug(`[PUSH] Resolved Spotify art via oEmbed: ${spotifyId}`);
+      return oEmbedUrl;
+    }
+  }
+  return null;
+}
+
+async function pushToBridge(eventData, rawAlbumArtUri, rawNextAlbumArtUri) {
   if (!SUPABASE_PUSH_URL || !BRIDGE_SECRET) return;
   
   // Only push on track changes
@@ -439,14 +512,20 @@ function pushToBridge(eventData, rawAlbumArtUri, rawNextAlbumArtUri) {
   if (trackKey === lastPushedTrack) return;
   lastPushedTrack = trackKey;
   
+  // Resolve album art to public URLs (parallel)
+  const [albumArtUrl, nextAlbumArtUrl] = await Promise.all([
+    resolvePublicArt(rawAlbumArtUri),
+    resolvePublicArt(rawNextAlbumArtUri)
+  ]);
+  
   const payload = JSON.stringify({
     trackName: eventData.trackName,
     artistName: eventData.artistName,
     albumName: eventData.albumName,
-    albumArtUri: resolvePublicArt(rawAlbumArtUri),
+    albumArtUri: albumArtUrl,
     nextTrackName: eventData.nextTrackName,
     nextArtistName: eventData.nextArtistName,
-    nextAlbumArtUri: resolvePublicArt(rawNextAlbumArtUri),
+    nextAlbumArtUri: nextAlbumArtUrl,
     playbackState: eventData.playbackState,
     positionMillis: eventData.positionMillis,
     durationMillis: eventData.durationMillis
