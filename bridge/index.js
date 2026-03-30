@@ -519,16 +519,39 @@ async function pushToBridge(eventData, rawAlbumArtUri, rawNextAlbumArtUri) {
   ]);
   
   const payload = JSON.stringify({
+    // Core track info
     trackName: eventData.trackName,
     artistName: eventData.artistName,
     albumName: eventData.albumName,
     albumArtUri: albumArtUrl,
+    // Next track
     nextTrackName: eventData.nextTrackName,
     nextArtistName: eventData.nextArtistName,
     nextAlbumArtUri: nextAlbumArtUrl,
+    // Playback state
     playbackState: eventData.playbackState,
     positionMillis: eventData.positionMillis,
-    durationMillis: eventData.durationMillis
+    durationMillis: eventData.durationMillis,
+    // Audio controls
+    volume: eventData.volume,
+    mute: eventData.mute,
+    bass: eventData.bass,
+    treble: eventData.treble,
+    loudness: eventData.loudness,
+    crossfade: eventData.crossfade,
+    // Media info
+    mediaType: eventData.mediaType,
+    trackNumber: eventData.trackNumber,
+    trackURI: eventData.trackURI,
+    nrTracks: eventData.nrTracks,
+    currentURI: eventData.currentURI,
+    nextAVTransportURI: eventData.nextAVTransportURI,
+    playMedium: eventData.playMedium,
+    // Extended metadata
+    streamContent: eventData.streamContent,
+    radioShowMd: eventData.radioShowMd,
+    originalTrackNumber: eventData.originalTrackNumber,
+    protocolInfo: eventData.protocolInfo
   });
   
   const url = new URL(SUPABASE_PUSH_URL);
