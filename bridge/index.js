@@ -941,6 +941,34 @@ function startPositionBroadcast() {
   }, 250);
 }
 
+// Periodic status push to brew-monitor every 30s (keeps remote UI in sync)
+const PERIODIC_PUSH_INTERVAL_MS = 30000;
+let periodicPushTimer = null;
+
+function startPeriodicPush() {
+  if (periodicPushTimer) return;
+  periodicPushTimer = setInterval(() => {
+    if (!lastSonosEvent) return;
+    // Force push by temporarily clearing the signature
+    const savedSignature = lastPushedTrack;
+    lastPushedTrack = null;
+    const rawArt = lastSonosEvent.albumArtUri || null;
+    const rawNextArt = lastSonosEvent.nextAlbumArtUri || null;
+    // Push current state (will re-upload art if available)
+    pushToBridge(lastSonosEvent, null, null).then(() => {
+      log.debug(`[PUSH] Periodic status push complete (${lastSonosEvent.playbackState})`);
+    }).catch(() => {});
+  }, PERIODIC_PUSH_INTERVAL_MS);
+  log.info(`📤 [PUSH] Periodic push started (every ${PERIODIC_PUSH_INTERVAL_MS / 1000}s)`);
+}
+
+function stopPeriodicPush() {
+  if (periodicPushTimer) {
+    clearInterval(periodicPushTimer);
+    periodicPushTimer = null;
+  }
+}
+
 function broadcastSSE(data) {
   const msg = `data: ${JSON.stringify(data)}\n\n`;
   sonosEventClients = sonosEventClients.filter(client => {
