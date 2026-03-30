@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.57';
+const BRIDGE_VERSION = '1.3.60';
 
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
