@@ -18,6 +18,9 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const PORT = parseInt(process.env.PORT || '3000');
 const DEVICE_ID = process.env.DEVICE_ID || 'default-bridge';
 const SONOS_IP = process.env.SONOS_IP || '192.168.1.175';
+const SUPABASE_PUSH_URL = process.env.SUPABASE_PUSH_URL || ''; // e.g. https://xxx.supabase.co/functions/v1/sonos-bridge-push
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
+const BRIDGE_SECRET = process.env.SONOS_BRIDGE_SECRET || '';
 const CUSTOM_APP_ID = 'FE376873';
 const BACKDROP_APP_ID = 'E8C28D3C';
 
@@ -414,6 +417,72 @@ function renewSonosSubscription() {
   req.end();
 }
 
+// ============ Bridge Push to brew-monitor ============
+
+let lastPushedTrack = null;
+
+function pushToBridge(eventData) {
+  if (!SUPABASE_PUSH_URL || !BRIDGE_SECRET) return;
+  
+  // Only push on track changes
+  const trackKey = `${eventData.trackName}|${eventData.artistName}`;
+  if (trackKey === lastPushedTrack) return;
+  lastPushedTrack = trackKey;
+  
+  const payload = JSON.stringify({
+    trackName: eventData.trackName,
+    artistName: eventData.artistName,
+    albumName: eventData.albumName,
+    albumArtUri: eventData.albumArtUri,
+    nextTrackName: eventData.nextTrackName,
+    nextArtistName: eventData.nextArtistName,
+    nextAlbumArtUri: eventData.nextAlbumArtUri,
+    playbackState: eventData.playbackState,
+    positionMillis: eventData.positionMillis,
+    durationMillis: eventData.durationMillis
+  });
+  
+  const url = new URL(SUPABASE_PUSH_URL);
+  const options = {
+    hostname: url.hostname,
+    port: url.port || 443,
+    path: url.pathname,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'X-Bridge-Secret': BRIDGE_SECRET,
+      'Content-Length': Buffer.byteLength(payload)
+    },
+    timeout: 5000
+  };
+  
+  const https = require('https');
+  const req = https.request(options, (res) => {
+    let body = '';
+    res.on('data', chunk => { body += chunk; });
+    res.on('end', () => {
+      if (res.statusCode === 200) {
+        log.info(`📤 [PUSH] Track pushed to brew-monitor: ${eventData.trackName}`);
+      } else {
+        log.warn(`⚠️ [PUSH] Push failed (${res.statusCode}): ${body}`);
+      }
+    });
+  });
+  
+  req.on('error', (err) => {
+    log.debug(`[PUSH] Push error: ${err.message}`);
+  });
+  
+  req.on('timeout', () => {
+    req.destroy();
+    log.debug('[PUSH] Push timeout');
+  });
+  
+  req.write(payload);
+  req.end();
+}
+
 // When we receive a UPnP event, fetch full status and broadcast to SSE clients
 async function handleSonosUPnPEvent() {
   try {
@@ -549,6 +618,9 @@ async function handleSonosUPnPEvent() {
     
     lastSonosEvent = eventData;
     broadcastSSE(eventData);
+    
+    // Push to brew-monitor edge function on track changes
+    pushToBridge(eventData);
   } catch (err) {
     log.error(`❌ [SONOS] Event handler error: ${err.message}`);
   }
