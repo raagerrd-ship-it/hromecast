@@ -630,7 +630,7 @@ async function handleSonosUPnPEvent() {
     broadcastSSE(eventData);
     
     // Push to brew-monitor edge function on track changes
-    pushToBridge(eventData);
+    pushToBridge(eventData, didl?.albumArtURI || null, rawNextAlbumArtUri);
   } catch (err) {
     log.error(`❌ [SONOS] Event handler error: ${err.message}`);
   }
