@@ -18,6 +18,9 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const PORT = parseInt(process.env.PORT || '3000');
 const DEVICE_ID = process.env.DEVICE_ID || 'default-bridge';
 const SONOS_IP = process.env.SONOS_IP || '192.168.1.175';
+const SUPABASE_PUSH_URL = process.env.SUPABASE_PUSH_URL || ''; // e.g. https://xxx.supabase.co/functions/v1/sonos-bridge-push
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
+const BRIDGE_SECRET = process.env.SONOS_BRIDGE_SECRET || '';
 const CUSTOM_APP_ID = 'FE376873';
 const BACKDROP_APP_ID = 'E8C28D3C';
 
