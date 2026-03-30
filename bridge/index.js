@@ -521,6 +521,9 @@ async function pushToBridge(eventData, rawAlbumArtUri, rawNextAlbumArtUri) {
   if (trackKey === lastPushedTrack) return;
   lastPushedTrack = trackKey;
   
+  log.info(`📤 [PUSH] Pushing track: "${eventData.trackName}" | next: "${eventData.nextTrackName || 'NONE'}" by "${eventData.nextArtistName || 'NONE'}"`);
+  log.debug(`[PUSH] rawAlbumArtUri: ${rawAlbumArtUri || 'null'}, rawNextAlbumArtUri: ${rawNextAlbumArtUri || 'null'}`);
+  
   // Fetch from local Sonos and upload to brew-monitor storage (parallel)
   const [albumArtUrl, nextAlbumArtUrl] = await Promise.all([
     fetchAndUploadArt(rawAlbumArtUri, 'bridge-current.jpg'),
