@@ -263,6 +263,7 @@ async function resolveNextTrack(nextMeta, trackNumber, nrTracks) {
   let nextTrackName = null;
   let nextArtistName = null;
   let nextAlbumArtUri = null;
+  let rawNextAlbumArtUri = null;
 
   // 1. Try NextAVTransportURIMetaData first
   if (nextMeta) {
@@ -272,6 +273,7 @@ async function resolveNextTrack(nextMeta, trackNumber, nrTracks) {
       nextTrackName = nextDidl.title || null;
       nextArtistName = nextDidl.creator || null;
       if (nextDidl.albumArtURI) {
+        rawNextAlbumArtUri = nextDidl.albumArtURI;
         nextAlbumArtUri = nextDidl.albumArtURI.startsWith('/')
           ? `/api/sonos${nextDidl.albumArtURI}`
           : `/api/sonos/art?url=${encodeURIComponent(nextDidl.albumArtURI)}`;
@@ -294,7 +296,6 @@ async function resolveNextTrack(nextMeta, trackNumber, nrTracks) {
           <SortCriteria></SortCriteria>
         </u:Browse>`;
         const browseXml = await soapRequest(browseBody, 'Browse', '/MediaServer/ContentDirectory/Control', 'ContentDirectory');
-        // The result is in <Result> tag, DIDL-encoded
         const resultRaw = extractTag(browseXml, 'Result');
         if (resultRaw) {
           let browseDidl = extractDidl(resultRaw);
@@ -303,6 +304,7 @@ async function resolveNextTrack(nextMeta, trackNumber, nrTracks) {
             nextTrackName = browseDidl.title || null;
             nextArtistName = browseDidl.creator || null;
             if (browseDidl.albumArtURI) {
+              rawNextAlbumArtUri = browseDidl.albumArtURI;
               nextAlbumArtUri = browseDidl.albumArtURI.startsWith('/')
                 ? `/api/sonos${browseDidl.albumArtURI}`
                 : `/api/sonos/art?url=${encodeURIComponent(browseDidl.albumArtURI)}`;
@@ -315,7 +317,7 @@ async function resolveNextTrack(nextMeta, trackNumber, nrTracks) {
     }
   }
 
-  return { nextTrackName, nextArtistName, nextAlbumArtUri };
+  return { nextTrackName, nextArtistName, nextAlbumArtUri, rawNextAlbumArtUri };
 }
 
 
