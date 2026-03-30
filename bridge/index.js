@@ -2471,6 +2471,7 @@ const server = http.createServer(async (req, res) => {
           if (transportState === 'PLAYING') playbackState = 'PLAYBACK_STATE_PLAYING';
           else if (transportState === 'PAUSED_PLAYBACK') playbackState = 'PLAYBACK_STATE_PAUSED';
           else if (transportState === 'TRANSITIONING') playbackState = 'PLAYBACK_STATE_PLAYING';
+          else if (transportState === 'STOPPED') playbackState = 'PLAYBACK_STATE_PAUSED';
           
           // Album art proxy URL
           let albumArtUri = null;
