@@ -7,7 +7,7 @@ const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
 // Version - keep in sync with src/config/version.ts
-const BRIDGE_VERSION = '1.3.62';
+const BRIDGE_VERSION = '1.3.63';
 
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
@@ -353,6 +353,11 @@ let sonosIdleDebounceTimer = null;
 let pendingSonosIdleEvent = null;
 let pendingSonosIdleMeta = null;
 let sonosTransitionRefreshTimer = null;
+let cachedGroupId = null;
+let cachedGroupName = null;
+let cachedRawAlbumArtUri = null;
+let cachedRawNextAlbumArtUri = null;
+let sonosSubscribeRetries = 0;
 const SONOS_IDLE_DEBOUNCE_MS = 2000;
 const SONOS_TRANSITION_REFRESH_MS = 700;
 const SONOS_TRANSITION_MAX_REFRESHES = 3;
@@ -486,6 +491,37 @@ function scheduleSonosTransitionRefresh(refreshCount) {
   }, SONOS_TRANSITION_REFRESH_MS);
 }
 
+// Fetch zone group info (groupId + groupName) from Sonos
+async function fetchZoneGroupInfo() {
+  try {
+    const body = `<u:GetZoneGroupState xmlns:u="urn:schemas-upnp-org:service:ZoneGroupTopology:1"></u:GetZoneGroupState>`;
+    const xml = await soapRequest(body, 'GetZoneGroupState', '/ZoneGroupTopology/Control', 'ZoneGroupTopology');
+    const stateRaw = extractTag(xml, 'ZoneGroupState');
+    if (!stateRaw) return { groupId: null, groupName: null };
+    const state = decodeXmlEntities(stateRaw);
+    // Find the group containing our SONOS_IP
+    const groupRegex = /<ZoneGroup\s[^>]*Coordinator="([^"]*)"[^>]*ID="([^"]*)"[^>]*>([\s\S]*?)<\/ZoneGroup>/g;
+    let match;
+    while ((match = groupRegex.exec(state)) !== null) {
+      const groupContent = match[3];
+      if (groupContent.includes(SONOS_IP)) {
+        const groupId = `${match[1]}:${match[2]}`;
+        // Get the group name from the coordinator's ZoneName
+        const nameMatch = groupContent.match(/ZoneName="([^"]*)"/);
+        const groupName = nameMatch ? nameMatch[1] : null;
+        cachedGroupId = groupId;
+        cachedGroupName = groupName;
+        log.debug(`[SONOS] Zone group: ${groupId} "${groupName}"`);
+        return { groupId, groupName };
+      }
+    }
+    return { groupId: cachedGroupId, groupName: cachedGroupName };
+  } catch (err) {
+    log.debug(`[SONOS] Zone group fetch failed: ${err.message}`);
+    return { groupId: cachedGroupId, groupName: cachedGroupName };
+  }
+}
+
 // Subscribe to Sonos AVTransport events
 function subscribeSonosEvents() {
   const networkIP = getNetworkIP();
@@ -508,9 +544,13 @@ function subscribeSonosEvents() {
     const sid = res.headers['sid'];
     if (sid) {
       sonosSubscriptionSID = sid;
+      sonosSubscribeRetries = 0; // Reset backoff on success
       log.info(`📡 [SONOS] Subscribed to AVTransport events, SID: ${sid}`);
       clearTimeout(sonosSubscriptionRenewTimer);
       sonosSubscriptionRenewTimer = setTimeout(() => renewSonosSubscription(), 240000);
+      // Push full state on (re)subscribe so remote UI is always in sync
+      log.info(`📡 [SONOS] Fetching full state after (re)subscribe...`);
+      handleSonosUPnPEvent({ source: 'resubscribe' });
     } else {
       log.warn('⚠️ [SONOS] Subscribe response missing SID');
     }
@@ -518,13 +558,17 @@ function subscribeSonosEvents() {
   
   req.on('error', (err) => {
     log.error(`❌ [SONOS] Subscribe error: ${err.message}`);
-    setTimeout(() => subscribeSonosEvents(), 30000);
+    const retryMs = Math.min(5000 * Math.pow(2, Math.min(sonosSubscribeRetries++, 5)), 120000);
+    log.info(`🔄 [SONOS] Retrying subscribe in ${Math.round(retryMs / 1000)}s...`);
+    setTimeout(() => subscribeSonosEvents(), retryMs);
   });
   
   req.on('timeout', () => {
     req.destroy();
     log.error('❌ [SONOS] Subscribe timeout');
-    setTimeout(() => subscribeSonosEvents(), 30000);
+    const retryMs = Math.min(5000 * Math.pow(2, Math.min(sonosSubscribeRetries++, 5)), 120000);
+    log.info(`🔄 [SONOS] Retrying subscribe in ${Math.round(retryMs / 1000)}s...`);
+    setTimeout(() => subscribeSonosEvents(), retryMs);
   });
   
   req.end();
@@ -650,19 +694,25 @@ async function fetchAndUploadArt(rawUri, filename) {
 async function pushToBridge(eventData, rawAlbumArtUri, rawNextAlbumArtUri) {
   if (!SUPABASE_PUSH_URL || !BRIDGE_SECRET) return;
   
+  // Use cached raw URIs if not provided (e.g. periodic push)
+  const effectiveRawArt = rawAlbumArtUri || cachedRawAlbumArtUri;
+  const effectiveRawNextArt = rawNextAlbumArtUri || cachedRawNextAlbumArtUri;
+  
   const pushSignature = getSonosPushSignature(eventData);
   if (pushSignature === lastPushedTrack) return;
   lastPushedTrack = pushSignature;
   
-  log.info(`📤 [PUSH] Pushing ${eventData.playbackState}: "${eventData.trackName}" | next: "${eventData.nextTrackName || 'NONE'}" by "${eventData.nextArtistName || 'NONE'}"`);
-  log.debug(`[PUSH] rawAlbumArtUri: ${rawAlbumArtUri || 'null'}, rawNextAlbumArtUri: ${rawNextAlbumArtUri || 'null'}`);
+  log.info(`📤 [PUSH] Pushing ${eventData.playbackState}: "${eventData.trackName}" | group: "${cachedGroupName || 'unknown'}" | next: "${eventData.nextTrackName || 'NONE'}"`);
+  log.debug(`[PUSH] rawAlbumArtUri: ${effectiveRawArt || 'null'}, rawNextAlbumArtUri: ${effectiveRawNextArt || 'null'}`);
   
   const [albumArtUrl, nextAlbumArtUrl] = await Promise.all([
-    fetchAndUploadArt(rawAlbumArtUri, 'bridge-current.jpg'),
-    fetchAndUploadArt(rawNextAlbumArtUri, 'bridge-next.jpg')
+    fetchAndUploadArt(effectiveRawArt, 'bridge-current.jpg'),
+    fetchAndUploadArt(effectiveRawNextArt, 'bridge-next.jpg')
   ]);
   
   const payload = JSON.stringify({
+    groupId: cachedGroupId,
+    groupName: cachedGroupName,
     trackName: eventData.trackName,
     artistName: eventData.artistName,
     albumName: eventData.albumName,
@@ -817,6 +867,13 @@ async function handleSonosUPnPEvent({ source = 'upnp-event', refreshCount = 0 } 
     const playMedium = extractTag(mediaXml, 'PlayMedium');
     const nextMeta = extractTag(mediaXml, 'NextAVTransportURIMetaData');
     const { nextTrackName, nextArtistName, nextAlbumArtUri, rawNextAlbumArtUri } = await resolveNextTrack(nextMeta, trackNumber, nrTracks);
+    
+    // Cache raw art URIs for periodic push re-upload
+    cachedRawAlbumArtUri = didl?.albumArtURI || cachedRawAlbumArtUri;
+    cachedRawNextAlbumArtUri = rawNextAlbumArtUri || cachedRawNextAlbumArtUri;
+    
+    // Fetch zone group info (non-blocking, uses cache on failure)
+    fetchZoneGroupInfo().catch(() => {});
     
     const mediaType = didl?.upnpClass?.includes('audioBroadcast') ? 'radio' : 'track';
     cachedMediaType = mediaType;
