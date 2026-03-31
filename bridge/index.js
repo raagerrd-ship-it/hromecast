@@ -546,6 +546,9 @@ function subscribeSonosEvents() {
       log.info(`📡 [SONOS] Subscribed to AVTransport events, SID: ${sid}`);
       clearTimeout(sonosSubscriptionRenewTimer);
       sonosSubscriptionRenewTimer = setTimeout(() => renewSonosSubscription(), 240000);
+      // Push full state on (re)subscribe so remote UI is always in sync
+      log.info(`📡 [SONOS] Fetching full state after (re)subscribe...`);
+      handleSonosUPnPEvent({ source: 'resubscribe' });
     } else {
       log.warn('⚠️ [SONOS] Subscribe response missing SID');
     }
@@ -553,13 +556,17 @@ function subscribeSonosEvents() {
   
   req.on('error', (err) => {
     log.error(`❌ [SONOS] Subscribe error: ${err.message}`);
-    setTimeout(() => subscribeSonosEvents(), 30000);
+    const retryMs = Math.min(5000 * Math.pow(2, Math.min(sonosSubscribeRetries++, 5)), 120000);
+    log.info(`🔄 [SONOS] Retrying subscribe in ${Math.round(retryMs / 1000)}s...`);
+    setTimeout(() => subscribeSonosEvents(), retryMs);
   });
   
   req.on('timeout', () => {
     req.destroy();
     log.error('❌ [SONOS] Subscribe timeout');
-    setTimeout(() => subscribeSonosEvents(), 30000);
+    const retryMs = Math.min(5000 * Math.pow(2, Math.min(sonosSubscribeRetries++, 5)), 120000);
+    log.info(`🔄 [SONOS] Retrying subscribe in ${Math.round(retryMs / 1000)}s...`);
+    setTimeout(() => subscribeSonosEvents(), retryMs);
   });
   
   req.end();
