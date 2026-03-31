@@ -357,6 +357,7 @@ let cachedGroupId = null;
 let cachedGroupName = null;
 let cachedRawAlbumArtUri = null;
 let cachedRawNextAlbumArtUri = null;
+let sonosSubscribeRetries = 0;
 const SONOS_IDLE_DEBOUNCE_MS = 2000;
 const SONOS_TRANSITION_REFRESH_MS = 700;
 const SONOS_TRANSITION_MAX_REFRESHES = 3;
