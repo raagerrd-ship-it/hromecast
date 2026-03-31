@@ -19,10 +19,28 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.62";
-const RELEASED_AT = "2026-03-30";
+const VERSION = "1.3.63";
+const RELEASED_AT = "2026-03-31";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.63",
+    date: "2026-03-31",
+    changes: {
+      sv: [
+        "Nytt: groupId och groupName skickas i varje push (auto-registreras av servern)",
+        "Nytt: Next-track art laddas alltid upp som bridge-next.jpg (inga råa Sonos-URLer i push)",
+        "Fix: PAUSED-push skickar korrekt position och pausar sedan periodisk push",
+        "Förbättrad reconnect: Exponentiell backoff vid UPnP-subscriptionfel, full state-push vid re-subscribe",
+      ],
+      en: [
+        "New: groupId and groupName sent in every push (auto-registered by server)",
+        "New: Next-track art always uploaded as bridge-next.jpg (no raw Sonos URLs in push)",
+        "Fix: PAUSED push sends correct position then pauses periodic push",
+        "Improved reconnect: Exponential backoff on UPnP subscription errors, full state push on re-subscribe",
+      ],
+    }
+  },
   {
     version: "1.3.62",
     date: "2026-03-30",
