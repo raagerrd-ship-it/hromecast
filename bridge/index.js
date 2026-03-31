@@ -685,19 +685,25 @@ async function fetchAndUploadArt(rawUri, filename) {
 async function pushToBridge(eventData, rawAlbumArtUri, rawNextAlbumArtUri) {
   if (!SUPABASE_PUSH_URL || !BRIDGE_SECRET) return;
   
+  // Use cached raw URIs if not provided (e.g. periodic push)
+  const effectiveRawArt = rawAlbumArtUri || cachedRawAlbumArtUri;
+  const effectiveRawNextArt = rawNextAlbumArtUri || cachedRawNextAlbumArtUri;
+  
   const pushSignature = getSonosPushSignature(eventData);
   if (pushSignature === lastPushedTrack) return;
   lastPushedTrack = pushSignature;
   
-  log.info(`📤 [PUSH] Pushing ${eventData.playbackState}: "${eventData.trackName}" | next: "${eventData.nextTrackName || 'NONE'}" by "${eventData.nextArtistName || 'NONE'}"`);
-  log.debug(`[PUSH] rawAlbumArtUri: ${rawAlbumArtUri || 'null'}, rawNextAlbumArtUri: ${rawNextAlbumArtUri || 'null'}`);
+  log.info(`📤 [PUSH] Pushing ${eventData.playbackState}: "${eventData.trackName}" | group: "${cachedGroupName || 'unknown'}" | next: "${eventData.nextTrackName || 'NONE'}"`);
+  log.debug(`[PUSH] rawAlbumArtUri: ${effectiveRawArt || 'null'}, rawNextAlbumArtUri: ${effectiveRawNextArt || 'null'}`);
   
   const [albumArtUrl, nextAlbumArtUrl] = await Promise.all([
-    fetchAndUploadArt(rawAlbumArtUri, 'bridge-current.jpg'),
-    fetchAndUploadArt(rawNextAlbumArtUri, 'bridge-next.jpg')
+    fetchAndUploadArt(effectiveRawArt, 'bridge-current.jpg'),
+    fetchAndUploadArt(effectiveRawNextArt, 'bridge-next.jpg')
   ]);
   
   const payload = JSON.stringify({
+    groupId: cachedGroupId,
+    groupName: cachedGroupName,
     trackName: eventData.trackName,
     artistName: eventData.artistName,
     albumName: eventData.albumName,
