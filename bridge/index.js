@@ -950,6 +950,11 @@ function startPeriodicPush() {
   if (periodicPushTimer) return;
   periodicPushTimer = setInterval(async () => {
     if (!lastSonosEvent) return;
+    // Only push periodically while playing — PAUSED/IDLE get a single event-driven push
+    if (lastSonosEvent.playbackState !== 'PLAYBACK_STATE_PLAYING') {
+      log.debug(`[PUSH] Periodic: skipped (state=${lastSonosEvent.playbackState})`);
+      return;
+    }
     // Fetch fresh position from Sonos before pushing
     try {
       const posBody = `<u:GetPositionInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:GetPositionInfo>`;
