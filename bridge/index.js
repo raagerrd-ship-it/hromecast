@@ -544,6 +544,7 @@ function subscribeSonosEvents() {
     const sid = res.headers['sid'];
     if (sid) {
       sonosSubscriptionSID = sid;
+      sonosSubscribeRetries = 0; // Reset backoff on success
       log.info(`📡 [SONOS] Subscribed to AVTransport events, SID: ${sid}`);
       clearTimeout(sonosSubscriptionRenewTimer);
       sonosSubscriptionRenewTimer = setTimeout(() => renewSonosSubscription(), 240000);
