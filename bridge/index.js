@@ -490,6 +490,37 @@ function scheduleSonosTransitionRefresh(refreshCount) {
   }, SONOS_TRANSITION_REFRESH_MS);
 }
 
+// Fetch zone group info (groupId + groupName) from Sonos
+async function fetchZoneGroupInfo() {
+  try {
+    const body = `<u:GetZoneGroupState xmlns:u="urn:schemas-upnp-org:service:ZoneGroupTopology:1"></u:GetZoneGroupState>`;
+    const xml = await soapRequest(body, 'GetZoneGroupState', '/ZoneGroupTopology/Control', 'ZoneGroupTopology');
+    const stateRaw = extractTag(xml, 'ZoneGroupState');
+    if (!stateRaw) return { groupId: null, groupName: null };
+    const state = decodeXmlEntities(stateRaw);
+    // Find the group containing our SONOS_IP
+    const groupRegex = /<ZoneGroup\s[^>]*Coordinator="([^"]*)"[^>]*ID="([^"]*)"[^>]*>([\s\S]*?)<\/ZoneGroup>/g;
+    let match;
+    while ((match = groupRegex.exec(state)) !== null) {
+      const groupContent = match[3];
+      if (groupContent.includes(SONOS_IP)) {
+        const groupId = `${match[1]}:${match[2]}`;
+        // Get the group name from the coordinator's ZoneName
+        const nameMatch = groupContent.match(/ZoneName="([^"]*)"/);
+        const groupName = nameMatch ? nameMatch[1] : null;
+        cachedGroupId = groupId;
+        cachedGroupName = groupName;
+        log.debug(`[SONOS] Zone group: ${groupId} "${groupName}"`);
+        return { groupId, groupName };
+      }
+    }
+    return { groupId: cachedGroupId, groupName: cachedGroupName };
+  } catch (err) {
+    log.debug(`[SONOS] Zone group fetch failed: ${err.message}`);
+    return { groupId: cachedGroupId, groupName: cachedGroupName };
+  }
+}
+
 // Subscribe to Sonos AVTransport events
 function subscribeSonosEvents() {
   const networkIP = getNetworkIP();
