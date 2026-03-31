@@ -859,6 +859,13 @@ async function handleSonosUPnPEvent({ source = 'upnp-event', refreshCount = 0 } 
     const nextMeta = extractTag(mediaXml, 'NextAVTransportURIMetaData');
     const { nextTrackName, nextArtistName, nextAlbumArtUri, rawNextAlbumArtUri } = await resolveNextTrack(nextMeta, trackNumber, nrTracks);
     
+    // Cache raw art URIs for periodic push re-upload
+    cachedRawAlbumArtUri = didl?.albumArtURI || cachedRawAlbumArtUri;
+    cachedRawNextAlbumArtUri = rawNextAlbumArtUri || cachedRawNextAlbumArtUri;
+    
+    // Fetch zone group info (non-blocking, uses cache on failure)
+    fetchZoneGroupInfo().catch(() => {});
+    
     const mediaType = didl?.upnpClass?.includes('audioBroadcast') ? 'radio' : 'track';
     cachedMediaType = mediaType;
     cachedBass = bass;
