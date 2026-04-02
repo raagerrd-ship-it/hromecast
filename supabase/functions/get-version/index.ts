@@ -19,10 +19,26 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.63";
-const RELEASED_AT = "2026-03-31";
+const VERSION = "1.3.64";
+const RELEASED_AT = "2026-04-02";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.3.64",
+    date: "2026-04-02",
+    changes: {
+      sv: [
+        "Ny: Stale-position-detektion i periodisk push — om positionen inte rör sig på 2 polls (~60s) verifieras transport-state via SOAP",
+        "Fix: Korrigerar automatiskt missade PAUSED-events från UPnP (t.ex. vid tappad subscription)",
+        "Ny: Auto re-subscribe UPnP-events vid detekterad stale-position för att återställa event-flödet",
+      ],
+      en: [
+        "New: Stale position detection in periodic push — if position unchanged for 2 polls (~60s), transport state is verified via SOAP",
+        "Fix: Automatically corrects missed PAUSED events from UPnP (e.g. lost subscription)",
+        "New: Auto re-subscribe UPnP events on detected stale position to restore event flow",
+      ],
+    }
+  },
   {
     version: "1.3.63",
     date: "2026-03-31",

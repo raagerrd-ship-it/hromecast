@@ -1,6 +1,6 @@
 {
   "name": "chromecast-bridge",
-  "version": "1.3.63",
+  "version": "1.3.64",
   "description": "Local service for controlling Chromecast screensaver",
   "main": "index.js",
   "scripts": {
