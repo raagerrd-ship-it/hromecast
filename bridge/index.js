@@ -1002,23 +1002,31 @@ function startPositionBroadcast() {
 // Periodic status push to brew-monitor every 30s (keeps remote UI in sync)
 const PERIODIC_PUSH_INTERVAL_MS = 30000;
 let periodicPushTimer = null;
+let lastPeriodicPosition = null; // stale-detection: previous periodic position
+let stalePositionCount = 0;      // consecutive polls with unchanged position
+const STALE_POSITION_THRESHOLD = 2; // after 2 consecutive stale polls (~60s), verify transport state
 
 function startPeriodicPush() {
   if (periodicPushTimer) return;
+  lastPeriodicPosition = null;
+  stalePositionCount = 0;
   periodicPushTimer = setInterval(async () => {
     if (!lastSonosEvent) return;
     // Only push periodically while playing — PAUSED/IDLE get a single event-driven push
     if (lastSonosEvent.playbackState !== 'PLAYBACK_STATE_PLAYING') {
       log.debug(`[PUSH] Periodic: skipped (state=${lastSonosEvent.playbackState})`);
+      lastPeriodicPosition = null;
+      stalePositionCount = 0;
       return;
     }
     // Fetch fresh position from Sonos before pushing
+    let freshPosition = null;
     try {
       const posBody = `<u:GetPositionInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:GetPositionInfo>`;
       const posXml = await soapRequest(posBody, 'GetPositionInfo');
       const relTime = extractTag(posXml, 'RelTime');
       const trackDuration = extractTag(posXml, 'TrackDuration');
-      const freshPosition = parseTime(relTime);
+      freshPosition = parseTime(relTime);
       const freshDuration = parseTime(trackDuration);
       // Update lastSonosEvent with fresh position
       lastSonosEvent.positionMillis = freshPosition;
@@ -1027,6 +1035,45 @@ function startPeriodicPush() {
     } catch (e) {
       log.warn(`[PUSH] Periodic: failed to fetch fresh position, using cached: ${e.message}`);
     }
+
+    // Stale-position detection: if position hasn't moved, Sonos might actually be paused
+    if (freshPosition !== null && lastPeriodicPosition !== null && freshPosition === lastPeriodicPosition) {
+      stalePositionCount++;
+      log.info(`⚠️ [PUSH] Stale position detected (${freshPosition}ms unchanged, count=${stalePositionCount}/${STALE_POSITION_THRESHOLD})`);
+      if (stalePositionCount >= STALE_POSITION_THRESHOLD) {
+        // Verify actual transport state from Sonos
+        try {
+          const tsBody = `<u:GetTransportInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:GetTransportInfo>`;
+          const tsXml = await soapRequest(tsBody, 'GetTransportInfo');
+          const actualState = extractTag(tsXml, 'CurrentTransportState');
+          log.info(`🔍 [PUSH] Transport state check: actual=${actualState}, cached=PLAYING`);
+          if (actualState && actualState !== 'PLAYING') {
+            const correctedState = getSonosPlaybackState(actualState);
+            log.warn(`🔧 [PUSH] Correcting missed state change: PLAYING → ${correctedState} (Sonos reports ${actualState})`);
+            lastSonosEvent.playbackState = correctedState;
+            lastSonosEvent.pushedAt = Date.now();
+            stalePositionCount = 0;
+            lastPeriodicPosition = null;
+            // Push corrected state immediately
+            lastPushedTrack = null;
+            pushToBridge(lastSonosEvent, null, null).then(() => {
+              log.info(`✅ [PUSH] Corrected ${correctedState} push sent`);
+            }).catch(() => {});
+            // Also re-subscribe UPnP in case subscription was lost
+            log.info(`🔄 [PUSH] Re-subscribing UPnP events after missed state change`);
+            subscribeSonosEvents();
+            return;
+          }
+        } catch (e) {
+          log.warn(`[PUSH] Transport state check failed: ${e.message}`);
+        }
+        stalePositionCount = 0; // reset after check even if still PLAYING (e.g. end of track)
+      }
+    } else {
+      stalePositionCount = 0;
+    }
+    lastPeriodicPosition = freshPosition;
+
     // Force push by temporarily clearing the signature
     lastPushedTrack = null;
     // Push current state (will re-upload art if available)
