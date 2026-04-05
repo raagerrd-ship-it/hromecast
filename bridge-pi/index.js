@@ -545,9 +545,21 @@ function discoverDevices() {
   return new Promise((resolve) => {
     log.info('🔍 Scanning for Chromecast devices...');
     
-    const browser = bonjour.find({ type: 'googlecast' });
+    const b = getBonjour();
+    const browser = b.find({ type: 'googlecast' });
     const foundDevices = [];
     let resolved = false;
+    
+    const finish = (devices, label) => {
+      if (resolved) return;
+      resolved = true;
+      browser.stop();
+      // Free mDNS resources after discovery (Pi Zero 2 W memory optimization)
+      destroyBonjour();
+      discoveredDevices = devices;
+      log.info(`📡 Discovery complete (${label}): ${devices.length} device(s)`);
+      resolve(devices);
+    };
     
     browser.on('up', (service) => {
       const name = service.name || service.txt?.fn || 'Unknown';
@@ -566,28 +578,22 @@ function discoverDevices() {
     const maxTimeoutMs = (config.discoveryTimeout || 10) * 1000;
     
     const earlyResolveTimeout = setTimeout(() => {
-      if (foundDevices.length > 0 && !resolved) {
-        resolved = true;
-        browser.stop();
-        discoveredDevices = foundDevices;
-        log.info(`📡 Discovery complete (early): ${foundDevices.length} device(s)`);
-        resolve(foundDevices);
+      if (foundDevices.length > 0) {
+        finish(foundDevices, 'early');
       }
     }, earlyResolveMs);
     
     setTimeout(() => {
       clearTimeout(earlyResolveTimeout);
       if (!resolved) {
-        resolved = true;
-        browser.stop();
-        
         if (foundDevices.length === 0 && discoveredDevices.length > 0) {
           log.info(`📡 Discovery timeout, keeping ${discoveredDevices.length} cached device(s)`);
+          resolved = true;
+          browser.stop();
+          destroyBonjour();
           resolve(discoveredDevices);
         } else {
-          discoveredDevices = foundDevices;
-          log.info(`📡 Discovery complete: ${foundDevices.length} device(s)`);
-          resolve(foundDevices);
+          finish(foundDevices, 'timeout');
         }
       }
     }, maxTimeoutMs);
