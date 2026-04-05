@@ -307,45 +307,43 @@ const Setup = () => {
                   <>
                     <h3 className="font-semibold flex items-center gap-2">
                       <Cpu className="h-4 w-4" />
-                      Raspberry Pi
+                      {t('rpiGitInstallTitle')}
                     </h3>
+                    <p className="text-sm text-muted-foreground">{t('rpiGitInstallDesc')}</p>
                     <div className="space-y-3">
                       <div className="flex items-start gap-3">
                         <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground text-sm font-medium">1</div>
-                        <div>
-                          <p className="text-sm">{t('copyZipToRpi')}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">{t('viaUsb')}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground text-sm font-medium">2</div>
-                        <div className="flex-1">
-                          <p className="text-sm mb-2">{t('unzipAndRun')}</p>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm mb-2">{t('rpiGitStep1')}</p>
                           <div className="relative">
                             <pre className="bg-muted p-3 rounded-lg text-xs overflow-x-auto pr-12 font-mono">
-                              <code>unzip chromecast-bridge.zip{'\n'}cd chromecast-bridge{'\n'}chmod +x install-linux.sh{'\n'}./install-linux.sh</code>
+                              <code>git clone https://github.com/raagerrd-ship-it/hromecast.git{'\n'}cd hromecast/bridge-pi{'\n'}chmod +x install-linux.sh{'\n'}./install-linux.sh</code>
                             </pre>
                             <Button
                               variant="ghost"
                               size="sm"
                               className="absolute right-1 top-1 h-8 w-8 p-0"
-                              onClick={() => copyToClipboard('unzip chromecast-bridge.zip && cd chromecast-bridge && chmod +x install-linux.sh && ./install-linux.sh')}
+                              onClick={() => copyToClipboard('git clone https://github.com/raagerrd-ship-it/hromecast.git && cd hromecast/bridge-pi && chmod +x install-linux.sh && ./install-linux.sh')}
                             >
-                              {copiedCommand === 'unzip chromecast-bridge.zip && cd chromecast-bridge && chmod +x install-linux.sh && ./install-linux.sh' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                              {copiedCommand === 'git clone https://github.com/raagerrd-ship-it/hromecast.git && cd hromecast/bridge-pi && chmod +x install-linux.sh && ./install-linux.sh' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                             </Button>
                           </div>
+                          <p className="text-xs text-muted-foreground mt-2">{t('rpiGitRequirements')}</p>
                         </div>
                       </div>
                       <div className="flex items-start gap-3">
                         <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
                           <CheckCircle className="h-3.5 w-3.5" />
                         </div>
-                        <p className="text-sm font-medium text-primary">{t('doneRpi')}</p>
+                        <p className="text-sm font-medium text-primary">{t('rpiGitStep2Done')}</p>
                       </div>
                     </div>
-                    <div className="pt-3 border-t">
+                    <div className="pt-3 border-t space-y-2">
                       <p className="text-xs text-muted-foreground">
-                        💡 {t('rpiTip')}
+                        🔄 {t('rpiGitAutoUpdate')}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        ⚡ {t('rpiGitTip')}
                       </p>
                     </div>
                   </>

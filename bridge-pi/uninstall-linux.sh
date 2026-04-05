@@ -94,6 +94,8 @@ for install in "${TO_UNINSTALL[@]}"; do
         rm -f "$HOME/.config/systemd/user/$service_name.service"
         rm -f "$HOME/.config/systemd/user/$service_name-restart.service"
         rm -f "$HOME/.config/systemd/user/$service_name-restart.timer"
+        rm -f "$HOME/.config/systemd/user/$service_name-update.service"
+        rm -f "$HOME/.config/systemd/user/$service_name-update.timer"
     fi
     
     if [ -n "$folder_path" ] && [ -d "$folder_path" ]; then
