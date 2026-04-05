@@ -100,8 +100,8 @@ const BASE_DELAY_MS = 1000;
 // Track active heartbeats for cleanup
 const activeHeartbeats = new Set();
 
-// In-memory log buffer (keep last 100 entries)
-const LOG_BUFFER_SIZE = 100;
+// In-memory log buffer — smaller on Pi Zero 2 W (512MB RAM)
+const LOG_BUFFER_SIZE = 50;
 let logBuffer = [];
 
 // Track last status check messages for deduplication
