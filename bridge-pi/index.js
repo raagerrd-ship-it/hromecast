@@ -6,8 +6,9 @@ const os = require('os');
 const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
-// Version - Cast Away Pi Edition
+// Version - Cast Away Pi Edition (optimized for Raspberry Pi Zero 2 W)
 const BRIDGE_VERSION = '1.4.0';
+const PI_OPTIMIZED = true; // Flag for Pi-specific behavior
 
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
@@ -20,8 +21,36 @@ const DEVICE_ID = process.env.DEVICE_ID || 'default-bridge';
 const CUSTOM_APP_ID = 'FE376873';
 const BACKDROP_APP_ID = 'E8C28D3C';
 
-// Initialize Bonjour
-const bonjour = new Bonjour();
+// Lazy Bonjour init — only create when needed, destroy after discovery to free memory
+let bonjour = null;
+function getBonjour() {
+  if (!bonjour) bonjour = new Bonjour();
+  return bonjour;
+}
+function destroyBonjour() {
+  if (bonjour) {
+    try { bonjour.destroy(); } catch(e) {}
+    bonjour = null;
+  }
+}
+
+// Static file cache — pre-load public files into memory to avoid repeated disk reads on slow SD card
+const staticCache = new Map();
+function preloadStaticFiles() {
+  try {
+    const files = fs.readdirSync(PUBLIC_DIR);
+    for (const file of files) {
+      const filePath = path.join(PUBLIC_DIR, file);
+      const stat = fs.statSync(filePath);
+      if (stat.isFile() && stat.size < 100 * 1024) { // Cache files under 100KB
+        staticCache.set('/' + file, {
+          data: fs.readFileSync(filePath),
+          ext: path.extname(file)
+        });
+      }
+    }
+  } catch(e) { /* ignore */ }
+}
 
 // ============ State ============
 
