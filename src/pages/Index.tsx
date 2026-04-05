@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { HelpCircle, Download, Loader2, ChevronRight, ExternalLink } from "lucide-react";
+import { HelpCircle, Download, Loader2, ChevronRight, ExternalLink, Cpu, Copy, Check, RefreshCw } from "lucide-react";
 import logo from "@/assets/logo.png";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
