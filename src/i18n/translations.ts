@@ -160,6 +160,11 @@ export const translations = {
     openLocalDashboard: 'Open your local dashboard directly',
     runsLocally: 'Runs locally • No cloud connection',
     
+    // Raspberry Pi landing
+    rpiLandingTitle: 'Raspberry Pi?',
+    rpiLandingDesc: 'Perfect as an always-on bridge. SSH in and run:',
+    rpiLandingAutoUpdate: 'Auto-updates via git every hour',
+    
     // Setup page
     installGuide: 'Installation Guide',
     downloadStep: 'Download',
