@@ -154,7 +154,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=$APP_DIR
-ExecStart=$(which node) index.js
+ExecStart=$(which node) --max-old-space-size=128 --expose-gc index.js
 Restart=always
 RestartSec=10
 Environment=NODE_ENV=production
