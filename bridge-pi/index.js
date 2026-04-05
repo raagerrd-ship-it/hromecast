@@ -1495,8 +1495,12 @@ const server = http.createServer(async (req, res) => {
       if (req.method === 'GET' && pathname === '/api/status') {
         const config = loadConfig();
         const networkIP = getNetworkIP();
+        const mem = process.memoryUsage();
+        const totalMem = os.totalmem();
+        const freeMem = os.freemem();
         sendJson(res, {
           version: BRIDGE_VERSION,
+          platform: 'pi-zero-2w',
           deviceId: DEVICE_ID,
           port: PORT,
           networkIP: networkIP,
@@ -1514,7 +1518,15 @@ const server = http.createServer(async (req, res) => {
             active: recoveryCheckInterval !== null,
             lastErrorType,
             ipRecoveryAttempts: ipRecoveryState.failedAttempts
-          }
+          },
+          memory: {
+            heapUsedMB: Math.round(mem.heapUsed / 1024 / 1024 * 10) / 10,
+            heapTotalMB: Math.round(mem.heapTotal / 1024 / 1024 * 10) / 10,
+            rssMB: Math.round(mem.rss / 1024 / 1024 * 10) / 10,
+            systemFreeMB: Math.round(freeMem / 1024 / 1024),
+            systemTotalMB: Math.round(totalMem / 1024 / 1024)
+          },
+          cpuLoad: os.loadavg()
         });
         return;
       }
