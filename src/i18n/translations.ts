@@ -56,6 +56,14 @@ export const translations = {
     unzipAndRun: 'Packa upp och kör:',
     doneRpi: 'Klart! Perfekt som always-on bridge',
     rpiTip: 'Raspberry Pi är perfekt som dedikerad bridge eftersom den är tyst och drar lite ström.',
+    rpiGitInstallTitle: 'Cast Away Pi Edition',
+    rpiGitInstallDesc: 'Optimerad för Raspberry Pi Zero 2 W. Ren Chromecast-logik utan Sonos.',
+    rpiGitStep1: 'SSH:a in till din Raspberry Pi och kör:',
+    rpiGitStep2Done: 'Klart! Bridge startar automatiskt',
+    rpiGitAutoUpdate: 'Auto-uppdatering: Bridge kollar GitHub varje timme och installerar uppdateringar automatiskt.',
+    rpiGitTip: 'Optimerad för Pi Zero 2 W (512MB RAM). Lazy mDNS, minneshushållning och SD-cache.',
+    rpiGitRequirements: 'Krav: git och Node.js 18+ (installeras automatiskt)',
+    rpiDownloadAlt: 'Alternativt: Ladda ner som ZIP',
     
     // Configure step
     openInBrowser: 'Öppna i webbläsaren:',
