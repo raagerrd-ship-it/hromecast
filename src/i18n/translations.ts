@@ -30,6 +30,11 @@ export const translations = {
     openLocalDashboard: 'Öppna din lokala dashboard direkt',
     runsLocally: 'Körs lokalt • Ingen molnanslutning',
     
+    // Raspberry Pi landing
+    rpiLandingTitle: 'Raspberry Pi?',
+    rpiLandingDesc: 'Perfekt som always-on bridge. SSH:a in och kör:',
+    rpiLandingAutoUpdate: 'Auto-uppdateras via git varje timme',
+    
     // Setup page
     installGuide: 'Installationsguide',
     downloadStep: 'Ladda ner',
