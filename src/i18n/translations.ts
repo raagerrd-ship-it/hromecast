@@ -30,6 +30,11 @@ export const translations = {
     openLocalDashboard: 'Öppna din lokala dashboard direkt',
     runsLocally: 'Körs lokalt • Ingen molnanslutning',
     
+    // Raspberry Pi landing
+    rpiLandingTitle: 'Raspberry Pi?',
+    rpiLandingDesc: 'Perfekt som always-on bridge. SSH:a in och kör:',
+    rpiLandingAutoUpdate: 'Auto-uppdateras via git varje timme',
+    
     // Setup page
     installGuide: 'Installationsguide',
     downloadStep: 'Ladda ner',
@@ -154,6 +159,11 @@ export const translations = {
     alreadyInstalled: 'Already installed?',
     openLocalDashboard: 'Open your local dashboard directly',
     runsLocally: 'Runs locally • No cloud connection',
+    
+    // Raspberry Pi landing
+    rpiLandingTitle: 'Raspberry Pi?',
+    rpiLandingDesc: 'Perfect as an always-on bridge. SSH in and run:',
+    rpiLandingAutoUpdate: 'Auto-updates via git every hour',
     
     // Setup page
     installGuide: 'Installation Guide',
