@@ -71,6 +71,16 @@ if ! command -v node &> /dev/null; then
 fi
 echo "  ✓ Node.js $(node --version)"
 
+# 1b. Kontrollera swap (Pi Zero 2 W har bara 512MB RAM)
+SWAP_TOTAL=$(free -m | awk '/^Swap:/{print $2}')
+if [ "$SWAP_TOTAL" -lt 100 ] 2>/dev/null; then
+    echo ""
+    echo "  ⚠️ Liten eller ingen swap detekterad (${SWAP_TOTAL}MB)"
+    echo "  Rekommendation: Aktivera minst 256MB swap för stabilitet"
+    echo "  sudo dphys-swapfile setup && sudo dphys-swapfile swapon"
+    echo ""
+fi
+
 # 2. Förbereda uppdatering - pausa aktiv bridge
 echo "[2/7] Förbereder uppdatering..."
 
