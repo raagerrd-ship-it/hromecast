@@ -121,30 +121,42 @@ const Index = () => {
           <Card className="bg-card/50 border-dashed">
             <CardContent className="pt-4 pb-4">
               <div className="space-y-3">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <Cpu className="h-4 w-4 text-primary" />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <Cpu className="h-4 w-4 text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="font-medium text-sm">{t('rpiLandingTitle')}</h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">{t('rpiLandingDesc')}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-medium text-sm">{t('rpiLandingTitle')}</h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">{t('rpiLandingDesc')}</p>
-                  </div>
-                </div>
-                <div className="relative">
-                  <pre className="bg-muted p-3 rounded-lg text-xs overflow-x-auto pr-10 font-mono">
-                    <code>git clone https://github.com/raagerrd-ship-it/hromecast.git{'\n'}cd hromecast/bridge-pi{'\n'}chmod +x install-linux.sh && ./install-linux.sh</code>
-                  </pre>
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
-                    className="absolute right-1 top-1 h-8 w-8 p-0"
+                    className="shrink-0 gap-1.5 h-8 text-xs"
                     onClick={copyPiCommand}
                   >
-                    {copiedPi ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    {copiedPi ? (
+                      <>
+                        <Check className="h-3 w-3" />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3 w-3" />
+                        Copy
+                      </>
+                    )}
                   </Button>
                 </div>
+                <div className="bg-muted rounded-lg p-3 overflow-hidden">
+                  <pre className="text-xs font-mono text-muted-foreground leading-relaxed whitespace-pre overflow-x-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
+                    <code><span className="text-primary/70">$</span> git clone https://github.com/raagerrd-ship-it/hromecast.git{'\n'}<span className="text-primary/70">$</span> cd hromecast/bridge-pi{'\n'}<span className="text-primary/70">$</span> chmod +x install-linux.sh && ./install-linux.sh</code>
+                  </pre>
+                </div>
                 <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                  <RefreshCw className="h-3 w-3" />
+                  <RefreshCw className="h-3 w-3 text-primary/50" />
                   {t('rpiLandingAutoUpdate')}
                 </p>
               </div>
