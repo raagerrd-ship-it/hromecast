@@ -6,8 +6,9 @@ const os = require('os');
 const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
-// Version - Cast Away Pi Edition
+// Version - Cast Away Pi Edition (optimized for Raspberry Pi Zero 2 W)
 const BRIDGE_VERSION = '1.4.0';
+const PI_OPTIMIZED = true; // Flag for Pi-specific behavior
 
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
@@ -20,8 +21,36 @@ const DEVICE_ID = process.env.DEVICE_ID || 'default-bridge';
 const CUSTOM_APP_ID = 'FE376873';
 const BACKDROP_APP_ID = 'E8C28D3C';
 
-// Initialize Bonjour
-const bonjour = new Bonjour();
+// Lazy Bonjour init — only create when needed, destroy after discovery to free memory
+let bonjour = null;
+function getBonjour() {
+  if (!bonjour) bonjour = new Bonjour();
+  return bonjour;
+}
+function destroyBonjour() {
+  if (bonjour) {
+    try { bonjour.destroy(); } catch(e) {}
+    bonjour = null;
+  }
+}
+
+// Static file cache — pre-load public files into memory to avoid repeated disk reads on slow SD card
+const staticCache = new Map();
+function preloadStaticFiles() {
+  try {
+    const files = fs.readdirSync(PUBLIC_DIR);
+    for (const file of files) {
+      const filePath = path.join(PUBLIC_DIR, file);
+      const stat = fs.statSync(filePath);
+      if (stat.isFile() && stat.size < 100 * 1024) { // Cache files under 100KB
+        staticCache.set('/' + file, {
+          data: fs.readFileSync(filePath),
+          ext: path.extname(file)
+        });
+      }
+    }
+  } catch(e) { /* ignore */ }
+}
 
 // ============ State ============
 
@@ -71,8 +100,8 @@ const BASE_DELAY_MS = 1000;
 // Track active heartbeats for cleanup
 const activeHeartbeats = new Set();
 
-// In-memory log buffer (keep last 100 entries)
-const LOG_BUFFER_SIZE = 100;
+// In-memory log buffer — smaller on Pi Zero 2 W (512MB RAM)
+const LOG_BUFFER_SIZE = 50;
 let logBuffer = [];
 
 // Track last status check messages for deduplication
@@ -516,9 +545,21 @@ function discoverDevices() {
   return new Promise((resolve) => {
     log.info('🔍 Scanning for Chromecast devices...');
     
-    const browser = bonjour.find({ type: 'googlecast' });
+    const b = getBonjour();
+    const browser = b.find({ type: 'googlecast' });
     const foundDevices = [];
     let resolved = false;
+    
+    const finish = (devices, label) => {
+      if (resolved) return;
+      resolved = true;
+      browser.stop();
+      // Free mDNS resources after discovery (Pi Zero 2 W memory optimization)
+      destroyBonjour();
+      discoveredDevices = devices;
+      log.info(`📡 Discovery complete (${label}): ${devices.length} device(s)`);
+      resolve(devices);
+    };
     
     browser.on('up', (service) => {
       const name = service.name || service.txt?.fn || 'Unknown';
@@ -537,28 +578,22 @@ function discoverDevices() {
     const maxTimeoutMs = (config.discoveryTimeout || 10) * 1000;
     
     const earlyResolveTimeout = setTimeout(() => {
-      if (foundDevices.length > 0 && !resolved) {
-        resolved = true;
-        browser.stop();
-        discoveredDevices = foundDevices;
-        log.info(`📡 Discovery complete (early): ${foundDevices.length} device(s)`);
-        resolve(foundDevices);
+      if (foundDevices.length > 0) {
+        finish(foundDevices, 'early');
       }
     }, earlyResolveMs);
     
     setTimeout(() => {
       clearTimeout(earlyResolveTimeout);
       if (!resolved) {
-        resolved = true;
-        browser.stop();
-        
         if (foundDevices.length === 0 && discoveredDevices.length > 0) {
           log.info(`📡 Discovery timeout, keeping ${discoveredDevices.length} cached device(s)`);
+          resolved = true;
+          browser.stop();
+          destroyBonjour();
           resolve(discoveredDevices);
         } else {
-          discoveredDevices = foundDevices;
-          log.info(`📡 Discovery complete: ${foundDevices.length} device(s)`);
-          resolve(foundDevices);
+          finish(foundDevices, 'timeout');
         }
       }
     }, maxTimeoutMs);
@@ -1282,6 +1317,20 @@ function serveStatic(filePath, res) {
     return;
   }
   
+  // Check in-memory cache first (Pi Zero 2 W: avoid slow SD card reads)
+  const relativePath = filePath.replace(PUBLIC_DIR, '');
+  const cached = staticCache.get(relativePath);
+  if (cached) {
+    const contentType = MIME_TYPES[cached.ext] || 'text/plain';
+    res.writeHead(200, { 
+      'Content-Type': contentType,
+      'Cache-Control': 'public, max-age=300',
+      ...SECURITY_HEADERS
+    });
+    res.end(cached.data);
+    return;
+  }
+  
   const normalizedPath = path.normalize(filePath);
   if (!normalizedPath.startsWith(PUBLIC_DIR)) {
     log.warn(`⚠️ Path traversal attempt blocked: ${filePath}`);
@@ -1446,8 +1495,12 @@ const server = http.createServer(async (req, res) => {
       if (req.method === 'GET' && pathname === '/api/status') {
         const config = loadConfig();
         const networkIP = getNetworkIP();
+        const mem = process.memoryUsage();
+        const totalMem = os.totalmem();
+        const freeMem = os.freemem();
         sendJson(res, {
           version: BRIDGE_VERSION,
+          platform: 'pi-zero-2w',
           deviceId: DEVICE_ID,
           port: PORT,
           networkIP: networkIP,
@@ -1465,7 +1518,15 @@ const server = http.createServer(async (req, res) => {
             active: recoveryCheckInterval !== null,
             lastErrorType,
             ipRecoveryAttempts: ipRecoveryState.failedAttempts
-          }
+          },
+          memory: {
+            heapUsedMB: Math.round(mem.heapUsed / 1024 / 1024 * 10) / 10,
+            heapTotalMB: Math.round(mem.heapTotal / 1024 / 1024 * 10) / 10,
+            rssMB: Math.round(mem.rss / 1024 / 1024 * 10) / 10,
+            systemFreeMB: Math.round(freeMem / 1024 / 1024),
+            systemTotalMB: Math.round(totalMem / 1024 / 1024)
+          },
+          cpuLoad: os.loadavg()
         });
         return;
       }
@@ -1637,16 +1698,64 @@ const server = http.createServer(async (req, res) => {
   serveStatic(filePath, res);
 });
 
+// ============ Pi Zero 2 W Optimizations ============
+
+// Periodic GC hint — helps keep memory low on 512MB device
+function scheduleMemoryMaintenance() {
+  setInterval(() => {
+    const mem = process.memoryUsage();
+    const heapMB = Math.round(mem.heapUsed / 1024 / 1024 * 10) / 10;
+    const rssMB = Math.round(mem.rss / 1024 / 1024 * 10) / 10;
+    
+    if (heapMB > 50) {
+      log.warn(`⚠️ [MEMORY] High heap usage: ${heapMB}MB (RSS: ${rssMB}MB)`);
+      // Trim log buffer aggressively if memory is high
+      while (logBuffer.length > 20) {
+        logBuffer.shift();
+      }
+    }
+    
+    // Expose GC if available (run with --expose-gc for best results on Pi)
+    if (global.gc) {
+      global.gc();
+      log.debug(`[MEMORY] GC triggered: heap ${heapMB}MB, RSS ${rssMB}MB`);
+    }
+  }, 5 * 60 * 1000); // Every 5 minutes
+}
+
+// CPU temperature monitoring (Pi-specific)
+function getCPUTemp() {
+  try {
+    const temp = fs.readFileSync('/sys/class/thermal/thermal_zone0/temp', 'utf8');
+    return parseInt(temp.trim()) / 1000;
+  } catch(e) {
+    return null;
+  }
+}
+
 // ============ Main Entry Point ============
 
 async function main() {
   const config = loadConfig();
   
-  log.info(`🚀 Cast Away v${BRIDGE_VERSION} (Pi Edition) starting...`);
+  const totalMemMB = Math.round(os.totalmem() / 1024 / 1024);
+  const cpuCores = os.cpus().length;
+  const cpuModel = os.cpus()[0]?.model || 'unknown';
+  
+  log.info(`🚀 Cast Away v${BRIDGE_VERSION} (Pi Zero 2 W Edition) starting...`);
   log.info(`📋 Device ID: ${DEVICE_ID}`);
+  log.info(`🖥️ Hardware: ${cpuModel} (${cpuCores} cores, ${totalMemMB}MB RAM)`);
   log.info(`🎬 Custom App ID: ${CUSTOM_APP_ID}`);
   log.info(`⚡ Circuit breaker: ${config.circuitBreakerThreshold || 5} failures = ${config.circuitBreakerCooldown || 5}min pause`);
-  log.info(`🔄 Recovery: ${config.cooldownAfterTakeover || 30}s cooldown, exponential backoff`);
+  
+  const cpuTemp = getCPUTemp();
+  if (cpuTemp !== null) {
+    log.info(`🌡️ CPU Temperature: ${cpuTemp.toFixed(1)}°C`);
+  }
+  
+  // Pre-load static files into memory (avoids slow SD card reads)
+  preloadStaticFiles();
+  log.info(`📁 Static files cached: ${staticCache.size} files`);
   
   writeNetworkInfo();
   
@@ -1667,22 +1776,30 @@ async function main() {
   const screensaverMs = (config.screensaverCheckInterval || 60) * 1000;
   setInterval(checkAndActivateScreensaver, screensaverMs);
   
-  // Graceful shutdown
-  process.on('SIGINT', () => {
-    log.info('👋 Shutting down...');
+  // Pi memory maintenance
+  scheduleMemoryMaintenance();
+  
+  // Graceful shutdown — handle both SIGINT and SIGTERM (systemd sends SIGTERM)
+  const gracefulShutdown = (signal) => {
+    log.info(`👋 Shutting down (${signal})...`);
+    destroyBonjour();
     server.close();
     stopRecoveryCheck();
     activeHeartbeats.forEach(h => clearInterval(h));
-    if (client) client.close();
+    if (client) {
+      try { client.close(); } catch(e) {}
+    }
     process.exit(0);
-  });
+  };
+  
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
   
   process.on('uncaughtException', (err) => {
     log.error(`❌ Uncaught exception: ${err.message}`);
     log.error(err.stack || '');
     if (client) {
-      try { client.close(); } catch(e) {
-      }
+      try { client.close(); } catch(e) {}
       client = null;
     }
     screensaverActive = false;
@@ -1691,8 +1808,7 @@ async function main() {
   process.on('unhandledRejection', (reason, promise) => {
     log.error(`❌ Unhandled rejection: ${reason}`);
     if (client) {
-      try { client.close(); } catch(e) {
-      }
+      try { client.close(); } catch(e) {}
       client = null;
     }
     screensaverActive = false;
