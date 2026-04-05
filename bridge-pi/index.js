@@ -1698,16 +1698,64 @@ const server = http.createServer(async (req, res) => {
   serveStatic(filePath, res);
 });
 
+// ============ Pi Zero 2 W Optimizations ============
+
+// Periodic GC hint — helps keep memory low on 512MB device
+function scheduleMemoryMaintenance() {
+  setInterval(() => {
+    const mem = process.memoryUsage();
+    const heapMB = Math.round(mem.heapUsed / 1024 / 1024 * 10) / 10;
+    const rssMB = Math.round(mem.rss / 1024 / 1024 * 10) / 10;
+    
+    if (heapMB > 50) {
+      log.warn(`⚠️ [MEMORY] High heap usage: ${heapMB}MB (RSS: ${rssMB}MB)`);
+      // Trim log buffer aggressively if memory is high
+      while (logBuffer.length > 20) {
+        logBuffer.shift();
+      }
+    }
+    
+    // Expose GC if available (run with --expose-gc for best results on Pi)
+    if (global.gc) {
+      global.gc();
+      log.debug(`[MEMORY] GC triggered: heap ${heapMB}MB, RSS ${rssMB}MB`);
+    }
+  }, 5 * 60 * 1000); // Every 5 minutes
+}
+
+// CPU temperature monitoring (Pi-specific)
+function getCPUTemp() {
+  try {
+    const temp = fs.readFileSync('/sys/class/thermal/thermal_zone0/temp', 'utf8');
+    return parseInt(temp.trim()) / 1000;
+  } catch(e) {
+    return null;
+  }
+}
+
 // ============ Main Entry Point ============
 
 async function main() {
   const config = loadConfig();
   
-  log.info(`🚀 Cast Away v${BRIDGE_VERSION} (Pi Edition) starting...`);
+  const totalMemMB = Math.round(os.totalmem() / 1024 / 1024);
+  const cpuCores = os.cpus().length;
+  const cpuModel = os.cpus()[0]?.model || 'unknown';
+  
+  log.info(`🚀 Cast Away v${BRIDGE_VERSION} (Pi Zero 2 W Edition) starting...`);
   log.info(`📋 Device ID: ${DEVICE_ID}`);
+  log.info(`🖥️ Hardware: ${cpuModel} (${cpuCores} cores, ${totalMemMB}MB RAM)`);
   log.info(`🎬 Custom App ID: ${CUSTOM_APP_ID}`);
   log.info(`⚡ Circuit breaker: ${config.circuitBreakerThreshold || 5} failures = ${config.circuitBreakerCooldown || 5}min pause`);
-  log.info(`🔄 Recovery: ${config.cooldownAfterTakeover || 30}s cooldown, exponential backoff`);
+  
+  const cpuTemp = getCPUTemp();
+  if (cpuTemp !== null) {
+    log.info(`🌡️ CPU Temperature: ${cpuTemp.toFixed(1)}°C`);
+  }
+  
+  // Pre-load static files into memory (avoids slow SD card reads)
+  preloadStaticFiles();
+  log.info(`📁 Static files cached: ${staticCache.size} files`);
   
   writeNetworkInfo();
   
@@ -1728,22 +1776,30 @@ async function main() {
   const screensaverMs = (config.screensaverCheckInterval || 60) * 1000;
   setInterval(checkAndActivateScreensaver, screensaverMs);
   
-  // Graceful shutdown
-  process.on('SIGINT', () => {
-    log.info('👋 Shutting down...');
+  // Pi memory maintenance
+  scheduleMemoryMaintenance();
+  
+  // Graceful shutdown — handle both SIGINT and SIGTERM (systemd sends SIGTERM)
+  const gracefulShutdown = (signal) => {
+    log.info(`👋 Shutting down (${signal})...`);
+    destroyBonjour();
     server.close();
     stopRecoveryCheck();
     activeHeartbeats.forEach(h => clearInterval(h));
-    if (client) client.close();
+    if (client) {
+      try { client.close(); } catch(e) {}
+    }
     process.exit(0);
-  });
+  };
+  
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
   
   process.on('uncaughtException', (err) => {
     log.error(`❌ Uncaught exception: ${err.message}`);
     log.error(err.stack || '');
     if (client) {
-      try { client.close(); } catch(e) {
-      }
+      try { client.close(); } catch(e) {}
       client = null;
     }
     screensaverActive = false;
@@ -1752,8 +1808,7 @@ async function main() {
   process.on('unhandledRejection', (reason, promise) => {
     log.error(`❌ Unhandled rejection: ${reason}`);
     if (client) {
-      try { client.close(); } catch(e) {
-      }
+      try { client.close(); } catch(e) {}
       client = null;
     }
     screensaverActive = false;
