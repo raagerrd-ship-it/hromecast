@@ -1317,6 +1317,20 @@ function serveStatic(filePath, res) {
     return;
   }
   
+  // Check in-memory cache first (Pi Zero 2 W: avoid slow SD card reads)
+  const relativePath = filePath.replace(PUBLIC_DIR, '');
+  const cached = staticCache.get(relativePath);
+  if (cached) {
+    const contentType = MIME_TYPES[cached.ext] || 'text/plain';
+    res.writeHead(200, { 
+      'Content-Type': contentType,
+      'Cache-Control': 'public, max-age=300',
+      ...SECURITY_HEADERS
+    });
+    res.end(cached.data);
+    return;
+  }
+  
   const normalizedPath = path.normalize(filePath);
   if (!normalizedPath.startsWith(PUBLIC_DIR)) {
     log.warn(`⚠️ Path traversal attempt blocked: ${filePath}`);
