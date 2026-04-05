@@ -10,9 +10,18 @@ import { useLanguage } from "@/i18n/LanguageContext";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 const Index = () => {
+  const [copiedPi, setCopiedPi] = useState(false);
   const { downloadBridge, isDownloading } = useDownloadBridge();
   const { language, t } = useLanguage();
   const { version, isLoading: isLoadingVersion } = useLatestVersion(language);
+
+  const piCommand = 'git clone https://github.com/raagerrd-ship-it/hromecast.git && cd hromecast/bridge-pi && chmod +x install-linux.sh && ./install-linux.sh';
+  
+  const copyPiCommand = () => {
+    navigator.clipboard.writeText(piCommand);
+    setCopiedPi(true);
+    setTimeout(() => setCopiedPi(false), 2000);
+  };
 
   return (
     <div className="min-h-screen min-h-[100dvh] flex flex-col safe-top safe-bottom">
