@@ -181,6 +181,14 @@ export const translations = {
     unzipAndRun: 'Extract and run:',
     doneRpi: 'Done! Perfect as always-on bridge',
     rpiTip: 'Raspberry Pi is perfect as a dedicated bridge since it\'s quiet and energy efficient.',
+    rpiGitInstallTitle: 'Cast Away Pi Edition',
+    rpiGitInstallDesc: 'Optimized for Raspberry Pi Zero 2 W. Pure Chromecast logic without Sonos.',
+    rpiGitStep1: 'SSH into your Raspberry Pi and run:',
+    rpiGitStep2Done: 'Done! Bridge starts automatically',
+    rpiGitAutoUpdate: 'Auto-update: Bridge checks GitHub every hour and installs updates automatically.',
+    rpiGitTip: 'Optimized for Pi Zero 2 W (512MB RAM). Lazy mDNS, memory management and SD cache.',
+    rpiGitRequirements: 'Requirements: git and Node.js 18+ (installed automatically)',
+    rpiDownloadAlt: 'Alternative: Download as ZIP',
     
     // Configure step
     openInBrowser: 'Open in browser:',

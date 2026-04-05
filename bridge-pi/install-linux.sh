@@ -198,6 +198,41 @@ EOF
 systemctl --user enable "$SERVICE_NAME-restart.timer"
 systemctl --user start "$SERVICE_NAME-restart.timer"
 
+# 6b. Auto-update via git (om det är en git-klon)
+if [ -f "$SCRIPT_DIR/update.sh" ]; then
+    echo "  Konfigurerar auto-update..."
+    
+    UPDATE_SCRIPT="$SCRIPT_DIR/update.sh"
+    chmod +x "$UPDATE_SCRIPT"
+    
+    cat > "$HOME/.config/systemd/user/$SERVICE_NAME-update.service" << EOF
+[Unit]
+Description=Auto-update Cast Away - $APP_NAME
+
+[Service]
+Type=oneshot
+WorkingDirectory=$SCRIPT_DIR
+ExecStart=/bin/bash $UPDATE_SCRIPT
+Environment=HOME=$HOME
+EOF
+
+    cat > "$HOME/.config/systemd/user/$SERVICE_NAME-update.timer" << EOF
+[Unit]
+Description=Hourly auto-update check for Cast Away - $APP_NAME
+
+[Timer]
+OnCalendar=*-*-* *:15:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+    systemctl --user enable "$SERVICE_NAME-update.timer"
+    systemctl --user start "$SERVICE_NAME-update.timer"
+    echo "  ✓ Auto-update aktiverat (kollar varje timme)"
+fi
+
 # Aktivera lingering för att köra services utan inloggning
 loginctl enable-linger "$USER" 2>/dev/null || true
 
