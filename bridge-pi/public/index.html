@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cast Away</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="header-title">
+        <h1>📺 Cast Away</h1>
+        <span class="version-badge" id="version-badge">v...</span>
+      </div>
+      <div class="status" id="status">
+        <span class="status-dot"></span>
+        <span id="status-text">Ansluter...</span>
+      </div>
+    </header>
+
+    <main>
+      <!-- Device Selection -->
+      <section class="card">
+        <div class="card-header">
+          <h2>Välj Chromecast</h2>
+          <button id="refresh-btn" class="btn btn-secondary" title="Sök efter enheter">
+            🔄 Sök
+          </button>
+        </div>
+        <div class="card-content">
+          <select id="chromecast-select">
+            <option value="">-- Välj enhet --</option>
+          </select>
+          <p class="hint" id="device-count">Söker efter enheter...</p>
+        </div>
+      </section>
+
+      <!-- Screensaver Settings -->
+      <section class="card">
+        <div class="card-header">
+          <h2>Screensaver</h2>
+          <label class="switch">
+            <input type="checkbox" id="enabled-toggle">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="card-content">
+          <div class="form-group">
+            <label for="url-input">URL att visa</label>
+            <input type="url" id="url-input" placeholder="https://example.com/screensaver">
+          </div>
+          <div class="screensaver-status" id="screensaver-status">
+            <span class="status-indicator off"></span>
+            <span>Inaktiv</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Controls -->
+      <section class="card">
+        <div class="card-header">
+          <h2>Kontroller</h2>
+          <span class="receiver-version-badge" id="receiver-version-badge" title="Förväntad receiver-version (TVn bör visa samma)">📺 v...</span>
+        </div>
+        <div class="card-content controls">
+          <button id="cast-btn" class="btn btn-primary">
+            ▶️ Starta nu
+          </button>
+          <button id="stop-btn" class="btn btn-danger">
+            ⏹️ Stoppa
+          </button>
+          <button id="check-btn" class="btn btn-secondary" title="Kontrollera status och återanslut om möjligt">
+            🔍 Kontrollera
+          </button>
+          <button id="reload-receiver-btn" class="btn btn-warning" title="Stoppar och startar om receiver-appen för att tvinga ny version">
+            🔄 Receiver
+          </button>
+        </div>
+      </section>
+
+      <!-- Preview -->
+      <section class="card preview-card">
+        <div class="card-header">
+          <h2>Förhandsvisning</h2>
+        </div>
+        <div class="card-content">
+          <div class="preview-container" id="preview-container">
+            <p class="preview-placeholder">Ange en URL ovan för att se förhandsvisning</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Timing Settings -->
+      <section class="card settings-card">
+        <div class="card-header">
+          <h2>⏱️ Tidsinställningar</h2>
+          <button id="toggle-settings-btn" class="btn btn-secondary btn-small">Visa</button>
+        </div>
+        <div class="card-content settings-content" id="settings-content" style="display: none;">
+          
+          <!-- Group 1: Sökning & Discovery -->
+          <div class="settings-group">
+            <div class="settings-group-header">
+              <h3 class="settings-group-title">🔍 Sökning</h3>
+              <button id="reset-discovery-btn" class="btn btn-secondary btn-small" title="Återställ">↩️</button>
+            </div>
+            <div class="settings-group-content">
+              <div class="setting-item">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">Sök-timeout</div>
+                  <div class="setting-item-hint">Max tid för att hitta enheter</div>
+                </div>
+                <div class="setting-item-input">
+                  <input type="number" id="discovery-timeout-input" min="3" max="30" step="1" value="10">
+                </div>
+              </div>
+              <div class="setting-item">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">Tidig avslutning</div>
+                  <div class="setting-item-hint">Avsluta när enheter hittas</div>
+                </div>
+                <div class="setting-item-input">
+                  <input type="number" id="discovery-early-resolve-input" min="1" max="15" step="1" value="4">
+                </div>
+              </div>
+              <div class="setting-item">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">Retry-fördröjning</div>
+                  <div class="setting-item-hint">Väntetid mellan sökförsök</div>
+                </div>
+                <div class="setting-item-input">
+                  <input type="number" id="discovery-retry-delay-input" min="1" max="30" step="1" value="5">
+                </div>
+              </div>
+              <div class="setting-item">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">Max försök</div>
+                  <div class="setting-item-hint">Antal sökförsök</div>
+                </div>
+                <div class="setting-item-input">
+                  <input type="number" id="discovery-max-retries-input" min="1" max="10" step="1" value="3">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Group 2: Cast & Session -->
+          <div class="settings-group">
+            <div class="settings-group-header">
+              <h3 class="settings-group-title">📺 Cast</h3>
+              <button id="reset-cast-btn" class="btn btn-secondary btn-small" title="Återställ">↩️</button>
+            </div>
+            <div class="settings-group-content">
+              <div class="setting-item">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">Screensaver-kontroll</div>
+                  <div class="setting-item-hint">Hur ofta kolla om ledig (sek)</div>
+                </div>
+                <div class="setting-item-input">
+                  <input type="number" id="screensaver-check-input" min="10" max="600" step="5" value="60">
+                </div>
+              </div>
+              <div class="setting-item">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">Keep-alive</div>
+                  <div class="setting-item-hint">Session-kontroll intervall (sek)</div>
+                </div>
+                <div class="setting-item-input">
+                  <input type="number" id="keep-alive-input" min="1" max="60" step="1" value="5">
+                </div>
+              </div>
+              <div class="setting-item">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">Idle-timeout</div>
+                  <div class="setting-item-hint">Timeout för statuskontroll (sek)</div>
+                </div>
+                <div class="setting-item-input">
+                  <input type="number" id="idle-status-timeout-input" min="1" max="30" step="1" value="5">
+                </div>
+              </div>
+              <div class="setting-item">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">Retry-fördröjning</div>
+                  <div class="setting-item-hint">Bas-fördröjning vid misslyckad cast</div>
+                </div>
+                <div class="setting-item-input">
+                  <input type="number" id="cast-retry-input" min="1" max="30" step="1" value="2">
+                </div>
+              </div>
+              <div class="setting-item">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">Max försök</div>
+                  <div class="setting-item-hint">Antal försök innan ge upp</div>
+                </div>
+                <div class="setting-item-input">
+                  <input type="number" id="cast-max-retries-input" min="1" max="100" step="1" value="3">
+                </div>
+              </div>
+              <div class="setting-item">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">Auto-refresh</div>
+                  <div class="setting-item-hint">Receiver omstart för minne (min). URL skickas 2 min innan.</div>
+                </div>
+                <div class="setting-item-input">
+                  <input type="number" id="receiver-auto-refresh-input" min="15" max="120" step="5" value="45">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Group 3: Återhämtning & Skydd -->
+          <div class="settings-group">
+            <div class="settings-group-header">
+              <h3 class="settings-group-title">🛡️ Skydd</h3>
+              <button id="reset-recovery-btn" class="btn btn-secondary btn-small" title="Återställ">↩️</button>
+            </div>
+            <div class="settings-group-content">
+              <div class="setting-item">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">Takeover cooldown</div>
+                  <div class="setting-item-hint">Väntetid efter app-takeover (sek)</div>
+                </div>
+                <div class="setting-item-input">
+                  <input type="number" id="cooldown-after-takeover-input" min="5" max="300" step="5" value="30">
+                </div>
+              </div>
+              <div class="setting-item">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">Recovery-intervall</div>
+                  <div class="setting-item-hint">Hur ofta kolla återhämtning (sek)</div>
+                </div>
+                <div class="setting-item-input">
+                  <input type="number" id="recovery-check-interval-input" min="5" max="120" step="5" value="10">
+                </div>
+              </div>
+              <div class="setting-item">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">Circuit breaker</div>
+                  <div class="setting-item-hint">Fel-tröskel för att pausa</div>
+                </div>
+                <div class="setting-item-input">
+                  <input type="number" id="circuit-breaker-threshold-input" min="1" max="20" step="1" value="5">
+                </div>
+              </div>
+              <div class="setting-item">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">Breaker paus</div>
+                  <div class="setting-item-hint">Pauslängd vid för många fel (min)</div>
+                </div>
+                <div class="setting-item-input">
+                  <input type="number" id="circuit-breaker-cooldown-input" min="1" max="60" step="1" value="5">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-actions">
+            <button id="restart-btn" class="btn btn-warning" title="Starta om bridge för att tillämpa ändringar">🔄 Starta om</button>
+          </div>
+          <p class="hint settings-note">⚠️ Ändringar kräver omstart</p>
+        </div>
+      </section>
+
+      <!-- Logs -->
+      <section class="card logs-card">
+        <div class="card-header">
+          <h2>📋 Loggar</h2>
+          <div class="log-filters" id="log-filters">
+            <button class="log-filter active" data-filter="cast" title="Cast-händelser">📺 Cast</button>
+            <button class="log-filter active" data-filter="status" title="Statuskontroller">📊 Status</button>
+            <button class="log-filter" data-filter="debug" title="Debug-meddelanden">🔧 Debug</button>
+            <button class="log-filter active" data-filter="error" title="Felmeddelanden">❌ Fel</button>
+            <button class="log-filter active" data-filter="system" title="Systemhändelser">⚙️ System</button>
+          </div>
+          <button id="clear-logs-btn" class="btn btn-secondary btn-small">🗑️ Rensa</button>
+        </div>
+        <div class="card-content">
+          <div class="logs-container" id="logs-container">
+            <p class="logs-placeholder">Inga loggar ännu...</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <section class="card network-card">
+        <div class="card-header">
+          <h2>📱 Anslut från mobil</h2>
+        </div>
+        <div class="card-content">
+          <div class="network-info">
+            <div class="network-row">
+              <span class="network-label">Nätverks-URL:</span>
+              <code id="network-url">-</code>
+              <button id="copy-url-btn" class="btn btn-small">📋 Kopiera</button>
+            </div>
+          </div>
+          <p class="hint">Öppna denna adress i din mobil för att konfigurera bridge:n</p>
+        </div>
+      </section>
+      <p class="footer-info">Device ID: <code id="device-id">-</code> | Port: <code id="port">-</code></p>
+    </footer>
+  </div>
+
+  <!-- Toast notifications -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Restart overlay -->
+  <div id="restart-overlay" class="restart-overlay" style="display: none;">
+    <div class="restart-spinner"></div>
+    <div class="restart-message" id="restart-message">Startar om bridge...</div>
+    <div class="restart-timer" id="restart-timer">0s</div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

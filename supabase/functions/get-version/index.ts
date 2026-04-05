@@ -19,10 +19,26 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.3.64";
-const RELEASED_AT = "2026-04-02";
+const VERSION = "1.4.0";
+const RELEASED_AT = "2026-04-05";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.4.0",
+    date: "2026-04-05",
+    changes: {
+      sv: [
+        "Ny: Cast Away Pi Edition — separat Raspberry Pi-version med ren Chromecast-logik (utan Sonos)",
+        "All Sonos UPnP/SOAP-kod, SSE-streaming, push-synk och Sonos API-routes borttagna",
+        "Optimerat för headless Raspberry Pi-drift med systemd auto-start och nattlig omstart",
+      ],
+      en: [
+        "New: Cast Away Pi Edition — standalone Raspberry Pi version with pure Chromecast logic (no Sonos)",
+        "All Sonos UPnP/SOAP code, SSE streaming, push sync and Sonos API routes removed",
+        "Optimized for headless Raspberry Pi operation with systemd auto-start and nightly restart",
+      ],
+    }
+  },
   {
     version: "1.3.64",
     date: "2026-04-02",
