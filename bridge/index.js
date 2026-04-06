@@ -1801,12 +1801,6 @@ async function main() {
   const screensaverMs = (config.screensaverCheckInterval || 60) * 1000;
   setInterval(checkAndActivateScreensaver, screensaverMs);
   
-  // Start Sonos UPnP event subscription for SSE
-  log.info(`🔊 [SONOS] Starting UPnP event subscription to ${SONOS_IP}...`);
-  subscribeSonosEvents();
-  startPositionBroadcast();
-  log.info(`🔊 [SONOS] Position broadcast started (250ms interval)`);
-  startPeriodicPush();
   
   // Graceful shutdown
   process.on('SIGINT', () => {
