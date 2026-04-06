@@ -19,10 +19,28 @@ type ChangelogEntry = {
   };
 };
 
-const VERSION = "1.4.0";
-const RELEASED_AT = "2026-04-05";
+const VERSION = "1.5.0";
+const RELEASED_AT = "2026-04-06";
 
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.5.0",
+    date: "2026-04-06",
+    changes: {
+      sv: [
+        "Sonos-kod borttagen från Windows/Linux bridge (3046 → 1844 rader)",
+        "Ren Chromecast-logik utan UPnP/SOAP, SSE eller push-synk",
+        "Ny Setup-sida: Linjär Raspberry Pi-guide med SSH-hjälp och CopyBlock-komponent",
+        "Fullständig svenska/engelska-översättning av Setup-sidan",
+      ],
+      en: [
+        "Sonos code removed from Windows/Linux bridge (3046 → 1844 lines)",
+        "Pure Chromecast logic without UPnP/SOAP, SSE or push sync",
+        "New Setup page: Linear Raspberry Pi guide with SSH help and CopyBlock component",
+        "Full Swedish/English translation of Setup page",
+      ],
+    }
+  },
   {
     version: "1.4.0",
     date: "2026-04-05",
