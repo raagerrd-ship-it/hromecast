@@ -118,43 +118,51 @@ const Index = () => {
           </Card>
 
           {/* Raspberry Pi Card */}
-          <Card className="bg-card/50 border-dashed">
-            <CardContent className="pt-4 pb-4">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      <Cpu className="h-4 w-4 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="font-medium text-sm">{t('rpiLandingTitle')}</h3>
-                      <p className="text-xs text-muted-foreground mt-0.5">{t('rpiLandingDesc')}</p>
-                    </div>
+          <Card className="bg-primary/10 border-primary/30">
+            <CardContent className="pt-5 pb-5">
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
+                    <Cpu className="h-5 w-5 text-primary" />
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0 gap-1.5 h-8 text-xs"
-                    onClick={copyPiCommand}
-                  >
-                    {copiedPi ? (
-                      <>
-                        <Check className="h-3 w-3" />
-                        Copied!
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-3 w-3" />
-                        Copy
-                      </>
-                    )}
-                  </Button>
+                  <div>
+                    <h2 className="font-semibold text-base">{t('rpiLandingTitle')}</h2>
+                    <p className="text-sm text-muted-foreground mt-0.5">{t('rpiLandingDesc')}</p>
+                  </div>
                 </div>
-                <div className="bg-muted rounded-lg p-3 overflow-hidden">
-                  <pre className="text-xs font-mono text-muted-foreground leading-relaxed whitespace-pre overflow-x-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
+
+                {/* Steps */}
+                <div className="space-y-2 pl-1">
+                  <div className="flex items-center gap-3 text-sm">
+                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium">1</div>
+                    <span className="font-mono text-xs">ssh pi@&lt;pi-ip&gt;</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm">
+                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium">2</div>
+                    <span>Kör installationskommandot</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm">
+                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium">3</div>
+                    <span className="flex items-center gap-1">
+                      Öppna <code className="bg-background/50 px-1.5 py-0.5 rounded text-xs">&lt;pi-ip&gt;:3000</code>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Copy command block */}
+                <div className="relative bg-muted rounded-lg p-3 overflow-hidden">
+                  <pre className="text-xs font-mono text-muted-foreground leading-relaxed whitespace-pre overflow-x-auto scrollbar-thin pr-10">
                     <code><span className="text-primary/70">$</span> git clone https://github.com/raagerrd-ship-it/hromecast.git{'\n'}<span className="text-primary/70">$</span> cd hromecast/bridge-pi{'\n'}<span className="text-primary/70">$</span> chmod +x install-linux.sh && ./install-linux.sh</code>
                   </pre>
+                  <button
+                    onClick={copyPiCommand}
+                    className="absolute right-2 top-2 p-1.5 rounded-md bg-background/80 border border-foreground/10 opacity-70 hover:opacity-100 transition-opacity"
+                    aria-label="Kopiera"
+                  >
+                    {copiedPi ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+                  </button>
                 </div>
+
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                     <RefreshCw className="h-3 w-3 text-primary/50" />
