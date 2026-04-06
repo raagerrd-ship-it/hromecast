@@ -517,21 +517,37 @@ Device ID: ${DEVICE_ID}
 
 // ============ Config Management ============
 
+// Config cache — avoid repeated disk reads on slow SD card (single-core optimization)
+let configCache = null;
+let configCacheTime = 0;
+const CONFIG_CACHE_TTL = 5000; // 5 seconds
+
 function loadConfig() {
+  const now = Date.now();
+  if (configCache && (now - configCacheTime) < CONFIG_CACHE_TTL) {
+    return configCache;
+  }
   try {
     if (fs.existsSync(CONFIG_FILE)) {
       const data = fs.readFileSync(CONFIG_FILE, 'utf8');
-      return { ...DEFAULT_CONFIG, ...JSON.parse(data) };
+      configCache = { ...DEFAULT_CONFIG, ...JSON.parse(data) };
+      configCacheTime = now;
+      return configCache;
     }
   } catch (error) {
     log.error('Error loading config:', error.message);
   }
-  return { ...DEFAULT_CONFIG };
+  configCache = { ...DEFAULT_CONFIG };
+  configCacheTime = now;
+  return configCache;
 }
 
 function saveConfig(config) {
   try {
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
+    // Invalidate cache immediately on write
+    configCache = { ...DEFAULT_CONFIG, ...config };
+    configCacheTime = Date.now();
     return true;
   } catch (error) {
     log.error('Error saving config:', error.message);

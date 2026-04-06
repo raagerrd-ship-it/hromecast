@@ -164,10 +164,11 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=$APP_DIR
-ExecStart=$(which node) --max-old-space-size=128 --expose-gc index.js
+ExecStart=$(which node) --max-old-space-size=128 --expose-gc --single-threaded --v8-pool-size=0 index.js
 Restart=always
 RestartSec=10
 Environment=NODE_ENV=production
+Environment=UV_THREADPOOL_SIZE=1
 
 # CPU-dedikering för Pi Zero 2 W (kärna 0, lämna kärna 2 fri för OS)
 AllowedCPUs=0
