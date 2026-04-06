@@ -155,10 +155,15 @@ const Index = () => {
                     <code><span className="text-primary/70">$</span> git clone https://github.com/raagerrd-ship-it/hromecast.git{'\n'}<span className="text-primary/70">$</span> cd hromecast/bridge-pi{'\n'}<span className="text-primary/70">$</span> chmod +x install-linux.sh && ./install-linux.sh</code>
                   </pre>
                 </div>
-                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                  <RefreshCw className="h-3 w-3 text-primary/50" />
-                  {t('rpiLandingAutoUpdate')}
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                    <RefreshCw className="h-3 w-3 text-primary/50" />
+                    {t('rpiLandingAutoUpdate')}
+                  </p>
+                  <Link to="/setup" className="text-xs text-primary hover:underline">
+                    {t('detailedInstructions')} →
+                  </Link>
+                </div>
               </div>
             </CardContent>
           </Card>
