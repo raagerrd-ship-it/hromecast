@@ -169,6 +169,11 @@ Restart=always
 RestartSec=10
 Environment=NODE_ENV=production
 
+# CPU-dedikering för Pi Zero 2 W (kärna 0, lämna kärna 2 fri för OS)
+AllowedCPUs=0
+CPUQuota=100%
+Nice=-5
+
 [Install]
 WantedBy=default.target
 EOF
