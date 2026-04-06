@@ -155,6 +155,32 @@ echo "  ✓ Port: $PORT"
 echo "[6/7] Skapar systemd service..."
 mkdir -p "$HOME/.config/systemd/user"
 
+echo ""
+echo "  ┌──────────────────────────────────────────┐"
+echo "  │  CPU-kärna (Pi Zero 2 W har 4 kärnor)    │"
+echo "  │                                          │"
+echo "  │  Rekommenderad fördelning:                │"
+echo "  │    Kärna 0 = Cast Away Web (port 3000)    │"
+echo "  │    Kärna 1 = Annan tjänst  (port 3001)    │"
+echo "  │    Kärna 2 = Ledig för OS/system          │"
+echo "  │    Kärna 3 = Annan tjänst  (port 3002)    │"
+echo "  │                                          │"
+echo "  │  Lämna kärna 2 fri åt Linux-kerneln.      │"
+echo "  └──────────────────────────────────────────┘"
+echo ""
+read -p "  Vilken CPU-kärna ska denna tjänst använda? (0-3, standard: 0): " CPU_CORE_INPUT
+
+if [ -z "$CPU_CORE_INPUT" ]; then
+    CPU_CORE=0
+elif [[ "$CPU_CORE_INPUT" =~ ^[0-3]$ ]]; then
+    CPU_CORE=$CPU_CORE_INPUT
+else
+    echo "  ⚠️ Ogiltigt val, använder kärna 0"
+    CPU_CORE=0
+fi
+
+echo "  ✓ CPU-kärna: $CPU_CORE"
+
 cat > "$HOME/.config/systemd/user/$SERVICE_NAME.service" << EOF
 [Unit]
 Description=Cast Away - $APP_NAME
@@ -170,8 +196,8 @@ RestartSec=10
 Environment=NODE_ENV=production
 Environment=UV_THREADPOOL_SIZE=1
 
-# CPU-dedikering för Pi Zero 2 W (kärna 0, lämna kärna 2 fri för OS)
-AllowedCPUs=0
+# CPU-dedikering för Pi Zero 2 W
+AllowedCPUs=$CPU_CORE
 CPUQuota=100%
 Nice=-5
 
