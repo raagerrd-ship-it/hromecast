@@ -52,19 +52,16 @@ if [ "$EUID" -eq 0 ]; then
 fi
 
 # 1. Kontrollera/installera Node.js
-echo "[1/6] Kontrollerar Node.js..."
+echo "[1/7] Kontrollerar Node.js..."
 if ! command -v node &> /dev/null; then
     echo "  Node.js hittades inte. Försöker installera..."
     
     if command -v apt-get &> /dev/null; then
-        # Debian/Ubuntu/Raspberry Pi
         curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
         sudo apt-get install -y nodejs
     elif command -v dnf &> /dev/null; then
-        # Fedora
         sudo dnf install -y nodejs
     elif command -v pacman &> /dev/null; then
-        # Arch
         sudo pacman -S nodejs npm
     else
         echo "  ❌ Kunde inte installera Node.js automatiskt."
@@ -79,6 +76,7 @@ echo "[2/7] Förbereder uppdatering..."
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STAGING_DIR=$(mktemp -d)
+trap 'rm -rf "$STAGING_DIR"' EXIT
 
 # Kopiera källfiler till staging INNAN vi tar bort APP_DIR
 for file in index.js package.json package-lock.json; do
@@ -86,17 +84,23 @@ for file in index.js package.json package-lock.json; do
         cp "$SCRIPT_DIR/$file" "$STAGING_DIR/"
     fi
 done
-if [ -d "$SCRIPT_DIR/public" ]; then
+if [ -d "$SCRIPT_DIR/public" ] && ls "$SCRIPT_DIR/public/"* &>/dev/null; then
     mkdir -p "$STAGING_DIR/public"
     cp -r "$SCRIPT_DIR/public/"* "$STAGING_DIR/public/"
 fi
 echo "  ✓ Källfiler staged"
 
+# Verifiera att vi har nödvändiga filer
+if [ ! -f "$STAGING_DIR/index.js" ] || [ ! -f "$STAGING_DIR/package.json" ]; then
+    echo "  ❌ Saknar index.js eller package.json i källmappen!"
+    echo "     Kontrollera att du kör scriptet från rätt katalog."
+    exit 1
+fi
+
 # Försök pausa befintlig bridge gracefully
 if systemctl --user is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
     echo "  Pausar befintlig bridge..."
     
-    # Anropa prepare-update endpoint
     curl -s -X POST "http://localhost:$PORT/api/prepare-update" --connect-timeout 3 > /dev/null 2>&1 && {
         echo "  ✓ Bridge pausad gracefully"
         sleep 2
@@ -124,12 +128,9 @@ echo "[3/7] Kopierar filer..."
 
 cp "$STAGING_DIR"/*.js "$APP_DIR/" 2>/dev/null || true
 cp "$STAGING_DIR"/*.json "$APP_DIR/" 2>/dev/null || true
-if [ -d "$STAGING_DIR/public" ]; then
+if [ -d "$STAGING_DIR/public" ] && ls "$STAGING_DIR/public/"* &>/dev/null; then
     cp -r "$STAGING_DIR/public/"* "$APP_DIR/public/"
 fi
-
-# Rensa staging
-rm -rf "$STAGING_DIR"
 
 echo "  ✓ Filer kopierade"
 
@@ -161,6 +162,7 @@ echo "  ✓ Port: $PORT"
 echo "[6/7] Skapar systemd service..."
 mkdir -p "$HOME/.config/systemd/user"
 
+NODE_PATH=$(which node)
 cat > "$HOME/.config/systemd/user/$SERVICE_NAME.service" << EOF
 [Unit]
 Description=Chromecast Bridge - $APP_NAME
@@ -170,7 +172,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=$APP_DIR
-ExecStart=$(which node) index.js
+ExecStart=$NODE_PATH index.js
 Restart=always
 RestartSec=10
 Environment=NODE_ENV=production
@@ -204,6 +206,9 @@ EOF
 systemctl --user enable "$SERVICE_NAME-restart.timer"
 systemctl --user start "$SERVICE_NAME-restart.timer"
 
+# 7. Aktivera och starta
+echo "[7/7] Startar service..."
+
 # Aktivera lingering för att köra services utan inloggning
 loginctl enable-linger "$USER" 2>/dev/null || true
 
@@ -215,7 +220,7 @@ systemctl --user start "$SERVICE_NAME"
 echo "  ✓ Service skapad och startad"
 
 # Hämta IP-adress
-IP_ADDR=$(hostname -I | awk '{print $1}')
+IP_ADDR=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "okänd")
 
 echo ""
 echo "========================================"

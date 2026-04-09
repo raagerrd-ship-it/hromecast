@@ -86,14 +86,25 @@ for install in "${TO_UNINSTALL[@]}"; do
     IFS='|' read -r service_name folder_path <<< "$install"
     
     if [ -n "$service_name" ]; then
-        echo "  Stoppar service: $service_name"
-        systemctl --user stop "$service_name" 2>/dev/null || true
+        # Stoppa och inaktivera alla relaterade units
+        for unit in "$service_name" "$service_name-restart" "$service_name-update"; do
+            systemctl --user stop "$unit" 2>/dev/null || true
+            systemctl --user disable "$unit" 2>/dev/null || true
+        done
         
-        echo "  Inaktiverar service: $service_name"
-        systemctl --user disable "$service_name" 2>/dev/null || true
+        # Stoppa och inaktivera timers
+        for timer in "$service_name-restart" "$service_name-update"; do
+            systemctl --user stop "$timer.timer" 2>/dev/null || true
+            systemctl --user disable "$timer.timer" 2>/dev/null || true
+        done
         
-        echo "  Tar bort service-fil"
+        # Ta bort alla service- och timer-filer
+        echo "  Tar bort service-filer för $service_name..."
         rm -f "$HOME/.config/systemd/user/$service_name.service"
+        rm -f "$HOME/.config/systemd/user/$service_name-restart.service"
+        rm -f "$HOME/.config/systemd/user/$service_name-restart.timer"
+        rm -f "$HOME/.config/systemd/user/$service_name-update.service"
+        rm -f "$HOME/.config/systemd/user/$service_name-update.timer"
     fi
     
     if [ -n "$folder_path" ] && [ -d "$folder_path" ]; then
