@@ -69,8 +69,26 @@ if [ "$SWAP_TOTAL" -lt 100 ] 2>/dev/null; then
     echo ""
 fi
 
-# 2. Förbereda uppdatering - pausa aktiv bridge
+# 2. Förbereda uppdatering - kopiera källfiler till temp först
 echo "[2/7] Förbereder uppdatering..."
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+STAGING_DIR=$(mktemp -d)
+
+# Kopiera källfiler till staging INNAN vi tar bort APP_DIR
+for file in index.js package.json package-lock.json; do
+    if [ -f "$SCRIPT_DIR/$file" ]; then
+        cp "$SCRIPT_DIR/$file" "$STAGING_DIR/"
+    fi
+done
+if [ -d "$SCRIPT_DIR/public" ]; then
+    mkdir -p "$STAGING_DIR/public"
+    cp -r "$SCRIPT_DIR/public/"* "$STAGING_DIR/public/"
+fi
+if [ -f "$SCRIPT_DIR/update.sh" ]; then
+    cp "$SCRIPT_DIR/update.sh" "$STAGING_DIR/"
+fi
+echo "  ✓ Källfiler staged"
 
 if systemctl --user is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
     echo "  Pausar befintlig bridge..."
