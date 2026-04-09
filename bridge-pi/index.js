@@ -1862,6 +1862,7 @@ async function main() {
   // Graceful shutdown — handle both SIGINT and SIGTERM (systemd sends SIGTERM)
   const gracefulShutdown = (signal) => {
     log.info(`👋 Shutting down (${signal})...`);
+    stopHealthcheck();
     destroyBonjour();
     server.close();
     stopRecoveryCheck();
