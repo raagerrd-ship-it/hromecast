@@ -159,7 +159,7 @@ echo "  ✓ Port: $PORT"
 echo "[6/7] Skapar systemd service..."
 mkdir -p "$HOME/.config/systemd/user"
 
-NODE_PATH=$(which node)
+NODE_PATH=$(command -v node)
 cat > "$HOME/.config/systemd/user/$SERVICE_NAME.service" << EOF
 [Unit]
 Description=Cast Away - $APP_NAME
