@@ -1,7 +1,10 @@
 #!/bin/bash
 # Cast Away - Raspberry Pi Installer (Pi Dashboard Integration)
 
-set -e
+set -euo pipefail
+
+# Fånga fel och rapportera vilken rad som failade
+trap 'echo "❌ Fel på rad $LINENO (exit-kod: $?)" >&2' ERR
 
 DEFAULT_APP_NAME="cast-away"
 DEFAULT_PORT=3000
@@ -21,10 +24,17 @@ done
 
 APP_NAME="$DEFAULT_APP_NAME"
 SERVICE_NAME="$DEFAULT_APP_NAME"
+
+# Säkerställ att HOME är satt
+if [ -z "${HOME:-}" ]; then
+    HOME=$(eval echo "~$(whoami)")
+    export HOME
+fi
+
 APP_DIR="$HOME/.local/share/$APP_NAME"
 
 # Säkerhetskontroll: APP_DIR måste vara en rimlig sökväg
-if [ -z "$HOME" ] || [ -z "$APP_NAME" ] || [[ "$APP_DIR" != "$HOME/"* ]]; then
+if [ -z "$APP_NAME" ] || [[ "$APP_DIR" != "$HOME/"* ]]; then
     echo "❌ Kunde inte bestämma installationsmapp (HOME=$HOME, APP=$APP_NAME)"
     exit 1
 fi
@@ -37,12 +47,14 @@ echo ""
 echo "  Port: $PORT"
 echo "  CPU-kärna: $CPU_CORE"
 echo "  Mapp: $APP_DIR"
+echo "  Användare: $(whoami)"
 echo ""
 
 # Kontrollera att vi inte kör som root
-if [ "$EUID" -eq 0 ]; then
+if [ "${EUID:-$(id -u)}" -eq 0 ]; then
     echo "❌ Kör inte detta script som root!"
     exit 1
+fi
 fi
 
 # 1. Kontrollera/installera Node.js
