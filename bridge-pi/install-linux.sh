@@ -55,7 +55,6 @@ if [ "${EUID:-$(id -u)}" -eq 0 ]; then
     echo "❌ Kör inte detta script som root!"
     exit 1
 fi
-fi
 
 # 1. Kontrollera/installera Node.js
 echo "[1/7] Kontrollerar Node.js..."
