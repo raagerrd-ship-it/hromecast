@@ -1856,6 +1856,9 @@ async function main() {
   // Pi memory maintenance
   scheduleMemoryMaintenance();
   
+  // Healthcheck heartbeat file for Pi Dashboard
+  startHealthcheck();
+  
   // Graceful shutdown — handle both SIGINT and SIGTERM (systemd sends SIGTERM)
   const gracefulShutdown = (signal) => {
     log.info(`👋 Shutting down (${signal})...`);
