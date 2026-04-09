@@ -23,6 +23,12 @@ APP_NAME="$DEFAULT_APP_NAME"
 SERVICE_NAME="$DEFAULT_APP_NAME"
 APP_DIR="$HOME/.local/share/$APP_NAME"
 
+# Säkerhetskontroll: APP_DIR måste vara en rimlig sökväg
+if [ -z "$HOME" ] || [ -z "$APP_NAME" ] || [[ "$APP_DIR" != "$HOME/"* ]]; then
+    echo "❌ Kunde inte bestämma installationsmapp (HOME=$HOME, APP=$APP_NAME)"
+    exit 1
+fi
+
 echo ""
 echo "========================================"
 echo "  Cast Away – Raspberry Pi Installer"

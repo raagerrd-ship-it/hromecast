@@ -3,8 +3,20 @@
 
 set -e
 
+# Kontrollera att vi inte kör som root
+if [ "$EUID" -eq 0 ]; then
+    echo "❌ Kör inte detta script som root!"
+    exit 1
+fi
+
 SERVICE_NAME="cast-away"
 APP_DIR="$HOME/.local/share/$SERVICE_NAME"
+
+# Säkerhetskontroll
+if [ -z "$HOME" ] || [[ "$APP_DIR" != "$HOME/"* ]]; then
+    echo "❌ Kunde inte bestämma installationsmapp"
+    exit 1
+fi
 
 echo ""
 echo "========================================"
