@@ -74,8 +74,23 @@ if ! command -v node &> /dev/null; then
 fi
 echo "  ✓ Node.js $(node --version)"
 
-# 2. Förbereda uppdatering - pausa aktiv bridge
+# 2. Förbereda uppdatering - kopiera källfiler till temp först
 echo "[2/7] Förbereder uppdatering..."
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+STAGING_DIR=$(mktemp -d)
+
+# Kopiera källfiler till staging INNAN vi tar bort APP_DIR
+for file in index.js package.json package-lock.json; do
+    if [ -f "$SCRIPT_DIR/$file" ]; then
+        cp "$SCRIPT_DIR/$file" "$STAGING_DIR/"
+    fi
+done
+if [ -d "$SCRIPT_DIR/public" ]; then
+    mkdir -p "$STAGING_DIR/public"
+    cp -r "$SCRIPT_DIR/public/"* "$STAGING_DIR/public/"
+fi
+echo "  ✓ Källfiler staged"
 
 # Försök pausa befintlig bridge gracefully
 if systemctl --user is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
@@ -104,23 +119,17 @@ mkdir -p "$APP_DIR/public"
 
 echo "  ✓ $APP_DIR"
 
-# 3. Kopiera filer
+# 3. Kopiera filer från staging
 echo "[3/7] Kopierar filer..."
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Kopiera huvudfiler
-for file in index.js package.json package-lock.json; do
-    if [ -f "$SCRIPT_DIR/$file" ]; then
-        cp "$SCRIPT_DIR/$file" "$APP_DIR/"
-        echo "  Kopierade $file"
-    fi
-done
-
-# Kopiera public-mapp
-if [ -d "$SCRIPT_DIR/public" ]; then
-    cp -r "$SCRIPT_DIR/public/"* "$APP_DIR/public/"
-    echo "  Kopierade public-mapp"
+cp "$STAGING_DIR"/*.js "$APP_DIR/" 2>/dev/null || true
+cp "$STAGING_DIR"/*.json "$APP_DIR/" 2>/dev/null || true
+if [ -d "$STAGING_DIR/public" ]; then
+    cp -r "$STAGING_DIR/public/"* "$APP_DIR/public/"
 fi
+
+# Rensa staging
+rm -rf "$STAGING_DIR"
 
 echo "  ✓ Filer kopierade"
 
