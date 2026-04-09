@@ -12,17 +12,17 @@ echo "  Cast Away Avinstallation"
 echo "========================================"
 echo ""
 
-# Stoppa och inaktivera alla relaterade tjänster
+# Stoppa och inaktivera alla relaterade tjänster och timers
 for unit in "$SERVICE_NAME" "$SERVICE_NAME-restart" "$SERVICE_NAME-update"; do
-    if systemctl --user is-active --quiet "$unit" 2>/dev/null || \
-       systemctl --user is-enabled --quiet "$unit" 2>/dev/null; then
-        echo "  Stoppar $unit..."
-        systemctl --user stop "$unit" 2>/dev/null || true
-        systemctl --user disable "$unit" 2>/dev/null || true
-    fi
+    systemctl --user stop "$unit" 2>/dev/null || true
+    systemctl --user disable "$unit" 2>/dev/null || true
+done
+for timer in "$SERVICE_NAME-restart" "$SERVICE_NAME-update"; do
+    systemctl --user stop "$timer.timer" 2>/dev/null || true
+    systemctl --user disable "$timer.timer" 2>/dev/null || true
 done
 
-# Ta bort service-filer
+# Ta bort service- och timer-filer
 echo "  Tar bort service-filer..."
 rm -f "$HOME/.config/systemd/user/$SERVICE_NAME.service"
 rm -f "$HOME/.config/systemd/user/$SERVICE_NAME-restart.service"
