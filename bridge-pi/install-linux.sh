@@ -1,53 +1,41 @@
 #!/bin/bash
-# Cast Away - Raspberry Pi Installer (Multi-Instance Support)
+# Cast Away - Raspberry Pi Installer (Pi Dashboard Integration)
 
 set -e
 
 DEFAULT_APP_NAME="cast-away"
 DEFAULT_PORT=3000
+DEFAULT_CORE=0
+
+# Parse arguments from Pi Dashboard
+PORT=$DEFAULT_PORT
+CPU_CORE=$DEFAULT_CORE
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --port) PORT="$2"; shift 2 ;;
+    --core) CPU_CORE="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+
+APP_NAME="$DEFAULT_APP_NAME"
+SERVICE_NAME="$DEFAULT_APP_NAME"
+APP_DIR="$HOME/.local/share/$APP_NAME"
 
 echo ""
 echo "========================================"
 echo "  Cast Away – Raspberry Pi Installer"
 echo "========================================"
 echo ""
-
-# Fråga om instansnamn
-echo "Om du vill köra flera bridges (t.ex. en per rum), ge varje ett unikt namn."
-echo "Lämna tomt för standardinstallation."
-echo ""
-read -p "Instansnamn (tryck Enter för standard): " INSTANCE_NAME
-
-if [ -z "$INSTANCE_NAME" ]; then
-    APP_NAME="$DEFAULT_APP_NAME"
-    SERVICE_NAME="$DEFAULT_APP_NAME"
-    PORT=$DEFAULT_PORT
-else
-    CLEAN_NAME=$(echo "$INSTANCE_NAME" | tr -cd '[:alnum:]-' | tr '[:upper:]' '[:lower:]')
-    APP_NAME="$DEFAULT_APP_NAME-$CLEAN_NAME"
-    SERVICE_NAME="$DEFAULT_APP_NAME-$CLEAN_NAME"
-    
-    read -p "Port (standard: $DEFAULT_PORT): " PORT_INPUT
-    if [ -z "$PORT_INPUT" ]; then
-        PORT=$DEFAULT_PORT
-    else
-        PORT=$PORT_INPUT
-    fi
-fi
-
-APP_DIR="$HOME/.local/share/$APP_NAME"
-
-echo ""
-echo "Installation:"
-echo "  Namn: $APP_NAME"
 echo "  Port: $PORT"
+echo "  CPU-kärna: $CPU_CORE"
 echo "  Mapp: $APP_DIR"
 echo ""
 
 # Kontrollera att vi inte kör som root
 if [ "$EUID" -eq 0 ]; then
     echo "❌ Kör inte detta script som root!"
-    echo "   Använd: ./install-linux.sh"
     exit 1
 fi
 
@@ -136,9 +124,6 @@ echo "  ✓ Dependencies installerade"
 # 5. Skapa .env-fil
 echo "[5/7] Skapar konfiguration..."
 DEVICE_ID=$(hostname | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]-')
-if [ -n "$CLEAN_NAME" ]; then
-    DEVICE_ID="$DEVICE_ID-$CLEAN_NAME"
-fi
 
 cat > "$APP_DIR/.env" << EOF
 # Cast Away Configuration
@@ -154,32 +139,6 @@ echo "  ✓ Port: $PORT"
 # 6. Skapa systemd user service
 echo "[6/7] Skapar systemd service..."
 mkdir -p "$HOME/.config/systemd/user"
-
-echo ""
-echo "  ┌──────────────────────────────────────────┐"
-echo "  │  CPU-kärna (Pi Zero 2 W har 4 kärnor)    │"
-echo "  │                                          │"
-echo "  │  Rekommenderad fördelning:                │"
-echo "  │    Kärna 0 = Cast Away Web (port 3000)    │"
-echo "  │    Kärna 1 = Annan tjänst  (port 3001)    │"
-echo "  │    Kärna 2 = Ledig för OS/system          │"
-echo "  │    Kärna 3 = Annan tjänst  (port 3002)    │"
-echo "  │                                          │"
-echo "  │  Lämna kärna 2 fri åt Linux-kerneln.      │"
-echo "  └──────────────────────────────────────────┘"
-echo ""
-read -p "  Vilken CPU-kärna ska denna tjänst använda? (0-3, standard: 0): " CPU_CORE_INPUT
-
-if [ -z "$CPU_CORE_INPUT" ]; then
-    CPU_CORE=0
-elif [[ "$CPU_CORE_INPUT" =~ ^[0-3]$ ]]; then
-    CPU_CORE=$CPU_CORE_INPUT
-else
-    echo "  ⚠️ Ogiltigt val, använder kärna 0"
-    CPU_CORE=0
-fi
-
-echo "  ✓ CPU-kärna: $CPU_CORE"
 
 cat > "$HOME/.config/systemd/user/$SERVICE_NAME.service" << EOF
 [Unit]
@@ -283,21 +242,10 @@ echo "========================================"
 echo "  Installation klar!"
 echo "========================================"
 echo ""
-echo "Öppna webbläsaren och gå till:"
+echo "  http://localhost:$PORT"
+echo "  http://$IP_ADDR:$PORT"
 echo ""
-echo "  Lokal:  http://localhost:$PORT"
-echo "  LAN:    http://$IP_ADDR:$PORT"
-echo ""
-echo "Där kan du välja Chromecast och konfigurera screensaver."
-echo ""
-echo "Device ID: $DEVICE_ID"
-echo "Service:   $SERVICE_NAME"
-echo ""
-echo "Användbara kommandon:"
-echo "  Status:  systemctl --user status $SERVICE_NAME"
-echo "  Loggar:  journalctl --user -u $SERVICE_NAME -f"
-echo "  Stoppa:  systemctl --user stop $SERVICE_NAME"
-echo "  Starta:  systemctl --user start $SERVICE_NAME"
-echo ""
-echo "För att avinstallera: ./uninstall-linux.sh"
+echo "  Device ID: $DEVICE_ID"
+echo "  Service:   $SERVICE_NAME"
+echo "  CPU-kärna: $CPU_CORE"
 echo ""
