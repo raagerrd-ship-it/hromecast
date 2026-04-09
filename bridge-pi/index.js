@@ -10,6 +10,19 @@ const Bonjour = require('bonjour-service').Bonjour;
 const BRIDGE_VERSION = '1.4.0';
 const PI_OPTIMIZED = true; // Flag for Pi-specific behavior
 
+// Git commit hash — resolved once at startup
+const { execSync } = require('child_process');
+let GIT_COMMIT = 'unknown';
+let GIT_COMMIT_SHORT = 'unknown';
+let GIT_BRANCH = 'unknown';
+try {
+  GIT_COMMIT = execSync('git rev-parse HEAD', { cwd: __dirname, timeout: 3000 }).toString().trim();
+  GIT_COMMIT_SHORT = GIT_COMMIT.substring(0, 7);
+  GIT_BRANCH = execSync('git rev-parse --abbrev-ref HEAD', { cwd: __dirname, timeout: 3000 }).toString().trim();
+} catch (e) {
+  // Not a git repo or git not available
+}
+
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
 
@@ -1514,7 +1527,8 @@ const server = http.createServer(async (req, res) => {
         const mem = process.memoryUsage();
         const totalMem = os.totalmem();
         const freeMem = os.freemem();
-        sendJson(res, {
+          commit: GIT_COMMIT_SHORT,
+          branch: GIT_BRANCH,
           version: BRIDGE_VERSION,
           platform: 'pi-zero-2w',
           deviceId: DEVICE_ID,
@@ -1547,6 +1561,18 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       
+      // GET /api/version
+      if (req.method === 'GET' && pathname === '/api/version') {
+        sendJson(res, {
+          name: 'cast-away',
+          version: BRIDGE_VERSION,
+          commit: GIT_COMMIT,
+          commitShort: GIT_COMMIT_SHORT,
+          branch: GIT_BRANCH
+        });
+        return;
+      }
+
       // GET /api/logs
       if (req.method === 'GET' && pathname === '/api/logs') {
         sendJson(res, { logs: logBuffer });
