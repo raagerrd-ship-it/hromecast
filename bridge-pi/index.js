@@ -1527,7 +1527,8 @@ const server = http.createServer(async (req, res) => {
         const mem = process.memoryUsage();
         const totalMem = os.totalmem();
         const freeMem = os.freemem();
-        sendJson(res, {
+          commit: GIT_COMMIT_SHORT,
+          branch: GIT_BRANCH,
           version: BRIDGE_VERSION,
           platform: 'pi-zero-2w',
           deviceId: DEVICE_ID,
