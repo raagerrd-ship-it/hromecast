@@ -69,8 +69,26 @@ if [ "$SWAP_TOTAL" -lt 100 ] 2>/dev/null; then
     echo ""
 fi
 
-# 2. Förbereda uppdatering - pausa aktiv bridge
+# 2. Förbereda uppdatering - kopiera källfiler till temp först
 echo "[2/7] Förbereder uppdatering..."
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+STAGING_DIR=$(mktemp -d)
+
+# Kopiera källfiler till staging INNAN vi tar bort APP_DIR
+for file in index.js package.json package-lock.json; do
+    if [ -f "$SCRIPT_DIR/$file" ]; then
+        cp "$SCRIPT_DIR/$file" "$STAGING_DIR/"
+    fi
+done
+if [ -d "$SCRIPT_DIR/public" ]; then
+    mkdir -p "$STAGING_DIR/public"
+    cp -r "$SCRIPT_DIR/public/"* "$STAGING_DIR/public/"
+fi
+if [ -f "$SCRIPT_DIR/update.sh" ]; then
+    cp "$SCRIPT_DIR/update.sh" "$STAGING_DIR/"
+fi
+echo "  ✓ Källfiler staged"
 
 if systemctl --user is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
     echo "  Pausar befintlig bridge..."
@@ -97,20 +115,13 @@ mkdir -p "$APP_DIR/public"
 
 echo "  ✓ $APP_DIR"
 
-# 3. Kopiera filer
+# 3. Kopiera filer från staging
 echo "[3/7] Kopierar filer..."
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-for file in index.js package.json package-lock.json; do
-    if [ -f "$SCRIPT_DIR/$file" ]; then
-        cp "$SCRIPT_DIR/$file" "$APP_DIR/"
-        echo "  Kopierade $file"
-    fi
-done
-
-if [ -d "$SCRIPT_DIR/public" ]; then
-    cp -r "$SCRIPT_DIR/public/"* "$APP_DIR/public/"
-    echo "  Kopierade public-mapp"
+cp "$STAGING_DIR"/*.js "$APP_DIR/" 2>/dev/null || true
+cp "$STAGING_DIR"/*.json "$APP_DIR/" 2>/dev/null || true
+if [ -d "$STAGING_DIR/public" ]; then
+    cp -r "$STAGING_DIR/public/"* "$APP_DIR/public/"
 fi
 
 echo "  ✓ Filer kopierade"
@@ -190,11 +201,12 @@ systemctl --user enable "$SERVICE_NAME-restart.timer"
 systemctl --user start "$SERVICE_NAME-restart.timer"
 
 # 6b. Auto-update via git (om det är en git-klon)
-if [ -f "$SCRIPT_DIR/update.sh" ]; then
+if [ -f "$STAGING_DIR/update.sh" ]; then
     echo "  Konfigurerar auto-update..."
     
-    UPDATE_SCRIPT="$SCRIPT_DIR/update.sh"
-    chmod +x "$UPDATE_SCRIPT"
+    # Kopiera update.sh till APP_DIR så den överlever staging-cleanup
+    cp "$STAGING_DIR/update.sh" "$APP_DIR/update.sh"
+    chmod +x "$APP_DIR/update.sh"
     
     cat > "$HOME/.config/systemd/user/$SERVICE_NAME-update.service" << EOF
 [Unit]
@@ -202,8 +214,8 @@ Description=Auto-update Cast Away - $APP_NAME
 
 [Service]
 Type=oneshot
-WorkingDirectory=$SCRIPT_DIR
-ExecStart=/bin/bash $UPDATE_SCRIPT
+WorkingDirectory=$APP_DIR
+ExecStart=/bin/bash $APP_DIR/update.sh
 Environment=HOME=$HOME
 EOF
 
@@ -223,6 +235,9 @@ EOF
     systemctl --user start "$SERVICE_NAME-update.timer"
     echo "  ✓ Auto-update aktiverat (kollar varje timme)"
 fi
+
+# Rensa staging
+rm -rf "$STAGING_DIR"
 
 # Aktivera lingering för att köra services utan inloggning
 loginctl enable-linger "$USER" 2>/dev/null || true
