@@ -115,20 +115,13 @@ mkdir -p "$APP_DIR/public"
 
 echo "  ✓ $APP_DIR"
 
-# 3. Kopiera filer
+# 3. Kopiera filer från staging
 echo "[3/7] Kopierar filer..."
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-for file in index.js package.json package-lock.json; do
-    if [ -f "$SCRIPT_DIR/$file" ]; then
-        cp "$SCRIPT_DIR/$file" "$APP_DIR/"
-        echo "  Kopierade $file"
-    fi
-done
-
-if [ -d "$SCRIPT_DIR/public" ]; then
-    cp -r "$SCRIPT_DIR/public/"* "$APP_DIR/public/"
-    echo "  Kopierade public-mapp"
+cp "$STAGING_DIR"/*.js "$APP_DIR/" 2>/dev/null || true
+cp "$STAGING_DIR"/*.json "$APP_DIR/" 2>/dev/null || true
+if [ -d "$STAGING_DIR/public" ]; then
+    cp -r "$STAGING_DIR/public/"* "$APP_DIR/public/"
 fi
 
 echo "  ✓ Filer kopierade"
