@@ -1560,6 +1560,18 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       
+      // GET /api/version
+      if (req.method === 'GET' && pathname === '/api/version') {
+        sendJson(res, {
+          name: 'cast-away',
+          version: BRIDGE_VERSION,
+          commit: GIT_COMMIT,
+          commitShort: GIT_COMMIT_SHORT,
+          branch: GIT_BRANCH
+        });
+        return;
+      }
+
       // GET /api/logs
       if (req.method === 'GET' && pathname === '/api/logs') {
         sendJson(res, { logs: logBuffer });
