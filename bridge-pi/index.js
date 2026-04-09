@@ -10,6 +10,19 @@ const Bonjour = require('bonjour-service').Bonjour;
 const BRIDGE_VERSION = '1.4.0';
 const PI_OPTIMIZED = true; // Flag for Pi-specific behavior
 
+// Git commit hash — resolved once at startup
+const { execSync } = require('child_process');
+let GIT_COMMIT = 'unknown';
+let GIT_COMMIT_SHORT = 'unknown';
+let GIT_BRANCH = 'unknown';
+try {
+  GIT_COMMIT = execSync('git rev-parse HEAD', { cwd: __dirname, timeout: 3000 }).toString().trim();
+  GIT_COMMIT_SHORT = GIT_COMMIT.substring(0, 7);
+  GIT_BRANCH = execSync('git rev-parse --abbrev-ref HEAD', { cwd: __dirname, timeout: 3000 }).toString().trim();
+} catch (e) {
+  // Not a git repo or git not available
+}
+
 // Update state - when true, pauses screensaver activation
 let updateInProgress = false;
 
