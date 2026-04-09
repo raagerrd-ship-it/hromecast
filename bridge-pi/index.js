@@ -1776,6 +1776,40 @@ function getCPUTemp() {
   }
 }
 
+// Healthcheck — write a heartbeat file to /tmp so Pi Dashboard can verify
+// the process is alive without polling the HTTP port
+const HEALTHCHECK_FILE = `/tmp/${DEVICE_ID || 'cast-away'}.health`;
+const HEALTHCHECK_INTERVAL = 15_000; // 15 seconds
+let healthcheckTimer = null;
+
+function writeHealthcheck() {
+  try {
+    const mem = process.memoryUsage();
+    const data = JSON.stringify({
+      pid: process.pid,
+      ts: Date.now(),
+      uptime: Math.round(process.uptime()),
+      port: PORT,
+      heapMB: Math.round(mem.heapUsed / 1024 / 1024 * 10) / 10,
+      active: screensaverActive
+    });
+    fs.writeFileSync(HEALTHCHECK_FILE, data);
+  } catch(e) { /* /tmp write should never fail, but don't crash if it does */ }
+}
+
+function startHealthcheck() {
+  writeHealthcheck(); // immediate first write
+  healthcheckTimer = setInterval(writeHealthcheck, HEALTHCHECK_INTERVAL);
+}
+
+function stopHealthcheck() {
+  if (healthcheckTimer) {
+    clearInterval(healthcheckTimer);
+    healthcheckTimer = null;
+  }
+  try { fs.unlinkSync(HEALTHCHECK_FILE); } catch(e) {}
+}
+
 // ============ Main Entry Point ============
 
 async function main() {
@@ -1822,9 +1856,13 @@ async function main() {
   // Pi memory maintenance
   scheduleMemoryMaintenance();
   
+  // Healthcheck heartbeat file for Pi Dashboard
+  startHealthcheck();
+  
   // Graceful shutdown — handle both SIGINT and SIGTERM (systemd sends SIGTERM)
   const gracefulShutdown = (signal) => {
     log.info(`👋 Shutting down (${signal})...`);
+    stopHealthcheck();
     destroyBonjour();
     server.close();
     stopRecoveryCheck();
