@@ -31,7 +31,6 @@ fi
 cd "$GIT_ROOT"
 
 # Determine where bridge-pi source files live relative to git root
-# Could be a monorepo (files in bridge-pi/) or standalone repo (files in root)
 if [ -d "$GIT_ROOT/bridge-pi" ]; then
     SOURCE_DIR="$GIT_ROOT/bridge-pi"
     DIFF_PATH="bridge-pi/"
@@ -57,8 +56,14 @@ fi
 
 echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Updating: $LOCAL -> $REMOTE"
 
-# Pull changes
-git pull origin main --quiet
+# Pull changes — reset on failure to avoid stuck state
+git pull origin main --quiet 2>/dev/null || {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Pull failed, resetting to remote..."
+    git reset --hard origin/main 2>/dev/null || {
+        echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Reset failed, skipping"
+        exit 0
+    }
+}
 
 # Check if relevant files changed
 if [ -n "$DIFF_PATH" ]; then
@@ -81,7 +86,7 @@ if [ "$SOURCE_DIR" != "$APP_DIR" ]; then
             cp "$SOURCE_DIR/$file" "$APP_DIR/"
         fi
     done
-    if [ -d "$SOURCE_DIR/public" ]; then
+    if [ -d "$SOURCE_DIR/public" ] && ls "$SOURCE_DIR/public/"* &>/dev/null; then
         mkdir -p "$APP_DIR/public"
         cp -r "$SOURCE_DIR/public/"* "$APP_DIR/public/"
     fi
@@ -97,7 +102,7 @@ fi
 
 if [ -n "$PKG_CHANGED" ]; then
     echo "$(date '+%Y-%m-%d %H:%M:%S') [update] package.json changed, reinstalling deps..."
-    cd "$APP_DIR" && npm install --production --quiet 2>/dev/null
+    cd "$APP_DIR" && npm install --production --quiet
 fi
 
 # Restart service
