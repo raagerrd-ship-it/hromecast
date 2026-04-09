@@ -4,7 +4,7 @@
 set -e
 
 # Kontrollera att vi inte kör som root
-if [ "$EUID" -eq 0 ]; then
+if [ "${EUID:-$(id -u)}" -eq 0 ]; then
     echo "❌ Kör inte detta script som root!"
     exit 1
 fi
