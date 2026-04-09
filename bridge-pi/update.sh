@@ -6,29 +6,39 @@ set -e
 
 DEFAULT_APP_NAME="cast-away"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APP_DIR="$SCRIPT_DIR"
 
-# Detect instance name from directory
+# Detect service name from directory
 DIR_NAME=$(basename "$SCRIPT_DIR")
-if [ "$DIR_NAME" = "bridge-pi" ] || [ "$DIR_NAME" = "hromecast" ]; then
+if [ "$DIR_NAME" = "$DEFAULT_APP_NAME" ]; then
     SERVICE_NAME="$DEFAULT_APP_NAME"
 else
     INSTANCE=$(echo "$DIR_NAME" | sed "s/^${DEFAULT_APP_NAME}-//")
     SERVICE_NAME="$DEFAULT_APP_NAME-$INSTANCE"
 fi
 
-# Check if we're in a git repo
-if [ ! -d "$SCRIPT_DIR/.git" ] && [ ! -d "$SCRIPT_DIR/../.git" ]; then
+# Find the git repo root — could be APP_DIR itself or a parent
+GIT_ROOT=""
+if [ -d "$SCRIPT_DIR/.git" ]; then
+    GIT_ROOT="$SCRIPT_DIR"
+elif [ -d "$SCRIPT_DIR/../.git" ]; then
+    GIT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+else
     echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Not a git repo, skipping"
     exit 0
 fi
 
-# Find git root
-GIT_ROOT="$SCRIPT_DIR"
-if [ -d "$SCRIPT_DIR/../.git" ]; then
-    GIT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-fi
-
 cd "$GIT_ROOT"
+
+# Determine where bridge-pi source files live relative to git root
+# Could be a monorepo (files in bridge-pi/) or standalone repo (files in root)
+if [ -d "$GIT_ROOT/bridge-pi" ]; then
+    SOURCE_DIR="$GIT_ROOT/bridge-pi"
+    DIFF_PATH="bridge-pi/"
+else
+    SOURCE_DIR="$GIT_ROOT"
+    DIFF_PATH=""
+fi
 
 # Fetch latest
 git fetch origin main --quiet 2>/dev/null || {
@@ -50,46 +60,47 @@ echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Updating: $LOCAL -> $REMOTE"
 # Pull changes
 git pull origin main --quiet
 
-# Check if bridge-pi files changed
-CHANGED=$(git diff --name-only "$LOCAL" "$REMOTE" -- bridge-pi/ 2>/dev/null | head -1)
+# Check if relevant files changed
+if [ -n "$DIFF_PATH" ]; then
+    CHANGED=$(git diff --name-only "$LOCAL" "$REMOTE" -- "$DIFF_PATH" 2>/dev/null | head -1)
+else
+    CHANGED=$(git diff --name-only "$LOCAL" "$REMOTE" 2>/dev/null | head -1)
+fi
 
 if [ -z "$CHANGED" ]; then
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [update] No bridge-pi changes, skipping restart"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [update] No relevant changes, skipping restart"
     exit 0
 fi
 
-echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Bridge files changed, reinstalling..."
+echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Files changed, updating..."
 
-# Re-run installer in the bridge-pi directory
-cd "$GIT_ROOT/bridge-pi"
-
-# Install dependencies if package.json changed
-if git diff --name-only "$LOCAL" "$REMOTE" -- bridge-pi/package.json | grep -q .; then
-    APP_DIR="$HOME/.local/share/$SERVICE_NAME"
-    if [ -d "$APP_DIR" ]; then
-        cp bridge-pi/package.json "$APP_DIR/" 2>/dev/null || true
-        cd "$APP_DIR" && npm install --production --quiet 2>/dev/null
-        cd "$GIT_ROOT/bridge-pi"
-    fi
-fi
-
-# Copy updated files to install directory
-APP_DIR="$HOME/.local/share/$SERVICE_NAME"
-if [ -d "$APP_DIR" ]; then
+# If source dir != app dir, copy files over
+if [ "$SOURCE_DIR" != "$APP_DIR" ]; then
     for file in index.js package.json; do
-        if [ -f "$file" ]; then
-            cp "$file" "$APP_DIR/"
+        if [ -f "$SOURCE_DIR/$file" ]; then
+            cp "$SOURCE_DIR/$file" "$APP_DIR/"
         fi
     done
-    
-    if [ -d "public" ]; then
+    if [ -d "$SOURCE_DIR/public" ]; then
         mkdir -p "$APP_DIR/public"
-        cp -r public/* "$APP_DIR/public/"
+        cp -r "$SOURCE_DIR/public/"* "$APP_DIR/public/"
     fi
-    
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Files copied, restarting service..."
-    systemctl --user restart "$SERVICE_NAME" 2>/dev/null || true
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Done! Now running $(git rev-parse --short HEAD)"
-else
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Install dir not found ($APP_DIR), run install-linux.sh first"
 fi
+
+# Reinstall dependencies if package.json changed
+PKG_CHANGED=""
+if [ -n "$DIFF_PATH" ]; then
+    PKG_CHANGED=$(git diff --name-only "$LOCAL" "$REMOTE" -- "${DIFF_PATH}package.json" 2>/dev/null | head -1)
+else
+    PKG_CHANGED=$(git diff --name-only "$LOCAL" "$REMOTE" -- "package.json" 2>/dev/null | head -1)
+fi
+
+if [ -n "$PKG_CHANGED" ]; then
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [update] package.json changed, reinstalling deps..."
+    cd "$APP_DIR" && npm install --production --quiet 2>/dev/null
+fi
+
+# Restart service
+echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Restarting service..."
+systemctl --user restart "$SERVICE_NAME" 2>/dev/null || true
+echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Done! Now running $(cd "$GIT_ROOT" && git rev-parse --short HEAD)"
