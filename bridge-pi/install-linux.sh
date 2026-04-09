@@ -201,11 +201,12 @@ systemctl --user enable "$SERVICE_NAME-restart.timer"
 systemctl --user start "$SERVICE_NAME-restart.timer"
 
 # 6b. Auto-update via git (om det är en git-klon)
-if [ -f "$SCRIPT_DIR/update.sh" ]; then
+if [ -f "$STAGING_DIR/update.sh" ]; then
     echo "  Konfigurerar auto-update..."
     
-    UPDATE_SCRIPT="$SCRIPT_DIR/update.sh"
-    chmod +x "$UPDATE_SCRIPT"
+    # Kopiera update.sh till APP_DIR så den överlever staging-cleanup
+    cp "$STAGING_DIR/update.sh" "$APP_DIR/update.sh"
+    chmod +x "$APP_DIR/update.sh"
     
     cat > "$HOME/.config/systemd/user/$SERVICE_NAME-update.service" << EOF
 [Unit]
@@ -213,8 +214,8 @@ Description=Auto-update Cast Away - $APP_NAME
 
 [Service]
 Type=oneshot
-WorkingDirectory=$SCRIPT_DIR
-ExecStart=/bin/bash $UPDATE_SCRIPT
+WorkingDirectory=$APP_DIR
+ExecStart=/bin/bash $APP_DIR/update.sh
 Environment=HOME=$HOME
 EOF
 
@@ -234,6 +235,9 @@ EOF
     systemctl --user start "$SERVICE_NAME-update.timer"
     echo "  ✓ Auto-update aktiverat (kollar varje timme)"
 fi
+
+# Rensa staging
+rm -rf "$STAGING_DIR"
 
 # Aktivera lingering för att köra services utan inloggning
 loginctl enable-linger "$USER" 2>/dev/null || true
