@@ -24,6 +24,10 @@ if [ -z "$INSTANCE_NAME" ]; then
     PORT=$DEFAULT_PORT
 else
     CLEAN_NAME=$(echo "$INSTANCE_NAME" | tr -cd '[:alnum:]-' | tr '[:upper:]' '[:lower:]')
+    if [ -z "$CLEAN_NAME" ]; then
+        echo "❌ Ogiltigt instansnamn – måste innehålla minst ett alfanumeriskt tecken."
+        exit 1
+    fi
     APP_NAME="$DEFAULT_APP_NAME-$CLEAN_NAME"
     SERVICE_NAME="$DEFAULT_APP_NAME-$CLEAN_NAME"
     
@@ -36,6 +40,12 @@ else
 fi
 
 APP_DIR="$HOME/.local/share/$APP_NAME"
+
+# Säkerhetskontroll: APP_DIR måste vara en rimlig sökväg
+if [ -z "$HOME" ] || [ -z "$APP_NAME" ] || [[ "$APP_DIR" != "$HOME/"* ]]; then
+    echo "❌ Kunde inte bestämma installationsmapp (HOME=$HOME, APP=$APP_NAME)"
+    exit 1
+fi
 
 echo ""
 echo "Installation:"

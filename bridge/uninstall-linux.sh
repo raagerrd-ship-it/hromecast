@@ -1,6 +1,11 @@
 #!/bin/bash
 # Chromecast Bridge - Linux Uninstaller (Multi-Instance Support)
 
+# Kontrollera att vi inte kör som root
+if [ "$EUID" -eq 0 ]; then
+    echo "❌ Kör inte detta script som root!"
+    exit 1
+fi
 echo ""
 echo "========================================"
 echo "  Chromecast Bridge Avinstallation"
