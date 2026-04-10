@@ -7,11 +7,15 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      VITE_SUPABASE_PROJECT_ID: "umxwaxzmoxwasryjibhe"
+      VITE_SUPABASE_URL: "https://umxwaxzmoxwasryjibhe.supabase.co"
+      VITE_SUPABASE_PUBLISHABLE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVteHdheHptb3h3YXNyeWppYmhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0OTc3OTgsImV4cCI6MjA4MDA3Mzc5OH0.R4hVdnkp310Wk-g0jZfy52EwxfV6z3Pfnv6uwhsf0ps"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       # Install frontend deps and build
       - run: npm ci
@@ -20,7 +24,7 @@ jobs:
       # Install bridge-pi production deps
       - run: cd bridge-pi && npm ci --omit=dev
 
-      # Package bridge-pi + node_modules + frontend dist
+      # Package bridge-pi + frontend dist
       - run: tar czf dist.tar.gz bridge-pi/ dist/
 
       - uses: softprops/action-gh-release@v2
