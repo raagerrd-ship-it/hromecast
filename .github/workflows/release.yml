@@ -1,0 +1,33 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Install frontend deps and build
+      - run: npm ci
+      - run: npm run build
+
+      # Install bridge-pi production deps
+      - run: cd bridge-pi && npm ci --omit=dev
+
+      # Package bridge-pi + node_modules + frontend dist
+      - run: tar czf dist.tar.gz bridge-pi/ dist/
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest Build
+          body: Automated release from main branch
+          files: dist.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
