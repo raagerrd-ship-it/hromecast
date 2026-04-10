@@ -1,5 +1,8 @@
 name: Build and Release
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 on:
   push:
     branches: [main]
@@ -17,14 +20,9 @@ jobs:
         with:
           node-version: 22
 
-      # Install frontend deps and build
       - run: npm ci
       - run: npm run build
-
-      # Install bridge-pi production deps
-      - run: cd bridge-pi && npm ci --omit=dev
-
-      # Package bridge-pi + frontend dist
+      - run: cd bridge-pi && npm install --omit=dev --package-lock=false
       - run: tar czf dist.tar.gz bridge-pi/ dist/
 
       - uses: softprops/action-gh-release@v2
