@@ -1604,11 +1604,27 @@ const server = http.createServer(async (req, res) => {
           return;
         }
         
+        // BYPASS circuit breaker for manual checks
+        const wasBreakerOpen = circuitBreakerState.isOpen;
+        if (wasBreakerOpen) {
+          log.info('⚡ [CIRCUIT] Manual check - bypassing circuit breaker');
+          circuitBreakerState.isOpen = false;
+          circuitBreakerState.failures = 0;
+        }
+        
+        // Reset IP recovery backoff for manual checks
+        resetIPRecoveryBackoff();
+        
+        // Run fresh discovery to get current IP
+        log.info('🔍 Running fresh discovery before manual check...');
+        await discoverDevicesWithRetry();
+        
         // Run status check immediately
         const result = await isChromecastIdleWithRecovery(config.selectedChromecast);
         
         if (result.status === 'idle' && config.enabled && config.url) {
           log.info('✅ Device idle - triggering cast...');
+          stopRecoveryCheck();
           try {
             await castMedia(config.selectedChromecast, config.url);
             sendJson(res, { success: true, status: 'cast_triggered', deviceStatus: result });
@@ -1616,6 +1632,7 @@ const server = http.createServer(async (req, res) => {
             sendJson(res, { success: false, status: 'cast_failed', error: error.message, deviceStatus: result });
           }
         } else if (result.status === 'our_app') {
+          stopRecoveryCheck();
           sendJson(res, { success: true, status: 'already_running', deviceStatus: result });
         } else {
           sendJson(res, { success: true, status: result.status, deviceStatus: result });
