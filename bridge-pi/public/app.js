@@ -1,5 +1,7 @@
-// API helpers
-const API_BASE = '';
+// API helpers — Engine runs on UI port + 50 (Pi Control Center convention)
+const UI_PORT = parseInt(window.location.port) || 3002;
+const ENGINE_PORT = UI_PORT + 50;
+const API_BASE = `http://${window.location.hostname}:${ENGINE_PORT}`;
 
 async function api(path, options = {}) {
   const res = await fetch(API_BASE + path, {
