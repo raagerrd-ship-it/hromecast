@@ -23,10 +23,29 @@ jobs:
         with:
           node-version: 22
 
+      # Build the main website (Vite/React)
       - run: npm ci
       - run: npm run build
-      - run: cd bridge-pi && npm install --omit=dev --package-lock=false
-      - run: tar czf dist.tar.gz bridge-pi/ dist/
+
+      # Prepare engine with production dependencies
+      - name: Prepare Engine
+        working-directory: bridge-pi/engine
+        run: npm install --omit=dev --package-lock=false
+
+      # Package for Pi Control Center:
+      # - engine/ with node_modules (Node.js backend)
+      # - dist/ (static UI from public/)
+      # - scripts/ (install, update, uninstall)
+      - name: Create tarball
+        working-directory: bridge-pi
+        run: |
+          mkdir -p ../release-staging/dist
+          cp -r engine ../release-staging/engine
+          cp -r public/* ../release-staging/dist/
+          cp -r scripts ../release-staging/scripts
+          chmod +x ../release-staging/scripts/*.sh
+          cd ../release-staging
+          tar czf ../dist.tar.gz engine/ dist/ scripts/
 
       - uses: softprops/action-gh-release@v2
         with:
