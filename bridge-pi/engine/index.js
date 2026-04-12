@@ -27,6 +27,7 @@ try {
 let updateInProgress = false;
 
 // Configuration
+const startTime = Date.now();
 const CONFIG_FILE = path.join(__dirname, 'config.json');
 const PORT = parseInt(process.env.PORT || '3052');
 const UI_PORT = parseInt(process.env.UI_PORT || '3002');
@@ -1380,12 +1381,20 @@ const server = http.createServer(async (req, res) => {
       // GET /api/health — required by Pi Control Center
       if (req.method === 'GET' && pathname === '/api/health') {
         const mem = process.memoryUsage();
+        const rssMB = Math.round(mem.rss / 1024 / 1024);
+        let healthStatus = 'ok';
+        if (rssMB > 100) healthStatus = 'degraded';
         sendJson(res, {
-          status: 'ok',
-          uptime: process.uptime(),
-          heapMB: Math.round(mem.heapUsed / 1024 / 1024 * 10) / 10,
-          screensaverActive,
-          devices: discoveredDevices.length
+          status: healthStatus,
+          service: 'cast-away-engine',
+          version: BRIDGE_VERSION,
+          uptime: Math.floor((Date.now() - startTime) / 1000),
+          memory: {
+            rss: rssMB,
+            heapUsed: Math.round(mem.heapUsed / 1024 / 1024),
+            heapTotal: Math.round(mem.heapTotal / 1024 / 1024)
+          },
+          timestamp: new Date().toISOString()
         });
         return;
       }
