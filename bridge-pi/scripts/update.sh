@@ -1,12 +1,13 @@
 #!/bin/bash
-# Cast Away — Auto-update script
-# Pulls latest changes from GitHub and restarts the engine if updated
+# Cast Away — Update script (fallback for Pi Control Center)
+# PCC normally handles updates via release download.
+# This script is called as fallback when releaseUrl is unavailable.
+# PCC handles service restarts AFTER this script completes.
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-SERVICE_NAME="cast-away-engine"
 
 # Find the git repo root
 GIT_ROOT=""
@@ -47,6 +48,13 @@ fi
 
 echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Updating: $LOCAL -> $REMOTE"
 
+# Graceful shutdown — stop screensaver and disconnect Chromecast before update
+ENGINE_PORT="${ENGINE_PORT:-3052}"
+curl -sf -X POST "http://localhost:${ENGINE_PORT}/api/prepare-update" 2>/dev/null && {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Engine preparing for update..."
+    sleep 2
+} || true
+
 # Pull changes — reset on failure to avoid stuck state
 git pull origin main --quiet 2>/dev/null || {
     echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Pull failed, resetting to remote..."
@@ -64,7 +72,7 @@ else
 fi
 
 if [ -z "$CHANGED" ]; then
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [update] No relevant changes, skipping restart"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [update] No relevant changes, skipping"
     exit 0
 fi
 
@@ -72,7 +80,6 @@ echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Files changed, updating..."
 
 # Reinstall engine dependencies if package.json changed
 PKG_PATH="${DIFF_PATH}engine/package.json"
-PKG_CHANGED=""
 if [ -n "$DIFF_PATH" ]; then
     PKG_CHANGED=$(git diff --name-only "$LOCAL" "$REMOTE" -- "$PKG_PATH" 2>/dev/null | head -1)
 else
@@ -83,19 +90,9 @@ if [ -n "$PKG_CHANGED" ]; then
     echo "$(date '+%Y-%m-%d %H:%M:%S') [update] engine/package.json changed, reinstalling deps..."
     ENGINE_DIR="$SOURCE_DIR/engine"
     if [ -d "$ENGINE_DIR" ]; then
-        cd "$ENGINE_DIR" && npm install --production --quiet
+        cd "$ENGINE_DIR" && npm install --omit=dev --quiet
     fi
 fi
 
-# Restart engine service
-echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Restarting engine..."
-systemctl --user restart "$SERVICE_NAME" 2>/dev/null || true
-
-# Restart UI service if UI files changed
-UI_CHANGED=$(git diff --name-only "$LOCAL" "$REMOTE" -- "${DIFF_PATH}public/" 2>/dev/null | head -1)
-if [ -n "$UI_CHANGED" ]; then
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [update] UI files changed, restarting UI..."
-    systemctl --user restart "cast-away-ui" 2>/dev/null || true
-fi
-
-echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Done! Now running $(cd "$GIT_ROOT" && git rev-parse --short HEAD)"
+# PCC handles service restarts — do NOT restart here
+echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Done! Now at $(cd "$GIT_ROOT" && git rev-parse --short HEAD)"
