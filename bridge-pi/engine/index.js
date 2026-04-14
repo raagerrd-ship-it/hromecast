@@ -6,8 +6,8 @@ const os = require('os');
 const castv2 = require('castv2');
 const Bonjour = require('bonjour-service').Bonjour;
 
-// Version - Cast Away Pi Edition (optimized for Raspberry Pi Zero 2 W)
-const BRIDGE_VERSION = '2.0.0';
+// Version — read from package.json as single source of truth
+const BRIDGE_VERSION = require('./package.json').version;
 const PI_OPTIMIZED = true; // Flag for Pi-specific behavior
 
 // Git commit hash — resolved once at startup
