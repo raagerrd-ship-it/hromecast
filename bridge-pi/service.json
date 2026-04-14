@@ -1,0 +1,25 @@
+{
+  "key": "cast-away",
+  "name": "Cast Away",
+  "repo": "https://github.com/raagerrd-ship-it/cast-away-web.git",
+  "releaseUrl": "https://api.github.com/repos/raagerrd-ship-it/cast-away-web/releases/latest",
+  "installDir": "/opt/cast-away",
+  "installScript": "scripts/install.sh",
+  "runInstallOnRelease": true,
+  "updateScript": "/opt/cast-away/scripts/update.sh",
+  "uninstallScript": "scripts/uninstall.sh",
+  "components": {
+    "engine": {
+      "type": "node",
+      "entrypoint": "engine/index.js",
+      "service": "cast-away-engine",
+      "alwaysOn": true
+    },
+    "ui": {
+      "type": "static",
+      "entrypoint": "dist/",
+      "service": "cast-away-ui",
+      "alwaysOn": false
+    }
+  }
+}
