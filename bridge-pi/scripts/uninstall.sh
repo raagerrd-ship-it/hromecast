@@ -2,7 +2,7 @@
 # Cast Away — Uninstaller
 # systemd services are managed by Pi Control Center — this script only cleans files
 
-INSTALL_DIR="${1:-$HOME/.local/share/cast-away}"
+INSTALL_DIR="${1:-/opt/cast-away}"
 
 if [ -n "$INSTALL_DIR" ] && [ -d "$INSTALL_DIR" ]; then
     echo "  Removing $INSTALL_DIR..."
