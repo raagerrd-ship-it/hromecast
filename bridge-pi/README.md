@@ -2,22 +2,22 @@
 
 Ren Chromecast-screensaver-bridge för Raspberry Pi. Inga Sonos-beroenden, inga molntjänster – allt körs lokalt.
 
-## Hur det fungerar
+## Arkitektur
 
-1. Bridge:n körs på en Raspberry Pi (eller annan Linux-enhet) i ditt lokala nätverk
-2. Den upptäcker Chromecast-enheter automatiskt via mDNS
-3. Du konfigurerar skärmsläckaren via webbgränssnittet på `http://<pi-ip>:3000`
-4. Bridge:n aktiverar skärmsläckaren automatiskt när Chromecast:en är inaktiv
+Cast Away körs som en tjänst i **Pi Control Center** (PCC) med två komponenter:
 
-## Snabbinstallation
+- **Engine** (`engine/index.js`) — Node.js-backend som hanterar Chromecast-discovery, casting och API
+- **UI** (`dist/`) — Statiskt webbgränssnitt för konfiguration
 
-```bash
-cd cast-away-pi
-chmod +x install-linux.sh
-./install-linux.sh
-```
+Portkonvention: Om UI körs på port `N`, lyssnar engine på port `N + 50`.
 
-## Manuell installation
+## Installation via Pi Control Center
+
+Cast Away installeras och hanteras automatiskt via PCC. Se [Pi Control Center](https://github.com/raagerrd-ship-it/pi-control-center) för instruktioner.
+
+Tjänsten definieras i `service.json` och inkluderar installations-, uppdaterings- och avinstallationsskript i `scripts/`.
+
+## Manuell utveckling
 
 ### Förutsättningar
 - Node.js 18 eller senare
@@ -26,7 +26,7 @@ chmod +x install-linux.sh
 ### Steg
 
 ```bash
-cd bridge-pi
+cd bridge-pi/engine
 npm install
 cp .env.example .env
 # Redigera .env med ditt DEVICE_ID
@@ -36,30 +36,17 @@ npm start
 ## Konfiguration
 
 - `DEVICE_ID`: Unikt namn för denna bridge-instans
-- `PORT`: HTTP-port för webbgränssnittet (standard: 3000)
+- `PORT`: HTTP-port för engine (standard: 3052 via PCC)
 
-## Webbgränssnitt
+## API-endpoints
 
-Öppna `http://<pi-ip>:3000` för att:
-- Välja vilken Chromecast som ska användas
-- Ange URL för skärmsläckaren
-- Aktivera/inaktivera automatisk skärmsläckare
-- Manuellt starta/stoppa casting
-
-## Köra som bakgrundstjänst (systemd)
-
-Installationsskriptet skapar automatiskt en systemd user service:
-
-```bash
-systemctl --user status cast-away
-systemctl --user stop cast-away
-systemctl --user start cast-away
-journalctl --user -u cast-away -f
-```
-
-## Flera instanser
-
-Kör flera bridge-instanser (t.ex. en per rum) genom att ange olika instansnamn vid installation. Varje instans får sin egen port och konfiguration.
+| Endpoint | Beskrivning |
+|---|---|
+| `/api/health` | Hälsostatus (PCC-kompatibel) |
+| `/api/version` | Version och git-info |
+| `/api/status` | Hårdvarustatus (CPU, minne, temperatur) |
+| `/api/devices` | Upptäckta Chromecast-enheter |
+| `/api/config` | Läs/skriv konfiguration |
 
 ## Felsökning
 
