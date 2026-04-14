@@ -43,9 +43,10 @@ jobs:
           cp -r engine ../release-staging/engine
           cp -r public/* ../release-staging/dist/
           cp -r scripts ../release-staging/scripts
+          cp service.json ../release-staging/
           chmod +x ../release-staging/scripts/*.sh
           cd ../release-staging
-          tar czf ../dist.tar.gz engine/ dist/ scripts/
+          tar czf ../dist.tar.gz engine/ dist/ scripts/ service.json
 
       - uses: softprops/action-gh-release@v2
         with:
