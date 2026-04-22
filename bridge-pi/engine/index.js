@@ -159,18 +159,135 @@ function categorizeLog(level, msg) {
   return 'system';
 }
 
+function trimLogMessage(msg) {
+  const message = String(msg || '');
+  if (message.length <= MAX_LOG_MESSAGE_LENGTH) {
+    return message;
+  }
+  return `${message.slice(0, MAX_LOG_MESSAGE_LENGTH)}…`;
+}
+
+function sanitizeLogArgs(args) {
+  if (!args || args.length === 0) {
+    return undefined;
+  }
+
+  const sanitized = args
+    .map((arg) => {
+      if (arg == null) return arg;
+      if (typeof arg === 'string') {
+        return arg.length > MAX_LOG_ARG_LENGTH ? `${arg.slice(0, MAX_LOG_ARG_LENGTH)}…` : arg;
+      }
+      if (typeof arg === 'number' || typeof arg === 'boolean') {
+        return arg;
+      }
+
+      try {
+        const serialized = JSON.stringify(arg);
+        if (!serialized) return undefined;
+        return serialized.length > MAX_LOG_ARG_LENGTH ? `${serialized.slice(0, MAX_LOG_ARG_LENGTH)}…` : serialized;
+      } catch (error) {
+        return '[unserializable]';
+      }
+    })
+    .filter((arg) => arg !== undefined);
+
+  return sanitized.length > 0 ? sanitized : undefined;
+}
+
+function trimLogBuffer(targetSize = LOG_BUFFER_SIZE) {
+  if (logBuffer.length <= targetSize) {
+    return;
+  }
+
+  logBuffer = logBuffer.slice(-targetSize);
+}
+
+function updateDiscoveryCache(devices) {
+  discoveredDevices = devices;
+  discoveredDevicesExpiresAt = Date.now() + (devices.length > 0 ? DISCOVERY_CACHE_TTL_MS : DISCOVERY_IDLE_TTL_MS);
+}
+
+function maybeExpireDiscoveredDevices(force = false) {
+  if (discoveredDevices.length === 0) {
+    return;
+  }
+
+  if (force || (!screensaverActive && Date.now() > discoveredDevicesExpiresAt)) {
+    discoveredDevices = [];
+    discoveredDevicesExpiresAt = 0;
+  }
+}
+
+function getCompactMemoryStats(mem = process.memoryUsage()) {
+  return {
+    heapUsedMB: Math.round(mem.heapUsed / 1024 / 1024 * 10) / 10,
+    heapTotalMB: Math.round(mem.heapTotal / 1024 / 1024 * 10) / 10,
+    rssMB: Math.round(mem.rss / 1024 / 1024 * 10) / 10
+  };
+}
+
+function buildStatusSnapshot() {
+  const config = loadConfig();
+  const networkIP = getNetworkIP();
+  const mem = process.memoryUsage();
+  const freeMem = os.freemem();
+  const totalMem = os.totalmem();
+
+  return {
+    commit: GIT_COMMIT_SHORT,
+    branch: GIT_BRANCH,
+    version: BRIDGE_VERSION,
+    platform: 'pi-zero-2w',
+    deviceId: DEVICE_ID,
+    port: PORT,
+    uiPort: UI_PORT,
+    networkIP,
+    networkUrl: `http://${networkIP}:${UI_PORT}`,
+    devices: discoveredDevices.length,
+    selectedChromecast: config.selectedChromecast,
+    screensaverActive,
+    uptime: process.uptime(),
+    lastDeviceCheck,
+    circuitBreaker: {
+      isOpen: circuitBreakerState.isOpen,
+      failures: circuitBreakerState.failures
+    },
+    recovery: {
+      active: recoveryCheckInterval !== null,
+      lastErrorType,
+      ipRecoveryAttempts: ipRecoveryState.failedAttempts
+    },
+    memory: {
+      ...getCompactMemoryStats(mem),
+      systemFreeMB: Math.round(freeMem / 1024 / 1024),
+      systemTotalMB: Math.round(totalMem / 1024 / 1024)
+    },
+    cpuLoad: os.loadavg()
+  };
+}
+
+function getStatusSnapshot(force = false) {
+  const now = Date.now();
+  if (!force && statusSnapshotCache && (now - statusSnapshotCacheTime) < STATUS_CACHE_TTL_MS) {
+    return statusSnapshotCache;
+  }
+
+  statusSnapshotCache = buildStatusSnapshot();
+  statusSnapshotCacheTime = now;
+  return statusSnapshotCache;
+}
+
 function addToLogBuffer(level, msg, args) {
   const entry = {
     timestamp: new Date().toISOString(),
     level,
-    message: msg,
+    message: trimLogMessage(msg),
     category: categorizeLog(level, msg),
-    args: args.length > 0 ? args : undefined
+    args: sanitizeLogArgs(args)
   };
   logBuffer.push(entry);
-  if (logBuffer.length > LOG_BUFFER_SIZE) {
-    logBuffer.shift();
-  }
+  trimLogBuffer();
 }
 
 const log = {
