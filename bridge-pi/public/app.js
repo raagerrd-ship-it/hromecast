@@ -97,7 +97,12 @@ const elements = {
 let state = {
   settings: {},
   devices: [],
-  isLoading: false
+  isLoading: false,
+  previewActive: false,
+  previewUrl: '',
+  lastStatusFingerprint: '',
+  lastLogsFingerprint: '',
+  lastRenderedLogs: []
 };
 
 // Log filter state (debug OFF by default)
@@ -108,6 +113,11 @@ let logFilters = JSON.parse(localStorage.getItem('logFilters')) || {
   error: true,
   system: true
 };
+
+const POLL_INTERVAL_FALLBACK_SECONDS = 60;
+const LOG_POLL_INTERVAL_MS = 15000;
+let statusPollInterval = null;
+let logsPollInterval = null;
 
 // ============ UI Updates ============
 
