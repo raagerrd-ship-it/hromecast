@@ -28,12 +28,30 @@ let updateInProgress = false;
 
 // Configuration
 const startTime = Date.now();
-const CONFIG_FILE = path.join(__dirname, 'config.json');
+const PCC_CONFIG_DIR = process.env.PCC_CONFIG_DIR?.trim();
+const PCC_LOG_DIR = process.env.PCC_LOG_DIR?.trim();
 const PORT = parseInt(process.env.PORT || '3052');
 const UI_PORT = parseInt(process.env.UI_PORT || '3002');
 const DEVICE_ID = process.env.DEVICE_ID || 'default-bridge';
+const DATA_DIR = PCC_CONFIG_DIR || __dirname;
+const LOG_DIR = PCC_LOG_DIR || __dirname;
+const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
+const NETWORK_INFO_FILE = path.join(LOG_DIR, 'network-info.txt');
+const HEALTHCHECK_FILE = path.join(LOG_DIR, `${DEVICE_ID || 'cast-away'}.health`);
+const ENGINE_LOG_FILE = path.join(LOG_DIR, 'engine.log');
 const CUSTOM_APP_ID = 'FE376873';
 const BACKDROP_APP_ID = 'E8C28D3C';
+
+function ensureDirectory(dirPath, label) {
+  try {
+    fs.mkdirSync(dirPath, { recursive: true });
+  } catch (error) {
+    console.error(`[ERROR] Failed to create ${label} directory (${dirPath}): ${error.message}`);
+  }
+}
+
+ensureDirectory(DATA_DIR, 'config');
+ensureDirectory(LOG_DIR, 'log');
 
 // Lazy Bonjour init — only create when needed, destroy after discovery to free memory
 let bonjour = null;
@@ -203,6 +221,22 @@ function trimLogBuffer(targetSize = LOG_BUFFER_SIZE) {
   logBuffer = logBuffer.slice(-targetSize);
 }
 
+function appendRuntimeLog(level, msg, args) {
+  const line = [
+    `[${level.toUpperCase()}]`,
+    new Date().toISOString(),
+    '-',
+    trimLogMessage(msg),
+    ...(sanitizeLogArgs(args) || [])
+  ].join(' ');
+
+  fs.appendFile(ENGINE_LOG_FILE, `${line}\n`, (error) => {
+    if (error) {
+      console.error(`[ERROR] Failed to write engine log: ${error.message}`);
+    }
+  });
+}
+
 function updateDiscoveryCache(devices) {
   discoveredDevices = devices;
   discoveredDevicesExpiresAt = Date.now() + (devices.length > 0 ? DISCOVERY_CACHE_TTL_MS : DISCOVERY_IDLE_TTL_MS);
@@ -294,20 +328,24 @@ const log = {
   info: (msg, ...args) => {
     console.log(`[INFO] ${new Date().toISOString()} - ${msg}`, ...args);
     addToLogBuffer('info', msg, args);
+    appendRuntimeLog('info', msg, args);
   },
   warn: (msg, ...args) => {
     console.warn(`[WARN] ${new Date().toISOString()} - ${msg}`, ...args);
     addToLogBuffer('warn', msg, args);
+    appendRuntimeLog('warn', msg, args);
   },
   error: (msg, ...args) => {
     console.error(`[ERROR] ${new Date().toISOString()} - ${msg}`, ...args);
     addToLogBuffer('error', msg, args);
+    appendRuntimeLog('error', msg, args);
   },
   debug: (msg, ...args) => {
     if (process.env.DEBUG) {
       console.log(`[DEBUG] ${new Date().toISOString()} - ${msg}`, ...args);
     }
     addToLogBuffer('debug', msg, args);
+    appendRuntimeLog('debug', msg, args);
   }
 };
 
