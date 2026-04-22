@@ -536,6 +536,8 @@ elements.urlInput.addEventListener('change', (e) => {
   updatePreview(url);
 });
 
+elements.urlInput.addEventListener('focus', ensurePreviewActivated);
+
 elements.refreshBtn.addEventListener('click', refreshDevices);
 elements.castBtn.addEventListener('click', startCast);
 elements.stopBtn.addEventListener('click', stopCast);
@@ -867,25 +869,46 @@ async function init() {
   
   await loadSettings();
   await loadDevices();
-  await loadStatus();
+  await Promise.all([loadStatus(), loadLogs()]);
   
-  // Start polling based on screensaver check interval
-  startStatusPolling();
+  startPolling();
 }
 
-function startStatusPolling() {
-  // Clear existing interval if any
+function stopPolling() {
   if (statusPollInterval) {
     clearInterval(statusPollInterval);
+    statusPollInterval = null;
   }
-  
-  // Poll at same interval as screensaver check (default 60 seconds)
-  const intervalSeconds = state.settings.screensaverCheckInterval || 60;
+  if (logsPollInterval) {
+    clearInterval(logsPollInterval);
+    logsPollInterval = null;
+  }
+}
+
+function startPolling() {
+  stopPolling();
+
+  if (document.hidden) {
+    return;
+  }
+
+  const intervalSeconds = state.settings.screensaverCheckInterval || POLL_INTERVAL_FALLBACK_SECONDS;
   const intervalMs = intervalSeconds * 1000;
   
   console.log(`📊 Polling interval: ${intervalSeconds}s (matches screensaver check)`);
   
   statusPollInterval = setInterval(loadStatus, intervalMs);
+  logsPollInterval = setInterval(loadLogs, LOG_POLL_INTERVAL_MS);
 }
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    stopPolling();
+  } else {
+    loadStatus();
+    loadLogs();
+    startPolling();
+  }
+});
 
 init();
