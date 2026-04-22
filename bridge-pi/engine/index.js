@@ -745,7 +745,7 @@ function saveConfig(config) {
     configCacheTime = Date.now();
     return true;
   } catch (error) {
-    log.error('Error saving config:', error.message);
+    log.error(`Error saving config to ${CONFIG_FILE}:`, error.message);
     return false;
   }
 }
@@ -1950,6 +1950,7 @@ async function main() {
   
   log.info(`🚀 Cast Away v${BRIDGE_VERSION} Engine starting...`);
   log.info(`📋 Device ID: ${DEVICE_ID}`);
+  log.info(`🗂️ Config path: ${CONFIG_FILE}`);
   log.info(`🖥️ Hardware: ${cpuModel} (${cpuCores} cores, ${totalMemMB}MB RAM)`);
   log.info(`🔌 Engine port: ${PORT} | UI port: ${UI_PORT}`);
   log.info(`🎬 Custom App ID: ${CUSTOM_APP_ID}`);
