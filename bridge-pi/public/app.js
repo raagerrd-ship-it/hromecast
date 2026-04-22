@@ -124,7 +124,9 @@ let logsPollInterval = null;
 function updateStatus(online, text) {
   const dot = elements.status.querySelector('.status-dot');
   dot.classList.toggle('online', online);
-  elements.statusText.textContent = text;
+  if (elements.statusText.textContent !== text) {
+    elements.statusText.textContent = text;
+  }
 }
 
 function updateDeviceList(devices) {
@@ -162,16 +164,41 @@ function updateScreensaverStatus(active) {
   text.textContent = active ? 'Aktiv på TV' : 'Inaktiv';
 }
 
+function ensurePreviewActivated() {
+  if (state.previewActive) {
+    return;
+  }
 
-function updatePreview(url) {
+  state.previewActive = true;
+  renderPreview();
+}
+
+function renderPreview() {
   const container = elements.previewContainer;
-  
+  const url = state.previewUrl;
+
   if (!url) {
     container.innerHTML = '<p class="preview-placeholder">Ange en URL ovan för att se förhandsvisning</p>';
     return;
   }
-  
-  container.innerHTML = `<iframe src="${url}" sandbox="allow-scripts allow-same-origin"></iframe>`;
+
+  if (!state.previewActive) {
+    container.innerHTML = '<p class="preview-placeholder">Förhandsvisning laddas först när du fokuserar URL-fältet eller startar en cast</p>';
+    return;
+  }
+
+  const existingFrame = container.querySelector('iframe');
+  if (existingFrame && existingFrame.dataset.src === url) {
+    return;
+  }
+
+  container.innerHTML = `<iframe src="${url}" data-src="${url}" sandbox="allow-scripts allow-same-origin"></iframe>`;
+}
+
+
+function updatePreview(url) {
+  state.previewUrl = url || '';
+  renderPreview();
 }
 
 function formatLogTime(timestamp) {
@@ -181,6 +208,14 @@ function formatLogTime(timestamp) {
 
 function updateLogs(logs) {
   const container = elements.logsContainer;
+  const fingerprint = JSON.stringify({ filters: logFilters, items: (logs || []).map(log => [log.timestamp, log.level, log.category, log.message]) });
+
+  if (fingerprint === state.lastLogsFingerprint) {
+    return;
+  }
+
+  state.lastLogsFingerprint = fingerprint;
+  state.lastRenderedLogs = logs || [];
   
   if (!logs || logs.length === 0) {
     container.innerHTML = '<p class="logs-placeholder">Inga loggar ännu...</p>';
@@ -241,7 +276,7 @@ function initLogFilters() {
       logFilters[filter] = !logFilters[filter];
       btn.classList.toggle('active', logFilters[filter]);
       localStorage.setItem('logFilters', JSON.stringify(logFilters));
-      loadStatus(); // Refresh logs with new filter
+      updateLogs(state.lastRenderedLogs);
     });
   });
 }
