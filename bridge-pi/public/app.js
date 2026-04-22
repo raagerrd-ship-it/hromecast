@@ -379,30 +379,57 @@ async function loadDevices() {
 async function loadStatus() {
   try {
     const data = await api('/api/status');
-    elements.port.textContent = data.port || '-';
+    const fingerprint = JSON.stringify({
+      port: data.port,
+      active: data.screensaverActive,
+      version: data.version,
+      networkUrl: data.networkUrl,
+      mem: data.memory,
+      recovery: data.recovery,
+      breaker: data.circuitBreaker,
+      lastDeviceCheck: data.lastDeviceCheck
+    });
+
+    if (fingerprint === state.lastStatusFingerprint) {
+      return;
+    }
+
+    state.lastStatusFingerprint = fingerprint;
+
+    if (elements.port.textContent !== String(data.port || '-')) {
+      elements.port.textContent = data.port || '-';
+    }
     updateScreensaverStatus(data.screensaverActive);
     
-    // Update version badge
     if (data.version && elements.versionBadge) {
-      elements.versionBadge.textContent = 'v' + data.version;
+      const versionText = 'v' + data.version;
+      if (elements.versionBadge.textContent !== versionText) {
+        elements.versionBadge.textContent = versionText;
+      }
     }
     
-    // Update receiver version badge (same as bridge version - they're synced)
     const receiverBadge = document.getElementById('receiver-version-badge');
     if (data.version && receiverBadge) {
-      receiverBadge.textContent = '📺 v' + data.version;
+      const receiverText = '📺 v' + data.version;
+      if (receiverBadge.textContent !== receiverText) {
+        receiverBadge.textContent = receiverText;
+      }
     }
     
-    // Update network URL display
-    if (data.networkUrl && elements.networkUrl) {
+    if (data.networkUrl && elements.networkUrl && elements.networkUrl.textContent !== data.networkUrl) {
       elements.networkUrl.textContent = data.networkUrl;
     }
-    
-    // Also load logs
+  } catch (error) {
+    console.error('Failed to load status:', error);
+  }
+}
+
+async function loadLogs() {
+  try {
     const logsData = await api('/api/logs');
     updateLogs(logsData.logs || []);
   } catch (error) {
-    console.error('Failed to load status:', error);
+    console.error('Failed to load logs:', error);
   }
 }
 
