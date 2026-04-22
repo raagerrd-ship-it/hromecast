@@ -97,7 +97,12 @@ const elements = {
 let state = {
   settings: {},
   devices: [],
-  isLoading: false
+  isLoading: false,
+  previewActive: false,
+  previewUrl: '',
+  lastStatusFingerprint: '',
+  lastLogsFingerprint: '',
+  lastRenderedLogs: []
 };
 
 // Log filter state (debug OFF by default)
@@ -109,12 +114,19 @@ let logFilters = JSON.parse(localStorage.getItem('logFilters')) || {
   system: true
 };
 
+const POLL_INTERVAL_FALLBACK_SECONDS = 60;
+const LOG_POLL_INTERVAL_MS = 15000;
+let statusPollInterval = null;
+let logsPollInterval = null;
+
 // ============ UI Updates ============
 
 function updateStatus(online, text) {
   const dot = elements.status.querySelector('.status-dot');
   dot.classList.toggle('online', online);
-  elements.statusText.textContent = text;
+  if (elements.statusText.textContent !== text) {
+    elements.statusText.textContent = text;
+  }
 }
 
 function updateDeviceList(devices) {
@@ -152,16 +164,41 @@ function updateScreensaverStatus(active) {
   text.textContent = active ? 'Aktiv på TV' : 'Inaktiv';
 }
 
+function ensurePreviewActivated() {
+  if (state.previewActive) {
+    return;
+  }
 
-function updatePreview(url) {
+  state.previewActive = true;
+  renderPreview();
+}
+
+function renderPreview() {
   const container = elements.previewContainer;
-  
+  const url = state.previewUrl;
+
   if (!url) {
     container.innerHTML = '<p class="preview-placeholder">Ange en URL ovan för att se förhandsvisning</p>';
     return;
   }
-  
-  container.innerHTML = `<iframe src="${url}" sandbox="allow-scripts allow-same-origin"></iframe>`;
+
+  if (!state.previewActive) {
+    container.innerHTML = '<p class="preview-placeholder">Förhandsvisning laddas först när du fokuserar URL-fältet eller startar en cast</p>';
+    return;
+  }
+
+  const existingFrame = container.querySelector('iframe');
+  if (existingFrame && existingFrame.dataset.src === url) {
+    return;
+  }
+
+  container.innerHTML = `<iframe src="${url}" data-src="${url}" sandbox="allow-scripts allow-same-origin"></iframe>`;
+}
+
+
+function updatePreview(url) {
+  state.previewUrl = url || '';
+  renderPreview();
 }
 
 function formatLogTime(timestamp) {
@@ -171,6 +208,14 @@ function formatLogTime(timestamp) {
 
 function updateLogs(logs) {
   const container = elements.logsContainer;
+  const fingerprint = JSON.stringify({ filters: logFilters, items: (logs || []).map(log => [log.timestamp, log.level, log.category, log.message]) });
+
+  if (fingerprint === state.lastLogsFingerprint) {
+    return;
+  }
+
+  state.lastLogsFingerprint = fingerprint;
+  state.lastRenderedLogs = logs || [];
   
   if (!logs || logs.length === 0) {
     container.innerHTML = '<p class="logs-placeholder">Inga loggar ännu...</p>';
@@ -231,7 +276,7 @@ function initLogFilters() {
       logFilters[filter] = !logFilters[filter];
       btn.classList.toggle('active', logFilters[filter]);
       localStorage.setItem('logFilters', JSON.stringify(logFilters));
-      loadStatus(); // Refresh logs with new filter
+      updateLogs(state.lastRenderedLogs);
     });
   });
 }
@@ -334,30 +379,57 @@ async function loadDevices() {
 async function loadStatus() {
   try {
     const data = await api('/api/status');
-    elements.port.textContent = data.port || '-';
+    const fingerprint = JSON.stringify({
+      port: data.port,
+      active: data.screensaverActive,
+      version: data.version,
+      networkUrl: data.networkUrl,
+      mem: data.memory,
+      recovery: data.recovery,
+      breaker: data.circuitBreaker,
+      lastDeviceCheck: data.lastDeviceCheck
+    });
+
+    if (fingerprint === state.lastStatusFingerprint) {
+      return;
+    }
+
+    state.lastStatusFingerprint = fingerprint;
+
+    if (elements.port.textContent !== String(data.port || '-')) {
+      elements.port.textContent = data.port || '-';
+    }
     updateScreensaverStatus(data.screensaverActive);
     
-    // Update version badge
     if (data.version && elements.versionBadge) {
-      elements.versionBadge.textContent = 'v' + data.version;
+      const versionText = 'v' + data.version;
+      if (elements.versionBadge.textContent !== versionText) {
+        elements.versionBadge.textContent = versionText;
+      }
     }
     
-    // Update receiver version badge (same as bridge version - they're synced)
     const receiverBadge = document.getElementById('receiver-version-badge');
     if (data.version && receiverBadge) {
-      receiverBadge.textContent = '📺 v' + data.version;
+      const receiverText = '📺 v' + data.version;
+      if (receiverBadge.textContent !== receiverText) {
+        receiverBadge.textContent = receiverText;
+      }
     }
     
-    // Update network URL display
-    if (data.networkUrl && elements.networkUrl) {
+    if (data.networkUrl && elements.networkUrl && elements.networkUrl.textContent !== data.networkUrl) {
       elements.networkUrl.textContent = data.networkUrl;
     }
-    
-    // Also load logs
+  } catch (error) {
+    console.error('Failed to load status:', error);
+  }
+}
+
+async function loadLogs() {
+  try {
     const logsData = await api('/api/logs');
     updateLogs(logsData.logs || []);
   } catch (error) {
-    console.error('Failed to load status:', error);
+    console.error('Failed to load logs:', error);
   }
 }
 
@@ -463,6 +535,8 @@ elements.urlInput.addEventListener('change', (e) => {
   saveSettings({ url });
   updatePreview(url);
 });
+
+elements.urlInput.addEventListener('focus', ensurePreviewActivated);
 
 elements.refreshBtn.addEventListener('click', refreshDevices);
 elements.castBtn.addEventListener('click', startCast);
@@ -785,8 +859,6 @@ if (elements.copyUrlBtn) {
 
 // ============ Init ============
 
-let statusPollInterval = null;
-
 async function init() {
   updateStatus(false, 'Ansluter...');
   
@@ -795,25 +867,46 @@ async function init() {
   
   await loadSettings();
   await loadDevices();
-  await loadStatus();
+  await Promise.all([loadStatus(), loadLogs()]);
   
-  // Start polling based on screensaver check interval
-  startStatusPolling();
+  startPolling();
 }
 
-function startStatusPolling() {
-  // Clear existing interval if any
+function stopPolling() {
   if (statusPollInterval) {
     clearInterval(statusPollInterval);
+    statusPollInterval = null;
   }
-  
-  // Poll at same interval as screensaver check (default 60 seconds)
-  const intervalSeconds = state.settings.screensaverCheckInterval || 60;
+  if (logsPollInterval) {
+    clearInterval(logsPollInterval);
+    logsPollInterval = null;
+  }
+}
+
+function startPolling() {
+  stopPolling();
+
+  if (document.hidden) {
+    return;
+  }
+
+  const intervalSeconds = state.settings.screensaverCheckInterval || POLL_INTERVAL_FALLBACK_SECONDS;
   const intervalMs = intervalSeconds * 1000;
   
   console.log(`📊 Polling interval: ${intervalSeconds}s (matches screensaver check)`);
   
   statusPollInterval = setInterval(loadStatus, intervalMs);
+  logsPollInterval = setInterval(loadLogs, LOG_POLL_INTERVAL_MS);
 }
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    stopPolling();
+  } else {
+    loadStatus();
+    loadLogs();
+    startPolling();
+  }
+});
 
 init();

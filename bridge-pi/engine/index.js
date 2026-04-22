@@ -96,8 +96,22 @@ const BASE_DELAY_MS = 1000;
 // Track active heartbeats for cleanup
 const activeHeartbeats = new Set();
 
-// In-memory log buffer — smaller on Pi Zero 2 W (512MB RAM)
-const LOG_BUFFER_SIZE = 50;
+const TOTAL_RAM_MB = Math.round(os.totalmem() / 1024 / 1024);
+const LOG_BUFFER_SIZE = TOTAL_RAM_MB <= 512 ? 30 : 50;
+const LOG_TRIM_TARGET = Math.max(12, Math.floor(LOG_BUFFER_SIZE * 0.6));
+const MAX_LOG_MESSAGE_LENGTH = 220;
+const MAX_LOG_ARG_LENGTH = 120;
+const DISCOVERY_CACHE_TTL_MS = 2 * 60 * 1000;
+const DISCOVERY_IDLE_TTL_MS = 30 * 1000;
+const STATUS_CACHE_TTL_MS = 4000;
+const MEMORY_CHECK_INTERVAL_MS = 60 * 1000;
+const MEMORY_HEAP_WARN_MB = 45;
+const MEMORY_RSS_WARN_MB = TOTAL_RAM_MB <= 512 ? 85 : 120;
+
+let discoveredDevicesExpiresAt = 0;
+let statusSnapshotCache = null;
+let statusSnapshotCacheTime = 0;
+
 let logBuffer = [];
 
 // Track last status check messages for deduplication
@@ -145,18 +159,135 @@ function categorizeLog(level, msg) {
   return 'system';
 }
 
+function trimLogMessage(msg) {
+  const message = String(msg || '');
+  if (message.length <= MAX_LOG_MESSAGE_LENGTH) {
+    return message;
+  }
+  return `${message.slice(0, MAX_LOG_MESSAGE_LENGTH)}…`;
+}
+
+function sanitizeLogArgs(args) {
+  if (!args || args.length === 0) {
+    return undefined;
+  }
+
+  const sanitized = args
+    .map((arg) => {
+      if (arg == null) return arg;
+      if (typeof arg === 'string') {
+        return arg.length > MAX_LOG_ARG_LENGTH ? `${arg.slice(0, MAX_LOG_ARG_LENGTH)}…` : arg;
+      }
+      if (typeof arg === 'number' || typeof arg === 'boolean') {
+        return arg;
+      }
+
+      try {
+        const serialized = JSON.stringify(arg);
+        if (!serialized) return undefined;
+        return serialized.length > MAX_LOG_ARG_LENGTH ? `${serialized.slice(0, MAX_LOG_ARG_LENGTH)}…` : serialized;
+      } catch (error) {
+        return '[unserializable]';
+      }
+    })
+    .filter((arg) => arg !== undefined);
+
+  return sanitized.length > 0 ? sanitized : undefined;
+}
+
+function trimLogBuffer(targetSize = LOG_BUFFER_SIZE) {
+  if (logBuffer.length <= targetSize) {
+    return;
+  }
+
+  logBuffer = logBuffer.slice(-targetSize);
+}
+
+function updateDiscoveryCache(devices) {
+  discoveredDevices = devices;
+  discoveredDevicesExpiresAt = Date.now() + (devices.length > 0 ? DISCOVERY_CACHE_TTL_MS : DISCOVERY_IDLE_TTL_MS);
+}
+
+function maybeExpireDiscoveredDevices(force = false) {
+  if (discoveredDevices.length === 0) {
+    return;
+  }
+
+  if (force || (!screensaverActive && Date.now() > discoveredDevicesExpiresAt)) {
+    discoveredDevices = [];
+    discoveredDevicesExpiresAt = 0;
+  }
+}
+
+function getCompactMemoryStats(mem = process.memoryUsage()) {
+  return {
+    heapUsedMB: Math.round(mem.heapUsed / 1024 / 1024 * 10) / 10,
+    heapTotalMB: Math.round(mem.heapTotal / 1024 / 1024 * 10) / 10,
+    rssMB: Math.round(mem.rss / 1024 / 1024 * 10) / 10
+  };
+}
+
+function buildStatusSnapshot() {
+  const config = loadConfig();
+  const networkIP = getNetworkIP();
+  const mem = process.memoryUsage();
+  const freeMem = os.freemem();
+  const totalMem = os.totalmem();
+
+  return {
+    commit: GIT_COMMIT_SHORT,
+    branch: GIT_BRANCH,
+    version: BRIDGE_VERSION,
+    platform: 'pi-zero-2w',
+    deviceId: DEVICE_ID,
+    port: PORT,
+    uiPort: UI_PORT,
+    networkIP,
+    networkUrl: `http://${networkIP}:${UI_PORT}`,
+    devices: discoveredDevices.length,
+    selectedChromecast: config.selectedChromecast,
+    screensaverActive,
+    uptime: process.uptime(),
+    lastDeviceCheck,
+    circuitBreaker: {
+      isOpen: circuitBreakerState.isOpen,
+      failures: circuitBreakerState.failures
+    },
+    recovery: {
+      active: recoveryCheckInterval !== null,
+      lastErrorType,
+      ipRecoveryAttempts: ipRecoveryState.failedAttempts
+    },
+    memory: {
+      ...getCompactMemoryStats(mem),
+      systemFreeMB: Math.round(freeMem / 1024 / 1024),
+      systemTotalMB: Math.round(totalMem / 1024 / 1024)
+    },
+    cpuLoad: os.loadavg()
+  };
+}
+
+function getStatusSnapshot(force = false) {
+  const now = Date.now();
+  if (!force && statusSnapshotCache && (now - statusSnapshotCacheTime) < STATUS_CACHE_TTL_MS) {
+    return statusSnapshotCache;
+  }
+
+  statusSnapshotCache = buildStatusSnapshot();
+  statusSnapshotCacheTime = now;
+  return statusSnapshotCache;
+}
+
 function addToLogBuffer(level, msg, args) {
   const entry = {
     timestamp: new Date().toISOString(),
     level,
-    message: msg,
+    message: trimLogMessage(msg),
     category: categorizeLog(level, msg),
-    args: args.length > 0 ? args : undefined
+    args: sanitizeLogArgs(args)
   };
   logBuffer.push(entry);
-  if (logBuffer.length > LOG_BUFFER_SIZE) {
-    logBuffer.shift();
-  }
+  trimLogBuffer();
 }
 
 const log = {
@@ -565,7 +696,7 @@ function discoverDevices() {
       browser.stop();
       // Free mDNS resources after discovery (Pi Zero 2 W memory optimization)
       destroyBonjour();
-      discoveredDevices = devices;
+      updateDiscoveryCache(devices);
       log.info(`📡 Discovery complete (${label}): ${devices.length} device(s)`);
       resolve(devices);
     };
@@ -595,6 +726,7 @@ function discoverDevices() {
     setTimeout(() => {
       clearTimeout(earlyResolveTimeout);
       if (!resolved) {
+        maybeExpireDiscoveredDevices();
         if (foundDevices.length === 0 && discoveredDevices.length > 0) {
           log.info(`📡 Discovery timeout, keeping ${discoveredDevices.length} cached device(s)`);
           resolved = true;
@@ -610,6 +742,7 @@ function discoverDevices() {
 }
 
 async function discoverDevicesWithRetry(maxRetriesOverride = null) {
+  maybeExpireDiscoveredDevices();
   const config = loadConfig();
   const maxRetries = maxRetriesOverride ?? (config.discoveryMaxRetries || 3);
   const retryDelayMs = (config.discoveryRetryDelay || 5) * 1000;
@@ -1355,6 +1488,7 @@ function cleanupConnection() {
     }
     client = null;
   }
+  statusSnapshotCache = null;
 }
 
 const server = http.createServer(async (req, res) => {
@@ -1466,44 +1600,8 @@ const server = http.createServer(async (req, res) => {
       
       // GET /api/status
       if (req.method === 'GET' && pathname === '/api/status') {
-        const config = loadConfig();
-        const networkIP = getNetworkIP();
-        const mem = process.memoryUsage();
-        const totalMem = os.totalmem();
-        const freeMem = os.freemem();
-        sendJson(res, {
-          commit: GIT_COMMIT_SHORT,
-          branch: GIT_BRANCH,
-          version: BRIDGE_VERSION,
-          platform: 'pi-zero-2w',
-          deviceId: DEVICE_ID,
-          port: PORT,
-          uiPort: UI_PORT,
-          networkIP: networkIP,
-          networkUrl: `http://${networkIP}:${UI_PORT}`,
-          devices: discoveredDevices.length,
-          selectedChromecast: config.selectedChromecast,
-          screensaverActive,
-          uptime: process.uptime(),
-          lastDeviceCheck,
-          circuitBreaker: {
-            isOpen: circuitBreakerState.isOpen,
-            failures: circuitBreakerState.failures
-          },
-          recovery: {
-            active: recoveryCheckInterval !== null,
-            lastErrorType,
-            ipRecoveryAttempts: ipRecoveryState.failedAttempts
-          },
-          memory: {
-            heapUsedMB: Math.round(mem.heapUsed / 1024 / 1024 * 10) / 10,
-            heapTotalMB: Math.round(mem.heapTotal / 1024 / 1024 * 10) / 10,
-            rssMB: Math.round(mem.rss / 1024 / 1024 * 10) / 10,
-            systemFreeMB: Math.round(freeMem / 1024 / 1024),
-            systemTotalMB: Math.round(totalMem / 1024 / 1024)
-          },
-          cpuLoad: os.loadavg()
-        });
+        maybeExpireDiscoveredDevices();
+        sendJson(res, getStatusSnapshot());
         return;
       }
       
@@ -1699,23 +1797,28 @@ const server = http.createServer(async (req, res) => {
 function scheduleMemoryMaintenance() {
   setInterval(() => {
     const mem = process.memoryUsage();
-    const heapMB = Math.round(mem.heapUsed / 1024 / 1024 * 10) / 10;
-    const rssMB = Math.round(mem.rss / 1024 / 1024 * 10) / 10;
+    const { heapUsedMB: heapMB, rssMB } = getCompactMemoryStats(mem);
     
-    if (heapMB > 50) {
+    if (!screensaverActive) {
+      maybeExpireDiscoveredDevices();
+    }
+
+    if (heapMB > MEMORY_HEAP_WARN_MB || rssMB > MEMORY_RSS_WARN_MB) {
       log.warn(`⚠️ [MEMORY] High heap usage: ${heapMB}MB (RSS: ${rssMB}MB)`);
-      // Trim log buffer aggressively if memory is high
-      while (logBuffer.length > 20) {
-        logBuffer.shift();
+      trimLogBuffer(LOG_TRIM_TARGET);
+
+      if (!screensaverActive) {
+        maybeExpireDiscoveredDevices(true);
+      }
+
+      if (global.gc) {
+        global.gc();
+        log.debug(`[MEMORY] GC triggered: heap ${heapMB}MB, RSS ${rssMB}MB`);
       }
     }
-    
-    // Expose GC if available (run with --expose-gc for best results on Pi)
-    if (global.gc) {
-      global.gc();
-      log.debug(`[MEMORY] GC triggered: heap ${heapMB}MB, RSS ${rssMB}MB`);
-    }
-  }, 5 * 60 * 1000); // Every 5 minutes
+
+    statusSnapshotCache = null;
+  }, MEMORY_CHECK_INTERVAL_MS);
 }
 
 // CPU temperature monitoring (Pi-specific)
@@ -1800,7 +1903,10 @@ async function main() {
   await checkAndReconnectSavedDevice();
   
   const screensaverMs = (config.screensaverCheckInterval || 60) * 1000;
-  setInterval(checkAndActivateScreensaver, screensaverMs);
+  setInterval(() => {
+    statusSnapshotCache = null;
+    checkAndActivateScreensaver();
+  }, screensaverMs);
   
   // Pi memory maintenance
   scheduleMemoryMaintenance();
