@@ -696,7 +696,7 @@ function discoverDevices() {
       browser.stop();
       // Free mDNS resources after discovery (Pi Zero 2 W memory optimization)
       destroyBonjour();
-      discoveredDevices = devices;
+      updateDiscoveryCache(devices);
       log.info(`📡 Discovery complete (${label}): ${devices.length} device(s)`);
       resolve(devices);
     };
@@ -726,6 +726,7 @@ function discoverDevices() {
     setTimeout(() => {
       clearTimeout(earlyResolveTimeout);
       if (!resolved) {
+        maybeExpireDiscoveredDevices();
         if (foundDevices.length === 0 && discoveredDevices.length > 0) {
           log.info(`📡 Discovery timeout, keeping ${discoveredDevices.length} cached device(s)`);
           resolved = true;
@@ -741,6 +742,7 @@ function discoverDevices() {
 }
 
 async function discoverDevicesWithRetry(maxRetriesOverride = null) {
+  maybeExpireDiscoveredDevices();
   const config = loadConfig();
   const maxRetries = maxRetriesOverride ?? (config.discoveryMaxRetries || 3);
   const retryDelayMs = (config.discoveryRetryDelay || 5) * 1000;
