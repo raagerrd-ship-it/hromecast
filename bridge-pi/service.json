@@ -8,6 +8,7 @@
   "runInstallOnRelease": true,
   "updateScript": "/opt/cast-away/scripts/update.sh",
   "uninstallScript": "scripts/uninstall.sh",
+  "permissions": ["network", "multicast"],
   "components": {
     "engine": {
       "type": "node",
