@@ -143,7 +143,11 @@ const ChromecastReceiver = () => {
         context.start(options);
 
         const savedUrl = localStorage.getItem("lastUrl");
-        if (savedUrl) {
+        const testUrl = new URLSearchParams(window.location.search).get("url");
+
+        if (testUrl) {
+          loadWebsite(testUrl);
+        } else if (savedUrl) {
           loadWebsite(savedUrl);
         } else {
           setStatus({ text: "Ready to cast...", type: "" });
