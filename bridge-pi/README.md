@@ -17,6 +17,23 @@ Cast Away installeras och hanteras automatiskt via PCC. Se [Pi Control Center](h
 
 Tjänsten definieras i `service.json` och inkluderar installations-, uppdaterings- och avinstallationsskript i `scripts/`.
 
+### PCC-regler för tjänsten
+
+- Installera **inte** Node.js själv — PCC tillhandahåller Node.js v24.
+- Behåll egna dependencies per tjänst i lokala `node_modules`; använd inte globala eller delade paket.
+- Läs engine-port från `process.env.PORT`.
+- UI ska antingen räkna engine-port som `UI_PORT + 50` eller läsa `ENGINE_PORT` om den finns.
+- Använd PCC:s kataloger:
+  - config/secrets: `process.env.PCC_CONFIG_DIR`
+  - loggar: `process.env.PCC_LOG_DIR`
+- Deklarera PCC-behörigheter i `service.json`. För Cast Away krävs `network` och `multicast`.
+- Implementera `GET /api/health` i engine och returnera minst `status`, `uptime`, `memory.rss` och gärna `version`.
+- Skriv inte egna systemd-tjänster när PCC hanterar livscykeln.
+- Lyssna på `SIGTERM` och stäng ner rent.
+- Distribuera releaser som `dist.tar.gz` med färdigbyggd kod och prod-dependencies.
+- Native-moduler ska rebuildas mot PCC:s Node v24 vid installation, inte mot en egen Node-installation.
+- Kort regel: **PCC äger runtime, portar, resurser, loggar, config och behörigheter — tjänsten äger bara sin appkod och sina dependencies.**
+
 ## Manuell utveckling
 
 ### Förutsättningar
