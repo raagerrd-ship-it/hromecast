@@ -32,6 +32,29 @@ jobs:
         working-directory: bridge-pi/engine
         run: npm install --omit=dev --package-lock=false
 
+      - name: Compute Pi release version
+        id: version
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+
+          const rootPackagePath = path.join(process.cwd(), 'bridge-pi', 'package.json');
+          const enginePackagePath = path.join(process.cwd(), 'bridge-pi', 'engine', 'package.json');
+          const rootPackage = JSON.parse(fs.readFileSync(rootPackagePath, 'utf8'));
+          const enginePackage = JSON.parse(fs.readFileSync(enginePackagePath, 'utf8'));
+
+          const [major = '0', minor = '0'] = String(rootPackage.version || '0.0.0').split('.');
+          const releaseVersion = `${major}.${minor}.${process.env.GITHUB_RUN_NUMBER}`;
+
+          rootPackage.version = releaseVersion;
+          enginePackage.version = releaseVersion;
+
+          fs.writeFileSync(rootPackagePath, JSON.stringify(rootPackage, null, 2) + '\n');
+          fs.writeFileSync(enginePackagePath, JSON.stringify(enginePackage, null, 2) + '\n');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `release_version=${releaseVersion}\n`);
+          NODE
+
       # Package for Pi Control Center:
       # - engine/ with node_modules (Node.js backend)
       # - dist/ (static UI from public/)
@@ -50,9 +73,10 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: latest
-          name: Latest Build
-          body: Automated release from main branch
+          tag_name: pi-v${{ steps.version.outputs.release_version }}
+          name: Pi Build v${{ steps.version.outputs.release_version }}
+          body: Automated Pi release for version ${{ steps.version.outputs.release_version }} from main branch
+          make_latest: true
           files: dist.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
