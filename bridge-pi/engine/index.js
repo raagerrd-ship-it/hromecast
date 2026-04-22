@@ -29,11 +29,14 @@ let updateInProgress = false;
 // Configuration
 const startTime = Date.now();
 const PCC_CONFIG_DIR = process.env.PCC_CONFIG_DIR?.trim();
+const PCC_DATA_DIR = process.env.PCC_DATA_DIR?.trim();
 const PCC_LOG_DIR = process.env.PCC_LOG_DIR?.trim();
 const PORT = parseInt(process.env.PORT || '3052');
 const UI_PORT = parseInt(process.env.UI_PORT || '3002');
 const DEVICE_ID = process.env.DEVICE_ID || 'default-bridge';
-const FALLBACK_APP_DIR = path.join(os.homedir(), '.config', 'cast-away');
+const FALLBACK_CONFIG_DIR = path.join(os.homedir(), '.config', 'cast-away');
+const FALLBACK_DATA_DIR = path.join(os.homedir(), '.local', 'share', 'cast-away');
+const FALLBACK_LOG_DIR = path.join(os.homedir(), '.local', 'state', 'cast-away', 'logs');
 
 function canWriteDirectory(dirPath) {
   try {
@@ -45,19 +48,28 @@ function canWriteDirectory(dirPath) {
   }
 }
 
-function resolveWritableDataDir() {
+function resolveWritableDir(preferredDir, fallbackDir) {
+  if (preferredDir) {
+    return preferredDir;
+  }
+
+  return fallbackDir;
+}
+
+function resolveWritableConfigDir() {
   if (PCC_CONFIG_DIR) {
     return PCC_CONFIG_DIR;
   }
 
-  return canWriteDirectory(__dirname) ? __dirname : FALLBACK_APP_DIR;
+  return canWriteDirectory(FALLBACK_CONFIG_DIR) ? FALLBACK_CONFIG_DIR : os.tmpdir();
 }
 
-const DATA_DIR = resolveWritableDataDir();
-const LOG_DIR = PCC_LOG_DIR || DATA_DIR;
-const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
-const NETWORK_INFO_FILE = path.join(LOG_DIR, 'network-info.txt');
-const HEALTHCHECK_FILE = path.join(LOG_DIR, `${DEVICE_ID || 'cast-away'}.health`);
+const CONFIG_DIR = resolveWritableConfigDir();
+const DATA_DIR = resolveWritableDir(PCC_DATA_DIR, FALLBACK_DATA_DIR);
+const LOG_DIR = resolveWritableDir(PCC_LOG_DIR, FALLBACK_LOG_DIR);
+const CONFIG_FILE = path.join(CONFIG_DIR, 'settings.json');
+const NETWORK_INFO_FILE = path.join(DATA_DIR, 'network-info.txt');
+const HEALTHCHECK_FILE = path.join(DATA_DIR, `${DEVICE_ID || 'cast-away'}.health`);
 const ENGINE_LOG_FILE = path.join(LOG_DIR, 'engine.log');
 const CUSTOM_APP_ID = 'FE376873';
 const BACKDROP_APP_ID = 'E8C28D3C';
@@ -70,7 +82,8 @@ function ensureDirectory(dirPath, label) {
   }
 }
 
-ensureDirectory(DATA_DIR, 'config');
+ensureDirectory(CONFIG_DIR, 'config');
+ensureDirectory(DATA_DIR, 'data');
 ensureDirectory(LOG_DIR, 'log');
 
 const LEGACY_CONFIG_FILE = path.join(__dirname, 'config.json');
