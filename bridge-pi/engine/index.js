@@ -1488,6 +1488,7 @@ function cleanupConnection() {
     }
     client = null;
   }
+  statusSnapshotCache = null;
 }
 
 const server = http.createServer(async (req, res) => {
@@ -1902,7 +1903,10 @@ async function main() {
   await checkAndReconnectSavedDevice();
   
   const screensaverMs = (config.screensaverCheckInterval || 60) * 1000;
-  setInterval(checkAndActivateScreensaver, screensaverMs);
+  setInterval(() => {
+    statusSnapshotCache = null;
+    checkAndActivateScreensaver();
+  }, screensaverMs);
   
   // Pi memory maintenance
   scheduleMemoryMaintenance();
