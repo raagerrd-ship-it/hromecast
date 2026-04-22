@@ -4,6 +4,7 @@ import { LanguageProvider } from "@/i18n/LanguageContext";
 import Index from "./pages/Index";
 import Setup from "./pages/Setup";
 import NotFound from "./pages/NotFound";
+import ChromecastReceiver from "./pages/ChromecastReceiver";
 
 const App = () => (
   <LanguageProvider>
@@ -12,6 +13,7 @@ const App = () => (
       <Routes>
         <Route path="/" element={<Index />} />
         <Route path="/setup" element={<Setup />} />
+        <Route path="/chromecast-receiver.html" element={<ChromecastReceiver />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
