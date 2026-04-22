@@ -1,6 +1,6 @@
 {
   "name": "cast-away-pi",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Cast Away — Chromecast screensaver bridge for Raspberry Pi",
   "private": true,
   "scripts": {
