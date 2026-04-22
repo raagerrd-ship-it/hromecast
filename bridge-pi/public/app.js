@@ -859,8 +859,6 @@ if (elements.copyUrlBtn) {
 
 // ============ Init ============
 
-let statusPollInterval = null;
-
 async function init() {
   updateStatus(false, 'Ansluter...');
   
