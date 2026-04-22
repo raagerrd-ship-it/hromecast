@@ -671,7 +671,7 @@ Engine (API): http://${ip}:${PORT}
 UI:           http://${ip}:${UI_PORT}
 `;
   try {
-    fs.writeFileSync(path.join(__dirname, 'network-info.txt'), info.trim());
+    fs.writeFileSync(NETWORK_INFO_FILE, info.trim());
   } catch (error) {
     log.error('Could not write network-info.txt:', error.message);
   }
@@ -1869,9 +1869,8 @@ function getCPUTemp() {
   }
 }
 
-// Healthcheck — write a heartbeat file to /tmp so Pi Dashboard can verify
+// Healthcheck — write a heartbeat file to PCC log dir so the host can verify
 // the process is alive without polling the HTTP port
-const HEALTHCHECK_FILE = `/tmp/${DEVICE_ID || 'cast-away'}.health`;
 const HEALTHCHECK_INTERVAL = 15_000; // 15 seconds
 let healthcheckTimer = null;
 
