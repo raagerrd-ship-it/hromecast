@@ -1599,44 +1599,8 @@ const server = http.createServer(async (req, res) => {
       
       // GET /api/status
       if (req.method === 'GET' && pathname === '/api/status') {
-        const config = loadConfig();
-        const networkIP = getNetworkIP();
-        const mem = process.memoryUsage();
-        const totalMem = os.totalmem();
-        const freeMem = os.freemem();
-        sendJson(res, {
-          commit: GIT_COMMIT_SHORT,
-          branch: GIT_BRANCH,
-          version: BRIDGE_VERSION,
-          platform: 'pi-zero-2w',
-          deviceId: DEVICE_ID,
-          port: PORT,
-          uiPort: UI_PORT,
-          networkIP: networkIP,
-          networkUrl: `http://${networkIP}:${UI_PORT}`,
-          devices: discoveredDevices.length,
-          selectedChromecast: config.selectedChromecast,
-          screensaverActive,
-          uptime: process.uptime(),
-          lastDeviceCheck,
-          circuitBreaker: {
-            isOpen: circuitBreakerState.isOpen,
-            failures: circuitBreakerState.failures
-          },
-          recovery: {
-            active: recoveryCheckInterval !== null,
-            lastErrorType,
-            ipRecoveryAttempts: ipRecoveryState.failedAttempts
-          },
-          memory: {
-            heapUsedMB: Math.round(mem.heapUsed / 1024 / 1024 * 10) / 10,
-            heapTotalMB: Math.round(mem.heapTotal / 1024 / 1024 * 10) / 10,
-            rssMB: Math.round(mem.rss / 1024 / 1024 * 10) / 10,
-            systemFreeMB: Math.round(freeMem / 1024 / 1024),
-            systemTotalMB: Math.round(totalMem / 1024 / 1024)
-          },
-          cpuLoad: os.loadavg()
-        });
+        maybeExpireDiscoveredDevices();
+        sendJson(res, getStatusSnapshot());
         return;
       }
       
@@ -1832,23 +1796,28 @@ const server = http.createServer(async (req, res) => {
 function scheduleMemoryMaintenance() {
   setInterval(() => {
     const mem = process.memoryUsage();
-    const heapMB = Math.round(mem.heapUsed / 1024 / 1024 * 10) / 10;
-    const rssMB = Math.round(mem.rss / 1024 / 1024 * 10) / 10;
+    const { heapUsedMB: heapMB, rssMB } = getCompactMemoryStats(mem);
     
-    if (heapMB > 50) {
+    if (!screensaverActive) {
+      maybeExpireDiscoveredDevices();
+    }
+
+    if (heapMB > MEMORY_HEAP_WARN_MB || rssMB > MEMORY_RSS_WARN_MB) {
       log.warn(`⚠️ [MEMORY] High heap usage: ${heapMB}MB (RSS: ${rssMB}MB)`);
-      // Trim log buffer aggressively if memory is high
-      while (logBuffer.length > 20) {
-        logBuffer.shift();
+      trimLogBuffer(LOG_TRIM_TARGET);
+
+      if (!screensaverActive) {
+        maybeExpireDiscoveredDevices(true);
+      }
+
+      if (global.gc) {
+        global.gc();
+        log.debug(`[MEMORY] GC triggered: heap ${heapMB}MB, RSS ${rssMB}MB`);
       }
     }
-    
-    // Expose GC if available (run with --expose-gc for best results on Pi)
-    if (global.gc) {
-      global.gc();
-      log.debug(`[MEMORY] GC triggered: heap ${heapMB}MB, RSS ${rssMB}MB`);
-    }
-  }, 5 * 60 * 1000); // Every 5 minutes
+
+    statusSnapshotCache = null;
+  }, MEMORY_CHECK_INTERVAL_MS);
 }
 
 // CPU temperature monitoring (Pi-specific)
