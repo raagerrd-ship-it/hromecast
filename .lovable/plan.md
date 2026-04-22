@@ -1,57 +1,56 @@
 
+Mål: minska RAM-användningen på Pi utan att försämra stabiliteten i cast-flödet.
 
-## Plan: Skapa separat Raspberry Pi-version (bridge-pi/)
+1. Strama åt UI-minnet först
+- Göra förhandsvisningen lazy: skapa inte `<iframe>` förrän användaren aktivt öppnar preview eller fokuserar URL-fältet.
+- Avlasta loggvyn: sluta rendera hela logglistan på varje statuspoll, och hämta loggar separat med lägre frekvens än status.
+- Pausa UI-polling när sidan är dold (`visibilitychange`) så dashboarden inte fortsätter dra minne/CPU i bakgrunden.
+- Undvika onödiga DOM-omsättningar i `bridge-pi/public/app.js` genom att bara uppdatera version, status och loggar när datan faktiskt ändrats.
 
-Behåller nuvarande `bridge/` intakt med all Sonos+Chromecast-kod. Skapar en ny mapp `bridge-pi/` som är en ren Chromecast-only version för Raspberry Pi.
+2. Minska minnesfotavtrycket i engine
+- Sänka standardstorleken på `logBuffer` ytterligare och göra den adaptiv efter tillgängligt RAM.
+- Göra loggning billigare: inte lagra `args` i minnet om de är tomma eller stora, och trunkera långa meddelanden innan de sparas i buffer.
+- Rensa cache för upptäckta enheter mer aggressivt när ingen cast är aktiv, så `discoveredDevices` inte hålls längre än nödvändigt.
+- Se över heartbeat/recovery-timers så endast exakt de intervall som behövs lever samtidigt.
 
-### Vad som skapas
+3. Göra underhållsloopen snålare
+- Byta från fast minnesunderhåll var 5:e minut till enklare tröskelstyrt underhåll, så GC-hint och loggtrimning bara sker när heap/RSS faktiskt är förhöjt.
+- Undvika extra minnesarbete i friskt läge, särskilt när Pi:n bara står idle.
 
-```text
-bridge-pi/
-├── index.js           # Ren Chromecast-logik (~1800 rader, kopierad från bridge/ minus Sonos)
-├── package.json       # cast-away-pi 1.4.0
-├── .env.example       # Bara DEVICE_ID + PORT
-├── install-linux.sh   # Pi-optimerad installer
-├── uninstall-linux.sh # Kopierad från bridge/
-├── public/            # Samma filer som bridge/public/
-│   ├── index.html
-│   ├── app.js
-│   └── style.css
-└── README.md          # Uppdaterad för ren Chromecast
-```
+4. Minska overhead från status-endpoints
+- Låta `/api/status` bli lättare genom att inte alltid bygga hela minnes/status-objektet för UI om inget ändrats.
+- Flytta logghämtning till separat, enklare polling i UI i stället för att varje `loadStatus()` också laddar `/api/logs`.
 
-### Vad som tas bort ur bridge-pi/index.js
+5. Bevara nuvarande stabila delar
+- Behålla lazy Bonjour/destroyBonjour-flödet eftersom det redan är en bra minnesoptimering.
+- Behålla config-cache på 5 sekunder eftersom den minskar onödiga diskläsningar utan stor RAM-kostnad.
+- Behålla receiverns minimala Chromecast-implementation; där finns sannolikt liten vinst jämfört med engine/UI.
 
-Allt mellan sektionerna "Sonos UPnP Helpers" (rad 174) och "Circuit Breaker" (rad 1165):
-- Sonos SOAP/UPnP-funktioner
-- Sonos event subscription + SSE
-- Bridge push till brew-monitor (Supabase)
-- Sonos-specifika konstanter och state-variabler (`SONOS_IP`, `SUPABASE_PUSH_URL`, `BRIDGE_SECRET`, etc.)
-- Stale-position-detektion
-- Sonos API-routes i HTTP-servern (`/api/sonos/*`, `/api/sonos/status`, `/api/sonos/events`, etc.)
+Filer att uppdatera
+- `bridge-pi/public/app.js`
+- `bridge-pi/engine/index.js`
+- Eventuellt `bridge-pi/README.md` om nya driftrekommendationer eller standardvärden ändras
 
-### Vad som behålls
+Teknisk riktning
+- Låg risk / hög nytta:
+  - lazy preview-iframe
+  - separat loggpolling
+  - pause-on-hidden i UI
+  - mindre/adaptiv loggbuffer
+  - billigare loggobjekt
+- Medelrisk / valfritt:
+  - mer aggressiv rensning av discovered devices
+  - ändrad underhålls/GC-strategi
+- Inte prioriterat:
+  - större omarkitektur av cast-klienten, eftersom nuvarande minnesprofil redan verkar vara ganska snål och fungerande på din Pi
 
-- Chromecast mDNS discovery (bonjour-service)
-- Cast-session (castv2, launch, URL, keep-alive, heartbeat)
-- Screensaver-logik (idle detection, auto-launch, circuit breaker, IP recovery)
-- Config-system, structured logging, log buffer
-- HTTP server med Chromecast API-routes
-- Webbpanel (public/)
+Förväntad effekt
+- Mest märkbar minskning kommer sannolikt från UI:t när dashboarden är öppen.
+- Engine-vinsten blir främst jämnare minnesnivåer över tid, inte dramatisk minskning.
+- Total effekt bör vara lägre toppar i RSS och mindre onödig aktivitet när systemet står still.
 
-### Övriga ändringar
-
-1. **`bridge-pi/package.json`** — namn `cast-away-pi`, version `1.4.0`, bara `castv2`, `bonjour-service`, `dotenv`
-2. **`bridge-pi/.env.example`** — bara `DEVICE_ID` och `PORT`
-3. **`bridge-pi/install-linux.sh`** — "Cast Away"-branding, anpassad för Pi
-4. **`bridge-pi/README.md`** — ren Chromecast-dokumentation utan Sonos-referenser
-5. **`supabase/functions/get-version/index.ts`** — ny version `1.4.0` med changelog-entry för Pi-edition
-6. **`bridge/` lämnas helt orörd**
-
-### Tekniska detaljer
-
-- `BRIDGE_VERSION` sätts till `'1.4.0'` i bridge-pi/index.js
-- Alla 542 Sonos-referenser i index.js elimineras
-- HTTP-servern förenklas: alla `/api/sonos/*`-routes tas bort
-- `categorizeLog` uppdateras (ta bort sonos-kategorin om den finns)
-
+Verifiering efter implementation
+- Jämföra `/api/health` och `/api/status` före/efter för RSS och heapUsed.
+- Kontrollera att discovery, cast, recovery och update-flödet fortfarande fungerar.
+- Bekräfta att UI inte fortsätter polla fullt när fliken är dold.
+- Testa långkörning på Pi för att se om minnet stabiliseras bättre över tid.
