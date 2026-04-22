@@ -53,15 +53,20 @@ fi
 # Check Node.js
 echo "[2/3] Checking Node.js..."
 if ! command -v node &>/dev/null; then
-    echo "  ❌ Node.js not found. Install Node.js 18+ first."
+    echo "  ❌ Node.js not found in PCC runtime."
     exit 1
 fi
-echo "  ✓ Node.js $(node --version)"
+NODE_VERSION="$(node --version)"
+echo "  ✓ Node.js $NODE_VERSION"
+if [[ ! "$NODE_VERSION" =~ ^v24\. ]]; then
+    echo "  ⚠️  Expected PCC Node.js v24, got $NODE_VERSION"
+fi
 
 # Install engine dependencies
 echo "[3/3] Installing engine dependencies..."
 cd "$APP_DIR/engine"
 npm install --omit=dev --quiet
+npm rebuild --quiet
 echo "  ✓ Dependencies installed"
 
 echo ""

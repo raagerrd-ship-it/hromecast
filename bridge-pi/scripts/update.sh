@@ -49,7 +49,7 @@ fi
 echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Updating: $LOCAL -> $REMOTE"
 
 # Graceful shutdown — stop screensaver and disconnect Chromecast before update
-ENGINE_PORT="${ENGINE_PORT:-3052}"
+ENGINE_PORT="${ENGINE_PORT:-${PORT:-3052}}"
 curl -sf -X POST "http://localhost:${ENGINE_PORT}/api/prepare-update" 2>/dev/null && {
     echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Engine preparing for update..."
     sleep 2
@@ -90,7 +90,7 @@ if [ -n "$PKG_CHANGED" ]; then
     echo "$(date '+%Y-%m-%d %H:%M:%S') [update] engine/package.json changed, reinstalling deps..."
     ENGINE_DIR="$SOURCE_DIR/engine"
     if [ -d "$ENGINE_DIR" ]; then
-        cd "$ENGINE_DIR" && npm install --omit=dev --quiet
+        cd "$ENGINE_DIR" && npm install --omit=dev --quiet && npm rebuild --quiet
     fi
 fi
 
