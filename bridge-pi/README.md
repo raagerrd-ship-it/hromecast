@@ -23,9 +23,13 @@ Tjänsten definieras i `service.json` och inkluderar installations-, uppdatering
 - Behåll egna dependencies per tjänst i lokala `node_modules`; använd inte globala eller delade paket.
 - Läs engine-port från `process.env.PORT`.
 - UI ska antingen räkna engine-port som `UI_PORT + 50` eller läsa `ENGINE_PORT` om den finns.
-- Använd PCC:s kataloger:
-  - config/secrets: `process.env.PCC_CONFIG_DIR`
+- Använd alltid PCC:s kataloger via miljövariabler:
+  - inställningar/konfiguration: `process.env.PCC_CONFIG_DIR`
+  - persistent data/state/cache/användardata: `process.env.PCC_DATA_DIR`
   - loggar: `process.env.PCC_LOG_DIR`
+- Spara inställningar i `PCC_CONFIG_DIR/settings.json`.
+- Spara aldrig viktig data i `/opt/`; den katalogen är endast appkod och kan ersättas vid uppdatering.
+- Hårdkoda inte PCC-sökvägar som `/etc/pi-control-center/...` eller `/var/lib/pi-control-center/...`; läs alltid från miljövariablerna.
 - Deklarera PCC-behörigheter i `service.json`. För Cast Away krävs `network` och `multicast`.
 - Implementera `GET /api/health` i engine och returnera minst `status`, `uptime`, `memory.rss` och gärna `version`.
 - Skriv inte egna systemd-tjänster när PCC hanterar livscykeln.
@@ -81,4 +85,4 @@ sudo apt-get install libavahi-compat-libdnssd-dev
 
 ## Säkerhet
 
-All data lagras lokalt i `config.json`. Ingen data skickas till molnet.
+All data lagras lokalt i PCC:s kataloger (`PCC_CONFIG_DIR`, `PCC_DATA_DIR`, `PCC_LOG_DIR`). Ingen data skickas till molnet.
