@@ -706,7 +706,10 @@ function loadConfig() {
 
 function saveConfig(config) {
   try {
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
+    fs.mkdirSync(path.dirname(CONFIG_FILE), { recursive: true });
+    const tempFile = `${CONFIG_FILE}.tmp`;
+    fs.writeFileSync(tempFile, JSON.stringify(config, null, 2));
+    fs.renameSync(tempFile, CONFIG_FILE);
     // Invalidate cache immediately on write
     configCache = { ...DEFAULT_CONFIG, ...config };
     configCacheTime = Date.now();
@@ -1589,7 +1592,11 @@ const server = http.createServer(async (req, res) => {
         const body = await parseBody(req);
         const config = loadConfig();
         const newConfig = { ...config, ...body };
-        saveConfig(newConfig);
+        const saved = saveConfig(newConfig);
+        if (!saved) {
+          sendJson(res, { error: 'Failed to save config' }, 500);
+          return;
+        }
         sendJson(res, { success: true, config: newConfig });
         return;
       }

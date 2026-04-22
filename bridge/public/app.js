@@ -9,7 +9,11 @@ async function api(path, options = {}) {
       ...options.headers
     }
   });
-  return res.json();
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || `HTTP ${res.status}`);
+  }
+  return data;
 }
 
 // ============ Toast Notifications ============
