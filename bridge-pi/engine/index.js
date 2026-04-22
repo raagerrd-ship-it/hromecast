@@ -33,8 +33,28 @@ const PCC_LOG_DIR = process.env.PCC_LOG_DIR?.trim();
 const PORT = parseInt(process.env.PORT || '3052');
 const UI_PORT = parseInt(process.env.UI_PORT || '3002');
 const DEVICE_ID = process.env.DEVICE_ID || 'default-bridge';
-const DATA_DIR = PCC_CONFIG_DIR || __dirname;
-const LOG_DIR = PCC_LOG_DIR || __dirname;
+const FALLBACK_APP_DIR = path.join(os.homedir(), '.config', 'cast-away');
+
+function canWriteDirectory(dirPath) {
+  try {
+    fs.mkdirSync(dirPath, { recursive: true });
+    fs.accessSync(dirPath, fs.constants.W_OK);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+function resolveWritableDataDir() {
+  if (PCC_CONFIG_DIR) {
+    return PCC_CONFIG_DIR;
+  }
+
+  return canWriteDirectory(__dirname) ? __dirname : FALLBACK_APP_DIR;
+}
+
+const DATA_DIR = resolveWritableDataDir();
+const LOG_DIR = PCC_LOG_DIR || DATA_DIR;
 const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
 const NETWORK_INFO_FILE = path.join(LOG_DIR, 'network-info.txt');
 const HEALTHCHECK_FILE = path.join(LOG_DIR, `${DEVICE_ID || 'cast-away'}.health`);
@@ -52,6 +72,16 @@ function ensureDirectory(dirPath, label) {
 
 ensureDirectory(DATA_DIR, 'config');
 ensureDirectory(LOG_DIR, 'log');
+
+const LEGACY_CONFIG_FILE = path.join(__dirname, 'config.json');
+if (CONFIG_FILE !== LEGACY_CONFIG_FILE && !fs.existsSync(CONFIG_FILE) && fs.existsSync(LEGACY_CONFIG_FILE)) {
+  try {
+    fs.copyFileSync(LEGACY_CONFIG_FILE, CONFIG_FILE);
+    console.log(`[INFO] Migrated config to writable path: ${CONFIG_FILE}`);
+  } catch (error) {
+    console.warn(`[WARN] Failed to migrate legacy config: ${error.message}`);
+  }
+}
 
 // Lazy Bonjour init — only create when needed, destroy after discovery to free memory
 let bonjour = null;
