@@ -96,8 +96,22 @@ const BASE_DELAY_MS = 1000;
 // Track active heartbeats for cleanup
 const activeHeartbeats = new Set();
 
-// In-memory log buffer — smaller on Pi Zero 2 W (512MB RAM)
-const LOG_BUFFER_SIZE = 50;
+const TOTAL_RAM_MB = Math.round(os.totalmem() / 1024 / 1024);
+const LOG_BUFFER_SIZE = TOTAL_RAM_MB <= 512 ? 30 : 50;
+const LOG_TRIM_TARGET = Math.max(12, Math.floor(LOG_BUFFER_SIZE * 0.6));
+const MAX_LOG_MESSAGE_LENGTH = 220;
+const MAX_LOG_ARG_LENGTH = 120;
+const DISCOVERY_CACHE_TTL_MS = 2 * 60 * 1000;
+const DISCOVERY_IDLE_TTL_MS = 30 * 1000;
+const STATUS_CACHE_TTL_MS = 4000;
+const MEMORY_CHECK_INTERVAL_MS = 60 * 1000;
+const MEMORY_HEAP_WARN_MB = 45;
+const MEMORY_RSS_WARN_MB = TOTAL_RAM_MB <= 512 ? 85 : 120;
+
+let discoveredDevicesExpiresAt = 0;
+let statusSnapshotCache = null;
+let statusSnapshotCacheTime = 0;
+
 let logBuffer = [];
 
 // Track last status check messages for deduplication
