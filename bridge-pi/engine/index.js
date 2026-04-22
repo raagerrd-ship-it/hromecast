@@ -1964,6 +1964,8 @@ async function main() {
   log.info(`🚀 Cast Away v${BRIDGE_VERSION} Engine starting...`);
   log.info(`📋 Device ID: ${DEVICE_ID}`);
   log.info(`🗂️ Config path: ${CONFIG_FILE}`);
+  log.info(`💾 Data dir: ${DATA_DIR}`);
+  log.info(`📝 Log dir: ${LOG_DIR}`);
   log.info(`🖥️ Hardware: ${cpuModel} (${cpuCores} cores, ${totalMemMB}MB RAM)`);
   log.info(`🔌 Engine port: ${PORT} | UI port: ${UI_PORT}`);
   log.info(`🎬 Custom App ID: ${CUSTOM_APP_ID}`);
