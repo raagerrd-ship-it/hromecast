@@ -164,12 +164,15 @@ const MAX_LOG_MESSAGE_LENGTH = 220;
 const MAX_LOG_ARG_LENGTH = 120;
 const DISCOVERY_CACHE_TTL_MS = 2 * 60 * 1000;
 const DISCOVERY_IDLE_TTL_MS = 30 * 1000;
+const DISCOVERY_REFRESH_INTERVAL_MS = 30 * 1000;
 const STATUS_CACHE_TTL_MS = 4000;
 const MEMORY_CHECK_INTERVAL_MS = 60 * 1000;
 const MEMORY_HEAP_WARN_MB = 45;
 const MEMORY_RSS_WARN_MB = TOTAL_RAM_MB <= 512 ? 85 : 120;
 
 let discoveredDevicesExpiresAt = 0;
+let discoveryInFlight = null;
+let backgroundDiscoveryTimer = null;
 let statusSnapshotCache = null;
 let statusSnapshotCacheTime = 0;
 
@@ -766,47 +769,51 @@ function saveConfig(config) {
 // ============ Chromecast Discovery ============
 
 function discoverDevices() {
-  return new Promise((resolve) => {
+  if (discoveryInFlight) {
+    log.debug('🔁 Discovery already running, reusing in-flight scan');
+    return discoveryInFlight;
+  }
+
+  discoveryInFlight = new Promise((resolve) => {
     log.info('🔍 Scanning for Chromecast devices...');
-    
+
     const b = getBonjour();
     const browser = b.find({ type: 'googlecast' });
     const foundDevices = [];
     let resolved = false;
-    
+
     const finish = (devices, label) => {
       if (resolved) return;
       resolved = true;
       browser.stop();
-      // Free mDNS resources after discovery (Pi Zero 2 W memory optimization)
       destroyBonjour();
       updateDiscoveryCache(devices);
       log.info(`📡 Discovery complete (${label}): ${devices.length} device(s)`);
       resolve(devices);
     };
-    
+
     browser.on('up', (service) => {
       const name = service.name || service.txt?.fn || 'Unknown';
       const host = service.addresses?.[0] || service.referer?.address || service.host;
       const port = service.port || 8009;
-      
+
       if (host && !foundDevices.find(d => d.host === host)) {
         const device = { name, host, port };
         foundDevices.push(device);
         log.info(`✅ Found: ${name} at ${host}:${port}`);
       }
     });
-    
+
     const config = loadConfig();
     const earlyResolveMs = (config.discoveryEarlyResolve || 4) * 1000;
     const maxTimeoutMs = (config.discoveryTimeout || 10) * 1000;
-    
+
     const earlyResolveTimeout = setTimeout(() => {
       if (foundDevices.length > 0) {
         finish(foundDevices, 'early');
       }
     }, earlyResolveMs);
-    
+
     setTimeout(() => {
       clearTimeout(earlyResolveTimeout);
       if (!resolved) {
@@ -822,7 +829,11 @@ function discoverDevices() {
         }
       }
     }, maxTimeoutMs);
+  }).finally(() => {
+    discoveryInFlight = null;
   });
+
+  return discoveryInFlight;
 }
 
 async function discoverDevicesWithRetry(maxRetriesOverride = null) {
@@ -879,6 +890,34 @@ async function checkAndReconnectSavedDevice() {
       log.info(`ℹ️ Saved device status: ${result.status}`);
     }
   }
+}
+
+function startBackgroundDiscovery() {
+  if (backgroundDiscoveryTimer) return;
+
+  backgroundDiscoveryTimer = setInterval(async () => {
+    const config = loadConfig();
+
+    if (!config.enabled || !config.selectedChromecast) {
+      return;
+    }
+
+    try {
+      const devices = await discoverDevices();
+      const selectedDevice = devices.find((device) => device.name === config.selectedChromecast);
+
+      if (selectedDevice) {
+        log.debug(`🛰️ Background discovery sees "${config.selectedChromecast}" at ${selectedDevice.host}`);
+        if (!screensaverActive && !recoveryCheckInterval && config.url) {
+          await checkAndReconnectSavedDevice();
+        }
+      } else {
+        log.debug(`🛰️ Background discovery did not find "${config.selectedChromecast}"`);
+      }
+    } catch (error) {
+      log.warn(`⚠️ Background discovery failed: ${error.message}`);
+    }
+  }, DISCOVERY_REFRESH_INTERVAL_MS);
 }
 
 // ============ Chromecast Control using raw castv2 ============
@@ -1485,6 +1524,31 @@ async function checkAndActivateScreensaver() {
   if (result.status === 'error') {
     if (wasScreensaverActive) {
       logScreensaverStop('network_error');
+      return;
+    }
+
+    log.info('🔄 Device unreachable during scheduled check - refreshing discovery cache...');
+    await discoverDevices();
+
+    const rediscoveredDevice = findDevice(config.selectedChromecast);
+    if (rediscoveredDevice) {
+      log.info(`✅ Device rediscovered at ${rediscoveredDevice.host} - retrying activation check`);
+      const retryResult = await isChromecastIdleWithRecovery(config.selectedChromecast);
+
+      if (retryResult.status === 'idle') {
+        log.info('💤 Rediscovered device is idle, activating screensaver...');
+        try {
+          await castMedia(config.selectedChromecast, config.url);
+        } catch (error) {
+          log.error('Failed to activate screensaver after rediscovery:', error.message);
+        }
+      } else if (retryResult.status === 'our_app') {
+        screensaverActive = true;
+        lastUrlRefreshTime = Date.now();
+        log.info('✅ Rediscovered device already runs our app');
+      } else if (retryResult.status === 'busy') {
+        log.info('ℹ️ Rediscovered device is busy, waiting for next check');
+      }
     }
     return;
   }
@@ -1991,6 +2055,7 @@ async function main() {
   
   await discoverDevices();
   await checkAndReconnectSavedDevice();
+  startBackgroundDiscovery();
   
   const screensaverMs = (config.screensaverCheckInterval || 60) * 1000;
   setInterval(() => {
@@ -2011,6 +2076,10 @@ async function main() {
     destroyBonjour();
     server.close();
     stopRecoveryCheck();
+    if (backgroundDiscoveryTimer) {
+      clearInterval(backgroundDiscoveryTimer);
+      backgroundDiscoveryTimer = null;
+    }
     activeHeartbeats.forEach(h => clearInterval(h));
     if (client) {
       try { client.close(); } catch(e) {
