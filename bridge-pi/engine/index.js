@@ -2094,10 +2094,10 @@ async function main() {
     destroyBonjour();
     server.close();
     stopRecoveryCheck();
-    if (backgroundDiscoveryTimer) {
-      clearInterval(backgroundDiscoveryTimer);
-      backgroundDiscoveryTimer = null;
+    if (backgroundDiscoveryTimer && backgroundDiscoveryTimer !== false) {
+      clearTimeout(backgroundDiscoveryTimer);
     }
+    backgroundDiscoveryTimer = false; // signals scheduler to stop
     activeHeartbeats.forEach(h => clearInterval(h));
     if (client) {
       try { client.close(); } catch(e) {
