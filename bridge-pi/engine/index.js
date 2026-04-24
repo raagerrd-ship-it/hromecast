@@ -936,7 +936,6 @@ function startBackgroundDiscovery() {
   // Mark as running and kick off first scan after a short delay (let startup settle)
   backgroundDiscoveryTimer = setTimeout(runScan, 5000);
 }
-}
 
 // ============ Chromecast Control using raw castv2 ============
 
