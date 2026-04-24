@@ -695,16 +695,21 @@ async function immediateReconnect() {
 
 // ============ Network Utilities ============
 
+// Cached — IP doesn't change between reboots, avoid iface iteration on every /api/status
+let _networkIPCache = null;
 function getNetworkIP() {
+  if (_networkIPCache) return _networkIPCache;
   const interfaces = os.networkInterfaces();
   for (const name of Object.keys(interfaces)) {
     for (const iface of interfaces[name]) {
       if (iface.family === 'IPv4' && !iface.internal) {
-        return iface.address;
+        _networkIPCache = iface.address;
+        return _networkIPCache;
       }
     }
   }
-  return 'localhost';
+  _networkIPCache = 'localhost';
+  return _networkIPCache;
 }
 
 function writeNetworkInfo() {
