@@ -896,29 +896,46 @@ async function checkAndReconnectSavedDevice() {
 function startBackgroundDiscovery() {
   if (backgroundDiscoveryTimer) return;
 
-  backgroundDiscoveryTimer = setInterval(async () => {
+  const runScan = async () => {
     const config = loadConfig();
 
     if (!config.enabled || !config.selectedChromecast) {
+      scheduleNext(DISCOVERY_REFRESH_INTERVAL_MS);
       return;
     }
 
+    let foundSelected = false;
     try {
-      const devices = await discoverDevices();
+      // Use retry-aware discovery so background behaves like manual "Sök".
+      // Limit to 2 retries to keep Pi load low.
+      const devices = await discoverDevicesWithRetry(2);
       const selectedDevice = devices.find((device) => device.name === config.selectedChromecast);
 
       if (selectedDevice) {
+        foundSelected = true;
         log.debug(`🛰️ Background discovery sees "${config.selectedChromecast}" at ${selectedDevice.host}`);
         if (!screensaverActive && !recoveryCheckInterval && config.url) {
           await checkAndReconnectSavedDevice();
         }
       } else {
-        log.debug(`🛰️ Background discovery did not find "${config.selectedChromecast}"`);
+        log.debug(`🛰️ Background discovery did not find "${config.selectedChromecast}" (${devices.length} device(s) seen)`);
       }
     } catch (error) {
       log.warn(`⚠️ Background discovery failed: ${error.message}`);
     }
-  }, DISCOVERY_REFRESH_INTERVAL_MS);
+
+    // If selected device is missing, scan more often to recover quickly.
+    scheduleNext(foundSelected ? DISCOVERY_REFRESH_INTERVAL_MS : DISCOVERY_REFRESH_INTERVAL_MISSING_MS);
+  };
+
+  const scheduleNext = (delayMs) => {
+    if (backgroundDiscoveryTimer === false) return; // stopped
+    backgroundDiscoveryTimer = setTimeout(runScan, delayMs);
+  };
+
+  // Mark as running and kick off first scan after a short delay (let startup settle)
+  backgroundDiscoveryTimer = setTimeout(runScan, 5000);
+}
 }
 
 // ============ Chromecast Control using raw castv2 ============
