@@ -1181,19 +1181,6 @@ async function castMedia(chromecastName, url, retryCount = 0) {
       log.info('📡 Getting receiver status...');
       receiver.send({ type: 'GET_STATUS', requestId: 1 });
       
-      receiver.on('message', (data) => {
-        log.debug(`📨 [DEBUG] Receiver message type: ${data.type}`);
-        if (data.type === 'RECEIVER_STATUS') {
-          const apps = data.status?.applications || [];
-          log.debug(`📨 [DEBUG] RECEIVER_STATUS: ${apps.length} app(s) running`);
-          apps.forEach((app, i) => {
-            log.debug(`📨 [DEBUG]   App ${i}: ${app.displayName} (${app.appId})`);
-          });
-        } else {
-          log.debug(`📨 [DEBUG] Full message: ${JSON.stringify(data)}`);
-        }
-      });
-      
       launchTimeout = setTimeout(async () => {
         log.error('⏱️ Timeout waiting for receiver response (120s)');
         cleanup();
@@ -1214,7 +1201,19 @@ async function castMedia(chromecastName, url, retryCount = 0) {
       let appLaunched = false;
       let mediaLoaded = false;
       
+      // Single message handler — debug-logging + launch/status logic combined
+      // (previously two separate receiver.on('message') handlers fired for every message)
       receiver.on('message', async (data) => {
+        log.debug(`📨 [DEBUG] Receiver message type: ${data.type}`);
+        if (data.type === 'RECEIVER_STATUS') {
+          const apps = data.status?.applications || [];
+          log.debug(`📨 [DEBUG] RECEIVER_STATUS: ${apps.length} app(s) running`);
+          apps.forEach((app, i) => {
+            log.debug(`📨 [DEBUG]   App ${i}: ${app.displayName} (${app.appId})`);
+          });
+        } else if (data.type !== 'LAUNCH_ERROR') {
+          log.debug(`📨 [DEBUG] Full message: ${JSON.stringify(data)}`);
+        }
         
         if (data.type === 'LAUNCH_ERROR') {
           cleanup();
