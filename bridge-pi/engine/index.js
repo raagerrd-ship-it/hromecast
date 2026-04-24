@@ -165,7 +165,8 @@ const MAX_LOG_MESSAGE_LENGTH = 220;
 const MAX_LOG_ARG_LENGTH = 120;
 const DISCOVERY_CACHE_TTL_MS = 2 * 60 * 1000;
 const DISCOVERY_IDLE_TTL_MS = 30 * 1000;
-const DISCOVERY_REFRESH_INTERVAL_MS = 60 * 1000; // when device is found
+const DISCOVERY_REFRESH_INTERVAL_MS = 2 * 60 * 1000; // when device is found, screensaver idle
+const DISCOVERY_REFRESH_INTERVAL_ACTIVE_MS = 5 * 60 * 1000; // when screensaver active and device recently seen
 const DISCOVERY_REFRESH_INTERVAL_MISSING_MS = 15 * 1000; // when device is missing — search aggressively
 const STATUS_CACHE_TTL_MS = 4000;
 const MEMORY_CHECK_INTERVAL_MS = 60 * 1000;
@@ -935,8 +936,19 @@ function startBackgroundDiscovery() {
       log.warn(`⚠️ Background discovery failed: ${error.message}`);
     }
 
-    // If selected device is missing, scan more often to recover quickly.
-    scheduleNext(foundSelected ? DISCOVERY_REFRESH_INTERVAL_MS : DISCOVERY_REFRESH_INTERVAL_MISSING_MS);
+    // Adaptive scheduling:
+    // - Missing device → scan aggressively (15s) for quick recovery
+    // - Found + screensaver active → scan rarely (5 min); mDNS cache + status polls cover us
+    // - Found + idle → moderate cadence (2 min)
+    let nextDelay;
+    if (!foundSelected) {
+      nextDelay = DISCOVERY_REFRESH_INTERVAL_MISSING_MS;
+    } else if (screensaverActive) {
+      nextDelay = DISCOVERY_REFRESH_INTERVAL_ACTIVE_MS;
+    } else {
+      nextDelay = DISCOVERY_REFRESH_INTERVAL_MS;
+    }
+    scheduleNext(nextDelay);
   };
 
   const scheduleNext = (delayMs) => {
