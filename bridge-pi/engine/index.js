@@ -695,16 +695,21 @@ async function immediateReconnect() {
 
 // ============ Network Utilities ============
 
+// Cached — IP doesn't change between reboots, avoid iface iteration on every /api/status
+let _networkIPCache = null;
 function getNetworkIP() {
+  if (_networkIPCache) return _networkIPCache;
   const interfaces = os.networkInterfaces();
   for (const name of Object.keys(interfaces)) {
     for (const iface of interfaces[name]) {
       if (iface.family === 'IPv4' && !iface.internal) {
-        return iface.address;
+        _networkIPCache = iface.address;
+        return _networkIPCache;
       }
     }
   }
-  return 'localhost';
+  _networkIPCache = 'localhost';
+  return _networkIPCache;
 }
 
 function writeNetworkInfo() {
@@ -726,28 +731,22 @@ UI:           http://${ip}:${UI_PORT}
 
 // ============ Config Management ============
 
-// Config cache — avoid repeated disk reads on slow SD card (single-core optimization)
+// Write-through cache — config almost never changes; eliminate disk I/O on every operation.
+// Cache is populated on first read and refreshed only on saveConfig().
 let configCache = null;
-let configCacheTime = 0;
-const CONFIG_CACHE_TTL = 5000; // 5 seconds
 
 function loadConfig() {
-  const now = Date.now();
-  if (configCache && (now - configCacheTime) < CONFIG_CACHE_TTL) {
-    return configCache;
-  }
+  if (configCache) return configCache;
   try {
     if (fs.existsSync(CONFIG_FILE)) {
       const data = fs.readFileSync(CONFIG_FILE, 'utf8');
       configCache = { ...DEFAULT_CONFIG, ...JSON.parse(data) };
-      configCacheTime = now;
       return configCache;
     }
   } catch (error) {
     log.error('Error loading config:', error.message);
   }
   configCache = { ...DEFAULT_CONFIG };
-  configCacheTime = now;
   return configCache;
 }
 
@@ -757,9 +756,8 @@ function saveConfig(config) {
     const tempFile = `${CONFIG_FILE}.tmp`;
     fs.writeFileSync(tempFile, JSON.stringify(config, null, 2));
     fs.renameSync(tempFile, CONFIG_FILE);
-    // Invalidate cache immediately on write
+    // Write-through: refresh cache immediately so subsequent loadConfig() returns fresh values
     configCache = { ...DEFAULT_CONFIG, ...config };
-    configCacheTime = Date.now();
     return true;
   } catch (error) {
     log.error(`Error saving config to ${CONFIG_FILE}:`, error.message);
@@ -1183,19 +1181,6 @@ async function castMedia(chromecastName, url, retryCount = 0) {
       log.info('📡 Getting receiver status...');
       receiver.send({ type: 'GET_STATUS', requestId: 1 });
       
-      receiver.on('message', (data) => {
-        log.debug(`📨 [DEBUG] Receiver message type: ${data.type}`);
-        if (data.type === 'RECEIVER_STATUS') {
-          const apps = data.status?.applications || [];
-          log.debug(`📨 [DEBUG] RECEIVER_STATUS: ${apps.length} app(s) running`);
-          apps.forEach((app, i) => {
-            log.debug(`📨 [DEBUG]   App ${i}: ${app.displayName} (${app.appId})`);
-          });
-        } else {
-          log.debug(`📨 [DEBUG] Full message: ${JSON.stringify(data)}`);
-        }
-      });
-      
       launchTimeout = setTimeout(async () => {
         log.error('⏱️ Timeout waiting for receiver response (120s)');
         cleanup();
@@ -1216,7 +1201,19 @@ async function castMedia(chromecastName, url, retryCount = 0) {
       let appLaunched = false;
       let mediaLoaded = false;
       
+      // Single message handler — debug-logging + launch/status logic combined
+      // (previously two separate receiver.on('message') handlers fired for every message)
       receiver.on('message', async (data) => {
+        log.debug(`📨 [DEBUG] Receiver message type: ${data.type}`);
+        if (data.type === 'RECEIVER_STATUS') {
+          const apps = data.status?.applications || [];
+          log.debug(`📨 [DEBUG] RECEIVER_STATUS: ${apps.length} app(s) running`);
+          apps.forEach((app, i) => {
+            log.debug(`📨 [DEBUG]   App ${i}: ${app.displayName} (${app.appId})`);
+          });
+        } else if (data.type !== 'LAUNCH_ERROR') {
+          log.debug(`📨 [DEBUG] Full message: ${JSON.stringify(data)}`);
+        }
         
         if (data.type === 'LAUNCH_ERROR') {
           cleanup();
