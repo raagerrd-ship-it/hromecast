@@ -1,7 +1,7 @@
 #!/bin/bash
 # Cast Away — Update script (fallback for Pi Control Center)
-# PCC normally handles updates via release download.
-# This script is called as fallback when releaseUrl is unavailable.
+# Downloads the latest release tarball from GitHub instead of using git pull,
+# because the release version is only baked into the tarball (not committed to the repo).
 # PCC handles service restarts AFTER this script completes.
 
 set -e
@@ -9,90 +9,82 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Find the git repo root
-GIT_ROOT=""
-if [ -d "$APP_DIR/.git" ]; then
-    GIT_ROOT="$APP_DIR"
-elif [ -d "$APP_DIR/../.git" ]; then
-    GIT_ROOT="$(cd "$APP_DIR/.." && pwd)"
-else
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Not a git repo, skipping"
-    exit 0
-fi
+REPO="raagerrd-ship-it/hromecast"
+RELEASE_URL="https://github.com/${REPO}/releases/latest/download/dist.tar.gz"
 
-cd "$GIT_ROOT"
-
-# Determine where source files live relative to git root
-if [ -d "$GIT_ROOT/bridge-pi" ]; then
-    SOURCE_DIR="$GIT_ROOT/bridge-pi"
-    DIFF_PATH="bridge-pi/"
-else
-    SOURCE_DIR="$GIT_ROOT"
-    DIFF_PATH=""
-fi
-
-# Fetch latest
-git fetch origin main --quiet 2>/dev/null || {
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Failed to fetch, skipping"
-    exit 0
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [update] $*"
 }
 
-# Check if there are updates
-LOCAL=$(git rev-parse HEAD 2>/dev/null)
-REMOTE=$(git rev-parse origin/main 2>/dev/null)
+# Sanity check — must look like our app dir
+if [ ! -d "$APP_DIR/engine" ] || [ ! -f "$APP_DIR/engine/package.json" ]; then
+    log "APP_DIR ($APP_DIR) does not look like Cast Away install, aborting"
+    exit 1
+fi
 
-if [ "$LOCAL" = "$REMOTE" ]; then
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Already up to date ($LOCAL)"
+# Read currently installed version
+CURRENT_VERSION=$(node -p "require('$APP_DIR/engine/package.json').version" 2>/dev/null || echo "unknown")
+log "Current installed version: $CURRENT_VERSION"
+
+# Resolve latest release tag from GitHub API (best-effort)
+LATEST_TAG=$(curl -sf "https://api.github.com/repos/${REPO}/releases/latest" \
+    | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name"\s*:\s*"([^"]+)".*/\1/' || true)
+LATEST_VERSION="${LATEST_TAG#v}"
+
+if [ -n "$LATEST_VERSION" ] && [ "$LATEST_VERSION" = "$CURRENT_VERSION" ]; then
+    log "Already up to date ($CURRENT_VERSION)"
     exit 0
 fi
 
-echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Updating: $LOCAL -> $REMOTE"
+log "Latest release: ${LATEST_VERSION:-unknown} — downloading tarball..."
 
-# Graceful shutdown — stop screensaver and disconnect Chromecast before update
+TMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+if ! curl -fsSL "$RELEASE_URL" -o "$TMP_DIR/dist.tar.gz"; then
+    log "Failed to download $RELEASE_URL, aborting"
+    exit 1
+fi
+
+mkdir -p "$TMP_DIR/extract"
+if ! tar xzf "$TMP_DIR/dist.tar.gz" -C "$TMP_DIR/extract"; then
+    log "Failed to extract tarball, aborting"
+    exit 1
+fi
+
+# Verify extracted payload
+if [ ! -f "$TMP_DIR/extract/engine/package.json" ]; then
+    log "Tarball missing engine/package.json, aborting"
+    exit 1
+fi
+
+NEW_VERSION=$(node -p "require('$TMP_DIR/extract/engine/package.json').version" 2>/dev/null || echo "unknown")
+log "Tarball version: $NEW_VERSION"
+
+# Graceful shutdown — stop screensaver and disconnect Chromecast before swap
 ENGINE_PORT="${ENGINE_PORT:-${PORT:-3052}}"
-curl -sf -X POST "http://localhost:${ENGINE_PORT}/api/prepare-update" 2>/dev/null && {
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Engine preparing for update..."
+curl -sf -X POST "http://localhost:${ENGINE_PORT}/api/prepare-update" >/dev/null 2>&1 && {
+    log "Engine preparing for update..."
     sleep 2
 } || true
 
-# Pull changes — reset on failure to avoid stuck state
-git pull origin main --quiet 2>/dev/null || {
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Pull failed, resetting to remote..."
-    git reset --hard origin/main 2>/dev/null || {
-        echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Reset failed, skipping"
-        exit 0
-    }
-}
-
-# Check if relevant files changed
-if [ -n "$DIFF_PATH" ]; then
-    CHANGED=$(git diff --name-only "$LOCAL" "$REMOTE" -- "$DIFF_PATH" 2>/dev/null | head -1)
-else
-    CHANGED=$(git diff --name-only "$LOCAL" "$REMOTE" 2>/dev/null | head -1)
-fi
-
-if [ -z "$CHANGED" ]; then
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [update] No relevant changes, skipping"
-    exit 0
-fi
-
-echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Files changed, updating..."
-
-# Reinstall engine dependencies if package.json changed
-PKG_PATH="${DIFF_PATH}engine/package.json"
-if [ -n "$DIFF_PATH" ]; then
-    PKG_CHANGED=$(git diff --name-only "$LOCAL" "$REMOTE" -- "$PKG_PATH" 2>/dev/null | head -1)
-else
-    PKG_CHANGED=$(git diff --name-only "$LOCAL" "$REMOTE" -- "engine/package.json" 2>/dev/null | head -1)
-fi
-
-if [ -n "$PKG_CHANGED" ]; then
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [update] engine/package.json changed, reinstalling deps..."
-    ENGINE_DIR="$SOURCE_DIR/engine"
-    if [ -d "$ENGINE_DIR" ]; then
-        cd "$ENGINE_DIR" && npm install --omit=dev --quiet && npm rebuild --quiet
+# Swap in new files (engine/, dist/, scripts/, service.json)
+log "Installing new files into $APP_DIR..."
+for item in engine dist scripts service.json; do
+    SRC="$TMP_DIR/extract/$item"
+    DEST="$APP_DIR/$item"
+    if [ ! -e "$SRC" ]; then
+        log "  - skipping $item (not in tarball)"
+        continue
     fi
-fi
+    if [ -d "$SRC" ]; then
+        rm -rf "$DEST"
+        cp -r "$SRC" "$DEST"
+    else
+        cp -f "$SRC" "$DEST"
+    fi
+done
 
-# PCC handles service restarts — do NOT restart here
-echo "$(date '+%Y-%m-%d %H:%M:%S') [update] Done! Now at $(cd "$GIT_ROOT" && git rev-parse --short HEAD)"
+chmod +x "$APP_DIR/scripts/"*.sh 2>/dev/null || true
+
+log "Done! Updated $CURRENT_VERSION -> $NEW_VERSION"
