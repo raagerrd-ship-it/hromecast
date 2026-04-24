@@ -112,6 +112,7 @@ function destroyBonjour() {
 // ============ State ============
 
 let discoveredDevices = [];
+let lastDiscoveryAt = 0;
 let client = null;
 let keepAliveInterval = null;
 let screensaverActive = false;
@@ -287,6 +288,7 @@ function appendRuntimeLog(level, msg, args) {
 function updateDiscoveryCache(devices) {
   discoveredDevices = devices;
   discoveredDevicesExpiresAt = Date.now() + (devices.length > 0 ? DISCOVERY_CACHE_TTL_MS : DISCOVERY_IDLE_TTL_MS);
+  lastDiscoveryAt = Date.now();
 }
 
 function maybeExpireDiscoveredDevices(force = false) {
@@ -840,7 +842,18 @@ async function discoverDevicesWithRetry(maxRetriesOverride = null) {
   const config = loadConfig();
   const maxRetries = maxRetriesOverride ?? (config.discoveryMaxRetries || 3);
   const retryDelayMs = (config.discoveryRetryDelay || 5) * 1000;
-  
+
+  // Reuse recent discovery results to avoid duplicate scans (e.g. startup + background)
+  const reuseWindowMs = (config.discoveryReuseWindow || 30) * 1000;
+  if (
+    discoveredDevices.length > 0 &&
+    lastDiscoveryAt > 0 &&
+    Date.now() - lastDiscoveryAt < reuseWindowMs
+  ) {
+    log.debug(`♻️ Reusing recent discovery (${discoveredDevices.length} device(s), ${Math.round((Date.now() - lastDiscoveryAt) / 1000)}s old)`);
+    return discoveredDevices;
+  }
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     const devices = await discoverDevices();
     
