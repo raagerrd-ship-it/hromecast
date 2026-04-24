@@ -164,7 +164,8 @@ const MAX_LOG_MESSAGE_LENGTH = 220;
 const MAX_LOG_ARG_LENGTH = 120;
 const DISCOVERY_CACHE_TTL_MS = 2 * 60 * 1000;
 const DISCOVERY_IDLE_TTL_MS = 30 * 1000;
-const DISCOVERY_REFRESH_INTERVAL_MS = 30 * 1000;
+const DISCOVERY_REFRESH_INTERVAL_MS = 60 * 1000; // when device is found
+const DISCOVERY_REFRESH_INTERVAL_MISSING_MS = 15 * 1000; // when device is missing — search aggressively
 const STATUS_CACHE_TTL_MS = 4000;
 const MEMORY_CHECK_INTERVAL_MS = 60 * 1000;
 const MEMORY_HEAP_WARN_MB = 45;
@@ -895,29 +896,45 @@ async function checkAndReconnectSavedDevice() {
 function startBackgroundDiscovery() {
   if (backgroundDiscoveryTimer) return;
 
-  backgroundDiscoveryTimer = setInterval(async () => {
+  const runScan = async () => {
     const config = loadConfig();
 
     if (!config.enabled || !config.selectedChromecast) {
+      scheduleNext(DISCOVERY_REFRESH_INTERVAL_MS);
       return;
     }
 
+    let foundSelected = false;
     try {
-      const devices = await discoverDevices();
+      // Use retry-aware discovery so background behaves like manual "Sök".
+      // Limit to 2 retries to keep Pi load low.
+      const devices = await discoverDevicesWithRetry(2);
       const selectedDevice = devices.find((device) => device.name === config.selectedChromecast);
 
       if (selectedDevice) {
+        foundSelected = true;
         log.debug(`🛰️ Background discovery sees "${config.selectedChromecast}" at ${selectedDevice.host}`);
         if (!screensaverActive && !recoveryCheckInterval && config.url) {
           await checkAndReconnectSavedDevice();
         }
       } else {
-        log.debug(`🛰️ Background discovery did not find "${config.selectedChromecast}"`);
+        log.debug(`🛰️ Background discovery did not find "${config.selectedChromecast}" (${devices.length} device(s) seen)`);
       }
     } catch (error) {
       log.warn(`⚠️ Background discovery failed: ${error.message}`);
     }
-  }, DISCOVERY_REFRESH_INTERVAL_MS);
+
+    // If selected device is missing, scan more often to recover quickly.
+    scheduleNext(foundSelected ? DISCOVERY_REFRESH_INTERVAL_MS : DISCOVERY_REFRESH_INTERVAL_MISSING_MS);
+  };
+
+  const scheduleNext = (delayMs) => {
+    if (backgroundDiscoveryTimer === false) return; // stopped
+    backgroundDiscoveryTimer = setTimeout(runScan, delayMs);
+  };
+
+  // Mark as running and kick off first scan after a short delay (let startup settle)
+  backgroundDiscoveryTimer = setTimeout(runScan, 5000);
 }
 
 // ============ Chromecast Control using raw castv2 ============
@@ -2076,10 +2093,10 @@ async function main() {
     destroyBonjour();
     server.close();
     stopRecoveryCheck();
-    if (backgroundDiscoveryTimer) {
-      clearInterval(backgroundDiscoveryTimer);
-      backgroundDiscoveryTimer = null;
+    if (backgroundDiscoveryTimer && backgroundDiscoveryTimer !== false) {
+      clearTimeout(backgroundDiscoveryTimer);
     }
+    backgroundDiscoveryTimer = false; // signals scheduler to stop
     activeHeartbeats.forEach(h => clearInterval(h));
     if (client) {
       try { client.close(); } catch(e) {
