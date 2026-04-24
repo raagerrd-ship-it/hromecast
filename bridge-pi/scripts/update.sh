@@ -87,4 +87,16 @@ done
 
 chmod +x "$APP_DIR/scripts/"*.sh 2>/dev/null || true
 
+# Write VERSION.json (PCC primary source for installed version, with v-prefix)
+ENGINE_VERSION_FILE="$APP_DIR/engine/version.json"
+VERSION_FILE="$APP_DIR/VERSION.json"
+if [ -f "$ENGINE_VERSION_FILE" ]; then
+    INSTALLED_VERSION=$(node -e "const fs=require('fs'); const d=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); if(!d.version) process.exit(1); process.stdout.write(String(d.version));" "$ENGINE_VERSION_FILE")
+    printf '{"tag":"v%s","version":"v%s","installedAt":"%s"}\n' \
+      "$INSTALLED_VERSION" \
+      "$INSTALLED_VERSION" \
+      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$VERSION_FILE"
+    log "VERSION.json synced (v$INSTALLED_VERSION)"
+fi
+
 log "Done! Updated $CURRENT_VERSION -> $NEW_VERSION"
