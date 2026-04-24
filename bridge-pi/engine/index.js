@@ -731,28 +731,22 @@ UI:           http://${ip}:${UI_PORT}
 
 // ============ Config Management ============
 
-// Config cache — avoid repeated disk reads on slow SD card (single-core optimization)
+// Write-through cache — config almost never changes; eliminate disk I/O on every operation.
+// Cache is populated on first read and refreshed only on saveConfig().
 let configCache = null;
-let configCacheTime = 0;
-const CONFIG_CACHE_TTL = 5000; // 5 seconds
 
 function loadConfig() {
-  const now = Date.now();
-  if (configCache && (now - configCacheTime) < CONFIG_CACHE_TTL) {
-    return configCache;
-  }
+  if (configCache) return configCache;
   try {
     if (fs.existsSync(CONFIG_FILE)) {
       const data = fs.readFileSync(CONFIG_FILE, 'utf8');
       configCache = { ...DEFAULT_CONFIG, ...JSON.parse(data) };
-      configCacheTime = now;
       return configCache;
     }
   } catch (error) {
     log.error('Error loading config:', error.message);
   }
   configCache = { ...DEFAULT_CONFIG };
-  configCacheTime = now;
   return configCache;
 }
 
@@ -762,9 +756,8 @@ function saveConfig(config) {
     const tempFile = `${CONFIG_FILE}.tmp`;
     fs.writeFileSync(tempFile, JSON.stringify(config, null, 2));
     fs.renameSync(tempFile, CONFIG_FILE);
-    // Invalidate cache immediately on write
+    // Write-through: refresh cache immediately so subsequent loadConfig() returns fresh values
     configCache = { ...DEFAULT_CONFIG, ...config };
-    configCacheTime = Date.now();
     return true;
   } catch (error) {
     log.error(`Error saving config to ${CONFIG_FILE}:`, error.message);
