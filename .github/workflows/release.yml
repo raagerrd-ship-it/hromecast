@@ -73,7 +73,7 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: pi-v${{ steps.version.outputs.release_version }}
+          tag_name: v${{ steps.version.outputs.release_version }}
           name: Pi Build v${{ steps.version.outputs.release_version }}
           body: Automated Pi release for version ${{ steps.version.outputs.release_version }} from main branch
           make_latest: true
